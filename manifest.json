@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "PolyRatings Enhancer",
+  "version": "0.1.0",
+  "description": "Integrates PolyRatings.dev scores directly into the Cal Poly Schedule Builder.",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "all_frames": true
+    }
+  ],
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://cmsweb.pscs.calpoly.edu/*"
+  ]
+} 
