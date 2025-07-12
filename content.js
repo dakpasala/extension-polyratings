@@ -211,7 +211,7 @@ function createNotFoundBadge(professorName) {
     return notFoundContainer;
 }
 
-// Function to inject rating UI next to professor name
+// Function to inject rating UI next to professor name (mobile approach)
 function injectRatingUI(professorElement, professor, profIndex = 0) {
     // Check if we've already processed this professor
     const professorName = professor.name;
@@ -255,6 +255,65 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
     console.log(`✅ Successfully injected rating UI for: ${professorName}`);
 }
 
+// Function to inject rating UI for desktop approach
+function injectDesktopRatingUI(professorNameElement, professor) {
+    // Check if we've already processed this professor
+    const professorName = professor.name;
+    
+    // Create a unique cache key for desktop approach
+    const currentUrl = window.location.href;
+    const elementPath = getElementPath(professorNameElement);
+    const cacheKey = `desktop-${professorName}-${currentUrl}-${elementPath}`;
+    
+    if (processedProfessors.has(cacheKey)) {
+        console.log(`⏭️ Already processed desktop professor: ${professorName} at this specific location`);
+        return;
+    }
+    
+    // Check if rating element already exists for this professor in this specific element
+    const existingRating = professorNameElement.querySelector(`.polyratings-rating[data-professor="${professorName}"]`);
+    if (existingRating) {
+        console.log(`⏭️ Desktop rating already exists for: ${professorName} in this element`);
+        return;
+    }
+    
+    console.log(`🎨 Injecting desktop rating UI for: ${professorName}`);
+    
+    // Create the rating element (reuse existing function)
+    const ratingElement = createRatingElement(professor);
+    ratingElement.className = 'polyratings-rating';
+    ratingElement.setAttribute('data-professor', professorName);
+    
+    // Fix the container to accommodate the rating within grid constraints
+    // Keep the noWrap class but adjust the container to show both name and rating
+    professorNameElement.style.cssText += `
+        display: flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        min-width: 0;
+        overflow: visible;
+        white-space: nowrap;
+    `;
+    
+    // Also adjust the parent grid cell to accommodate the rating
+    const parentGridCell = professorNameElement.closest('.cx-MuiGrid-grid-xs-4');
+    if (parentGridCell) {
+        parentGridCell.style.cssText += `
+            min-width: 0;
+            overflow: visible;
+            flex-shrink: 0;
+        `;
+    }
+    
+    // Insert the rating element directly after the professor name text
+    professorNameElement.appendChild(ratingElement);
+    
+    // Mark as processed
+    processedProfessors.add(cacheKey);
+    
+    console.log(`✅ Successfully injected desktop rating UI for: ${professorName}`);
+}
+
 // Function to get a unique path for a DOM element
 function getElementPath(element) {
     const path = [];
@@ -286,10 +345,12 @@ function getElementPath(element) {
 function findAndLogProfessors() {
     console.log("🔍 Starting professor search in iframe...");
     
+    // Step 1: Try mobile approach first
     const dtElements = document.querySelectorAll('dt');
     console.log(`📋 Found ${dtElements.length} dt elements in iframe`);
     
     let professorCount = 0;
+    let mobileApproachFound = false;
     
     dtElements.forEach((dt, index) => {
         const dtText = dt.textContent.trim();
@@ -297,6 +358,7 @@ function findAndLogProfessors() {
         
         if (dtText === 'Instructor:') {
             console.log(`✅ Found "Instructor:" at index ${index}`);
+            mobileApproachFound = true;
             
             const nextElement = dt.nextElementSibling;
             if (nextElement) {
@@ -339,7 +401,111 @@ function findAndLogProfessors() {
         }
     });
     
-    console.log(`🎯 Professor search complete. Found ${professorCount} professors.`);
+    // Step 2a: If mobile approach didn't find anything, try desktop approach
+    if (!mobileApproachFound) {
+        console.log("📱 Mobile approach found no professors, trying desktop approach...");
+        
+        // Find the outermost grid container
+        const mainGridContainers = document.querySelectorAll('.cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap');
+        console.log(`🖥️ Found ${mainGridContainers.length} main grid containers`);
+        
+        if (mainGridContainers.length > 0) {
+            console.log("✅ Successfully found main grid container(s) for desktop approach");
+            
+            // Log details about each container for debugging
+            mainGridContainers.forEach((container, index) => {
+                console.log(`📦 Grid container ${index + 1}:`, {
+                    className: container.className,
+                    childCount: container.children.length,
+                    textContent: container.textContent.substring(0, 100) + '...'
+                });
+                
+                // Step 2b: Find the professor name grid item within this container
+                const detailsGridItems = container.querySelectorAll('.cx-MuiGrid-grid-xs-5');
+                console.log(`🔍 Found ${detailsGridItems.length} details grid items (cx-MuiGrid-grid-xs-5) in container ${index + 1}`);
+                
+                if (detailsGridItems.length > 0) {
+                    console.log("✅ Successfully found details grid item(s) for professor extraction");
+                    
+                    // Log details about each details grid item
+                    detailsGridItems.forEach((detailsItem, detailsIndex) => {
+                        console.log(`📋 Details grid item ${detailsIndex + 1}:`, {
+                            className: detailsItem.className,
+                            childCount: detailsItem.children.length,
+                            textContent: detailsItem.textContent.substring(0, 100) + '...'
+                        });
+                        
+                        // Step 2c: Navigate to professor name cell within this details grid item
+                        const professorNameCells = detailsItem.querySelectorAll('.cx-MuiGrid-grid-xs-4');
+                        console.log(`🔍 Found ${professorNameCells.length} grid-xs-4 cells in details item ${detailsIndex + 1}`);
+                        
+                        if (professorNameCells.length > 0) {
+                            console.log("✅ Successfully found professor name cells");
+                            
+                            // Step 2d: Extract professor name from the first cell
+                            const firstCell = professorNameCells[0];
+                            const professorNameElement = firstCell.querySelector('.cx-MuiTypography-body2');
+                            
+                            if (professorNameElement) {
+                                const professorName = professorNameElement.textContent.trim();
+                                console.log(`👨‍🏫 Extracted professor name: "${professorName}"`);
+                                
+                                // Validate the extracted name
+                                if (professorName && professorName.length > 0) {
+                                    console.log("✅ Professor name validation passed");
+                                    console.log(`📊 Professor name details:`, {
+                                        name: professorName,
+                                        length: professorName.length,
+                                        hasLetters: /[a-zA-Z]/.test(professorName),
+                                        isNotTime: !/\d{1,2}:\d{2}/.test(professorName),
+                                        isNotLocation: !/Building|Room|Hall|Center/.test(professorName)
+                                    });
+                                    
+                                    // Process the professor for rating lookup (desktop approach)
+                                    console.log(`👨‍🏫 Processing desktop professor: ${professorName}`);
+                                    
+                                    // Send message to background script to get professor rating
+                                    chrome.runtime.sendMessage(
+                                        { type: "getProfRating", profName: professorName },
+                                        (response) => {
+                                            console.log("📨 Desktop response from background script:", response);
+                                            
+                                            if (response.status === "success" && response.professor) {
+                                                console.log("✅ Received desktop professor data:", response.professor);
+                                                // Inject rating UI for desktop
+                                                injectDesktopRatingUI(professorNameElement, response.professor);
+                                            } else if (response.status === "not_found") {
+                                                console.log("❌ Desktop professor not found in database");
+                                                // Inject "not found" badge for desktop
+                                                const notFoundBadge = createNotFoundBadge(professorName);
+                                                professorNameElement.appendChild(notFoundBadge);
+                                            } else {
+                                                console.log("❌ Error getting desktop professor data:", response.message);
+                                            }
+                                        }
+                                    );
+                                } else {
+                                    console.log("❌ Professor name is empty or invalid");
+                                }
+                            } else {
+                                console.log("❌ No .cx-MuiTypography-body2 element found in first cell");
+                            }
+                        } else {
+                            console.log("❌ No professor name cells found in details item");
+                        }
+                    });
+                } else {
+                    console.log("❌ No details grid items found in container");
+                }
+            });
+        } else {
+            console.log("❌ No main grid containers found for desktop approach");
+        }
+    } else {
+        console.log("📱 Mobile approach successful, skipping desktop approach");
+    }
+    
+    console.log(`🎯 Professor search complete. Found ${professorCount} professors via mobile approach.`);
 }
 
 // Function to set up the MutationObserver
@@ -349,6 +515,7 @@ function setupMutationObserver() {
         console.log(`🔄 DOM changed in iframe! ${mutations.length} mutation(s) detected`);
         
         // Log details about each mutation for debugging
+        /*
         mutations.forEach((mutation, index) => {
             console.log(`📊 Mutation ${index + 1}:`, {
                 type: mutation.type,
@@ -358,29 +525,54 @@ function setupMutationObserver() {
                 attributeName: mutation.attributeName
             });
         });
+        */
         
-        // Check if any of the mutations might contain new content
-        const hasRelevantChanges = mutations.some(mutation => {
-            // Check for added nodes
-            for (let node of mutation.addedNodes) {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                    // Check if this node or its children contain dt elements
-                    if (node.querySelectorAll) {
-                        const dtElements = node.querySelectorAll('dt');
-                        if (dtElements.length > 0) {
-                            console.log(`🎯 Found ${dtElements.length} dt elements in added node`);
-                            return true;
-                        }
-                    }
-                    // Also check if the node itself is a dt element
-                    if (node.tagName === 'DT') {
-                        console.log(`🎯 Found dt element directly added`);
-                        return true;
-                    }
-                }
-            }
-            return false;
-        });
+                                // Check if any of the mutations might contain new content
+                        const hasRelevantChanges = mutations.some(mutation => {
+                            // Check for added nodes
+                            for (let node of mutation.addedNodes) {
+                                if (node.nodeType === Node.ELEMENT_NODE) {
+                                    // Check if this node or its children contain dt elements (mobile)
+                                    if (node.querySelectorAll) {
+                                        const dtElements = node.querySelectorAll('dt');
+                                        if (dtElements.length > 0) {
+                                            console.log(`🎯 Found ${dtElements.length} dt elements in added node`);
+                                            return true;
+                                        }
+                                    }
+                                    // Also check if the node itself is a dt element
+                                    if (node.tagName === 'DT') {
+                                        console.log(`🎯 Found dt element directly added`);
+                                        return true;
+                                    }
+                                    
+                                    // Check for desktop grid containers being added
+                                    if (node.querySelectorAll) {
+                                        const gridContainers = node.querySelectorAll('.cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap');
+                                        if (gridContainers.length > 0) {
+                                            console.log(`🎯 Found ${gridContainers.length} desktop grid containers in added node`);
+                                            return true;
+                                        }
+                                    }
+                                    // Also check if the node itself is a grid container
+                                    if (node.classList && node.classList.contains('cx-MuiGrid-container') && node.classList.contains('cx-MuiGrid-wrap-xs-nowrap')) {
+                                        console.log(`🎯 Found desktop grid container directly added`);
+                                        return true;
+                                    }
+                                }
+                            }
+                            
+                            // Also check for attribute changes that might indicate layout switches
+                            if (mutation.type === 'attributes') {
+                                const target = mutation.target;
+                                if (target.classList && (target.classList.contains('cx-MuiGrid-container') || target.classList.contains('cx-MuiGrid-wrap-xs-nowrap'))) {
+                                    console.log(`🎯 Found attribute change on grid container`);
+                                    return true;
+                                }
+                            }
+                            
+                            return false;
+                        });
         
         if (hasRelevantChanges) {
             console.log("🚀 Relevant changes detected in iframe, running professor search...");
@@ -716,6 +908,7 @@ function injectIntoIframe(iframe) {
                         console.log(`🔄 DOM changed in iframe! ${mutations.length} mutation(s) detected`);
                         
                         // Log details about each mutation for debugging
+                        /*
                         mutations.forEach((mutation, index) => {
                             console.log(`📊 Mutation ${index + 1}:`, {
                                 type: mutation.type,
@@ -725,13 +918,14 @@ function injectIntoIframe(iframe) {
                                 attributeName: mutation.attributeName
                             });
                         });
+                        */
                         
                         // Check if any of the mutations might contain new content
                         const hasRelevantChanges = mutations.some(mutation => {
                             // Check for added nodes
                             for (let node of mutation.addedNodes) {
                                 if (node.nodeType === Node.ELEMENT_NODE) {
-                                    // Check if this node or its children contain dt elements
+                                    // Check if this node or its children contain dt elements (mobile)
                                     if (node.querySelectorAll) {
                                         const dtElements = node.querySelectorAll('dt');
                                         if (dtElements.length > 0) {
@@ -744,8 +938,32 @@ function injectIntoIframe(iframe) {
                                         console.log(`🎯 Found dt element directly added`);
                                         return true;
                                     }
+                                    
+                                    // Check for desktop grid containers being added
+                                    if (node.querySelectorAll) {
+                                        const gridContainers = node.querySelectorAll('.cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap');
+                                        if (gridContainers.length > 0) {
+                                            console.log(`🎯 Found ${gridContainers.length} desktop grid containers in added node`);
+                                            return true;
+                                        }
+                                    }
+                                    // Also check if the node itself is a grid container
+                                    if (node.classList && node.classList.contains('cx-MuiGrid-container') && node.classList.contains('cx-MuiGrid-wrap-xs-nowrap')) {
+                                        console.log(`🎯 Found desktop grid container directly added`);
+                                        return true;
+                                    }
                                 }
                             }
+                            
+                            // Also check for attribute changes that might indicate layout switches
+                            if (mutation.type === 'attributes') {
+                                const target = mutation.target;
+                                if (target.classList && (target.classList.contains('cx-MuiGrid-container') || target.classList.contains('cx-MuiGrid-wrap-xs-nowrap'))) {
+                                    console.log(`🎯 Found attribute change on grid container`);
+                                    return true;
+                                }
+                            }
+                            
                             return false;
                         });
                         
