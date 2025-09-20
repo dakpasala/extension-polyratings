@@ -71,23 +71,30 @@ function prInjectStyles() {
         margin-top: 2px; /* Push rating down slightly */
       }
       
-      .pr-rating-full {
+      /* Star rating styles */
+      .polyratings-rating-element {
         display: inline-flex;
         align-items: center;
+        gap: 1px;
       }
       
-      .pr-rating-compact {
-        display: none;
+      /* Hide extra stars when space is tight */
+      .polyratings-rating-element .star-rating {
+        display: inline-flex;
+        gap: 1px;
       }
       
-      /* When space is very tight, show compact version */
+      /* When space is very tight, show only first star */
       @media (max-width: 1200px) {
-        .pr-rating-full {
+        .polyratings-rating-element .star-rating svg:not(:first-child) {
           display: none;
         }
-        .pr-rating-compact {
-          display: inline-flex;
-          align-items: center;
+      }
+      
+      /* When space is extremely tight, show only rating text */
+      @media (max-width: 800px) {
+        .polyratings-rating-element .star-rating {
+          display: none;
         }
       }
 
@@ -101,70 +108,79 @@ function prInjectStyles() {
 }
 prInjectStyles();
 
-// Function to create rating UI element
+// Function to create rating UI element (SIMPLIFIED - single version only)
 function createRatingElement(professor) {
-  const mainContainer = document.createElement("div");
-  mainContainer.className = "pr-rating-container";
+  const ratingContainer = document.createElement("a");
+  ratingContainer.href = professor.link;
+  ratingContainer.target = "_blank";
+  ratingContainer.className = "polyratings-rating-element";
+  ratingContainer.style.cssText = `
+        display: inline-flex; 
+        align-items: center; 
+        text-decoration: none;
+        padding: 2px 6px; 
+        border: 1px solid #7F8A9E; 
+        border-radius: 8px;
+        font-size: 11px; 
+        color: #090d19; 
+        transition: all 0.2s ease;
+        cursor: pointer; 
+        white-space: nowrap; 
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        margin-left: 8px;
+    `;
+  ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
 
-  // --- Helper to create a single rating element ---
-  const buildRatingView = (isCompact = false) => {
-    const ratingContainer = document.createElement("a"); // Use an anchor tag
-    ratingContainer.href = professor.link;
-    ratingContainer.target = "_blank";
-    ratingContainer.style.cssText = `
-            display: inline-flex; align-items: center; text-decoration: none;
-            padding: 2px 6px; border: 1px solid #7F8A9E; border-radius: 8px;
-            font-size: 11px; color: #090d19; transition: all 0.2s ease;
-            cursor: pointer; white-space: nowrap; background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        `;
-    ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
+  ratingContainer.addEventListener("click", (e) => e.stopPropagation());
+  ratingContainer.addEventListener("mouseenter", () => {
+    ratingContainer.style.background = "rgba(21, 71, 52, 0.12)";
+    ratingContainer.style.borderColor = "#154734";
+  });
+  ratingContainer.addEventListener("mouseleave", () => {
+    ratingContainer.style.background = "rgba(255, 255, 255, 0.9)";
+    ratingContainer.style.borderColor = "#7F8A9E";
+  });
 
-    ratingContainer.addEventListener("click", (e) => e.stopPropagation());
-    ratingContainer.addEventListener("mouseenter", () => {
-      ratingContainer.style.background = "rgba(21, 71, 52, 0.12)";
-      ratingContainer.style.borderColor = "#154734";
-    });
-    ratingContainer.addEventListener("mouseleave", () => {
-      ratingContainer.style.background = "rgba(255, 255, 255, 0.9)";
-      ratingContainer.style.borderColor = "#7F8A9E";
-    });
+  const ratingText = document.createElement("span");
+  ratingText.textContent = `${professor.rating}/4`;
+  ratingText.style.marginRight = "3px";
 
-    const ratingText = document.createElement("span");
-    ratingText.textContent = `${professor.rating}/4`;
-    ratingText.style.marginRight = "3px";
+  // Create star rating based on professor rating
+  const stars = document.createElement("span");
+  stars.className = "star-rating";
+  stars.style.display = "inline-flex";
+  stars.style.gap = "1px";
 
-    const starIconSvg = `<svg viewBox="0 0 51 48" style="width:1em; height:1em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="3"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+  // Calculate how many stars to fill based on rating
+  const rating = parseFloat(professor.rating);
+  const fullStars = Math.floor(rating);
+  const hasHalfStar = rating % 1 >= 0.5;
 
-    const stars = document.createElement("span");
-    stars.style.display = "inline-flex";
+  let starsHtml = "";
 
-    if (isCompact) {
-      ratingContainer.className = "pr-rating-compact";
-      stars.innerHTML = starIconSvg; // Just one star
-    } else {
-      ratingContainer.className = "pr-rating-full";
-      // Show 4 stars for full version
-      let fullStarsHtml = "";
-      for (let i = 0; i < 4; i++) {
-        fullStarsHtml += starIconSvg;
-      }
-      stars.innerHTML = fullStarsHtml;
-    }
+  // Add full stars
+  for (let i = 0; i < fullStars; i++) {
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.8em; height:0.8em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+  }
 
-    ratingContainer.appendChild(ratingText);
-    ratingContainer.appendChild(stars);
-    return ratingContainer;
-  };
+  // Add half star if needed
+  if (hasHalfStar) {
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.8em; height:0.8em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+  }
 
-  // Create both versions
-  const fullRating = buildRatingView(false);
-  const compactRating = buildRatingView(true);
+  // Add empty stars to make it 4 total
+  const emptyStars = 4 - fullStars - (hasHalfStar ? 1 : 0);
+  for (let i = 0; i < emptyStars; i++) {
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.8em; height:0.8em; vertical-align: top;" fill="none" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+  }
 
-  mainContainer.appendChild(fullRating);
-  mainContainer.appendChild(compactRating);
+  stars.innerHTML = starsHtml;
 
-  return mainContainer;
+  ratingContainer.appendChild(ratingText);
+  ratingContainer.appendChild(stars);
+
+  return ratingContainer;
 }
 
 // Function to create "not found" badge
@@ -225,21 +241,14 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
 
   // First, remove any existing rating elements for this professor to prevent duplicates
   const existingRatings = professorElement.querySelectorAll(
-    `.polyratings-rating[data-professor="${professorName}"]`
+    `.polyratings-rating-element[data-professor="${professorName}"]`
   );
   existingRatings.forEach((rating) => rating.remove());
-
-  // Also remove any elements with the old class name
-  const oldRatings = professorElement.querySelectorAll(
-    ".polyratings-rating-element"
-  );
-  oldRatings.forEach((rating) => rating.remove());
 
   console.log(`🎨 Injecting mobile rating UI for: ${professorName}`);
 
   // Create the rating element
   const ratingElement = createRatingElement(professor);
-  ratingElement.className = "polyratings-rating polyratings-mobile";
   ratingElement.setAttribute("data-professor", professorName);
 
   // Add extra margin for multiple professors (except the first one)
@@ -276,10 +285,15 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   nameSpan.className = "pr-name";
   nameSpan.textContent = nameText;
 
+  // Wrap the rating in a container for consistency
+  const ratingContainer = document.createElement("div");
+  ratingContainer.className = "pr-rating-container";
+  ratingContainer.appendChild(ratingEl);
+
   // The main container becomes a vertical flex container
   professorNameElement.classList.add("pr-wrap");
   professorNameElement.appendChild(nameSpan);
-  professorNameElement.appendChild(ratingEl);
+  professorNameElement.appendChild(ratingContainer);
 
   console.log(
     `✅ Successfully injected desktop vertical rating UI for: ${professorName}`
@@ -353,7 +367,7 @@ function findAndLogProfessors() {
 
   // First, clean up any existing rating elements to prevent duplicates
   const existingRatings = document.querySelectorAll(
-    ".polyratings-rating, .polyratings-rating-element"
+    ".polyratings-rating-element"
   );
   existingRatings.forEach((rating) => rating.remove());
   console.log(
@@ -412,8 +426,7 @@ function findAndLogProfessors() {
 
                 // Inject the "not found" badge
                 const notFoundBadge = createNotFoundBadge(professorName);
-                notFoundBadge.className =
-                  "polyratings-rating polyratings-mobile";
+                notFoundBadge.className = "polyratings-rating-element";
                 notFoundBadge.setAttribute("data-professor", professorName);
                 if (profIndex > 0) {
                   notFoundBadge.style.marginLeft = "12px";
