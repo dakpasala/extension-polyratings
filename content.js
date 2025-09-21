@@ -70,7 +70,7 @@ function prInjectStyles() {
         align-items: center;
         gap: 4px;
         width: 100%;
-        margin-top: 4px;
+        margin-top: 8px;
         margin-bottom: 0;
       }
       
@@ -101,6 +101,7 @@ function prInjectStyles() {
         align-items: flex-start;
       }
       
+      
       /* Don't modify the base cell height - let it stay natural */
       .cx-MuiGrid-grid-xs-4 {
         height: auto;
@@ -114,10 +115,12 @@ function prInjectStyles() {
       }
       
       /* Ensure the rating doesn't affect table row height */
-      .polyratings-rating-element {
-        display: inline-block;
-        vertical-align: top;
-      }
+  .polyratings-rating-element {
+    display: inline-block;
+    vertical-align: top;
+    font-size: 12px !important;
+    padding: 3px 8px !important;
+  }
     `;
   document.documentElement.appendChild(style);
 }
@@ -133,19 +136,20 @@ function createRatingElement(professor) {
         display: inline-flex; 
         align-items: center; 
         text-decoration: none;
-        padding: 2px 6px; 
+        padding: 3px 8px; 
         border: 1px solid #7F8A9E; 
         border-radius: 8px;
-        font-size: 11px; 
+        font-size: 12px; 
         color: #090d19; 
         transition: all 0.2s ease;
         cursor: pointer; 
         white-space: nowrap; 
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 8px;
-        max-width: 100%;
+        margin-left: 4px;
+        max-width: calc(100% - 4px);
         overflow: hidden;
+        width: fit-content;
     `;
   ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
 
@@ -178,12 +182,12 @@ function createRatingElement(professor) {
 
   // Add full stars
   for (let i = 0; i < fullStars; i++) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.8em; height:0.8em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:1em; height:1em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
   }
 
   // Add half star if needed
   if (hasHalfStar) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.8em; height:0.8em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:1em; height:1em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
   }
 
   // Add empty stars to make it 4 total
@@ -234,20 +238,21 @@ function createNotFoundBadge(professorName) {
   notFoundContainer.style.cssText = `
         display: inline-flex;
         align-items: center;
-        padding: 2px 6px;
+        padding: 3px 8px;
         background: rgba(255, 255, 255, 0.9);
         border: 1px solid #7F8A9E;
         border-radius: 8px;
-        font-size: 11px;
+        font-size: 12px;
         color: #090d19;
         text-decoration: none;
         transition: all 0.2s ease;
         cursor: pointer;
         white-space: nowrap;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 8px;
-        max-width: 100%;
+        margin-left: 4px;
+        max-width: calc(100% - 4px);
         overflow: hidden;
+        width: fit-content;
     `;
 
   // Create simple text that will shrink with ellipses
@@ -331,27 +336,121 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   );
   existingRatings.forEach((rating) => rating.remove());
 
+  // Also clean up any text content that might have been corrupted
+  const textNodes = professorNameElement.childNodes;
+  for (let i = textNodes.length - 1; i >= 0; i--) {
+    const node = textNodes[i];
+    if (
+      node.nodeType === Node.TEXT_NODE &&
+      node.textContent.includes("Add to PolyRatings")
+    ) {
+      node.remove();
+    }
+  }
+
   prInjectStyles();
 
   const ratingEl = createRatingElement(professor);
 
-  // --- VERTICAL LAYOUT: Name on top, rating below ---
-  const nameText = professorNameElement.textContent.trim();
-  professorNameElement.innerHTML = ""; // Clear the element safely
+  // Inject with slightly more height while keeping everything aligned
+  const originalText = professorNameElement.textContent.trim();
 
+  // Get the parent cell and the expansion panel row to set consistent height
+  const parentCell = professorNameElement.closest(".cx-MuiGrid-grid-xs-4");
+  const expansionPanel = professorNameElement.closest(
+    ".cx-MuiExpansionPanel-root"
+  );
+  const expansionSummary = professorNameElement.closest(
+    ".cx-MuiExpansionPanelSummary-root"
+  );
+
+  if (parentCell && expansionPanel && expansionSummary) {
+    // Set height for the expansion panel summary (the actual row) - increased height
+    expansionSummary.style.minHeight = "80px";
+    expansionSummary.style.height = "80px";
+
+    // Set height for the main grid container within the expansion panel
+    const mainGrid = expansionSummary.querySelector(
+      ".cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap"
+    );
+    if (mainGrid) {
+      mainGrid.style.minHeight = "80px";
+      mainGrid.style.height = "80px";
+    }
+
+    // Set height for all cells in this row with proper alignment
+    const allCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
+    allCells.forEach((cell) => {
+      cell.style.minHeight = "80px";
+      cell.style.height = "80px";
+      cell.style.display = "flex";
+      cell.style.alignItems = "flex-start"; // Changed to flex-start for better alignment
+      cell.style.padding = "8px 6px"; // Adjusted padding
+    });
+
+    // Special alignment for specific columns that need to match instructor column
+    const specificCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
+    specificCells.forEach((cell, index) => {
+      // Target the first few columns (section, topic, unreserved, reserved seats)
+      if (index < 4) {
+        cell.style.alignItems = "center";
+        cell.style.paddingTop = "8px";
+        cell.style.paddingBottom = "8px";
+
+        // Target the inner typography elements that have center alignment
+        const typographyElements = cell.querySelectorAll(
+          ".cx-MuiTypography-alignCenter"
+        );
+        typographyElements.forEach((typography) => {
+          typography.style.display = "flex";
+          typography.style.alignItems = "center";
+          typography.style.justifyContent = "center";
+          typography.style.height = "100%";
+        });
+      }
+    });
+  }
+
+  // Create a container that uses the extra height
+  const container = document.createElement("div");
+  container.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    justify-content: flex-start;
+    align-items: flex-start;
+  `;
+
+  // Keep the original text with proper ellipsis handling
   const nameSpan = document.createElement("div");
-  nameSpan.className = "pr-name";
-  nameSpan.textContent = nameText;
+  nameSpan.textContent = originalText;
+  nameSpan.style.cssText = `
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    max-width: 100%;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  `;
 
-  // Wrap the rating in a container for consistency
+  // Add the rating below with more space
   const ratingContainer = document.createElement("div");
-  ratingContainer.className = "pr-rating-container";
+  ratingContainer.style.cssText = `
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    flex-shrink: 0;
+  `;
   ratingContainer.appendChild(ratingEl);
 
-  // The main container becomes a vertical flex container
-  professorNameElement.classList.add("pr-wrap");
-  professorNameElement.appendChild(nameSpan);
-  professorNameElement.appendChild(ratingContainer);
+  container.appendChild(nameSpan);
+  container.appendChild(ratingContainer);
+
+  // Replace the content
+  professorNameElement.innerHTML = "";
+  professorNameElement.appendChild(container);
 
   console.log(
     `✅ Successfully injected desktop vertical rating UI for: ${professorName}`
@@ -365,27 +464,122 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
   );
   existingRatings.forEach((rating) => rating.remove());
 
+  // Also clean up any text content that might have been corrupted
+  const textNodes = professorNameElement.childNodes;
+  for (let i = textNodes.length - 1; i >= 0; i--) {
+    const node = textNodes[i];
+    if (
+      node.nodeType === Node.TEXT_NODE &&
+      node.textContent.includes("Add to PolyRatings")
+    ) {
+      node.remove();
+    }
+  }
+
   prInjectStyles();
 
   const notFoundEl = createNotFoundBadge(professorName);
 
-  // --- VERTICAL LAYOUT: Name on top, "not found" below ---
-  const nameText = professorNameElement.textContent.trim();
-  professorNameElement.innerHTML = ""; // Clear the element safely
+  // Inject with slightly more height while keeping everything aligned
+  const originalText = professorNameElement.textContent.trim();
 
+  // Get the parent cell and the expansion panel row to set consistent height
+  const parentCell = professorNameElement.closest(".cx-MuiGrid-grid-xs-4");
+  const expansionPanel = professorNameElement.closest(
+    ".cx-MuiExpansionPanel-root"
+  );
+  const expansionSummary = professorNameElement.closest(
+    ".cx-MuiExpansionPanelSummary-root"
+  );
+
+  if (parentCell && expansionPanel && expansionSummary) {
+    // Set height for the expansion panel summary (the actual row) - increased height
+    expansionSummary.style.minHeight = "80px";
+    expansionSummary.style.height = "80px";
+
+    // Set height for the main grid container within the expansion panel
+    const mainGrid = expansionSummary.querySelector(
+      ".cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap"
+    );
+    if (mainGrid) {
+      mainGrid.style.minHeight = "80px";
+      mainGrid.style.height = "80px";
+    }
+
+    // Set height for all cells in this row with proper alignment
+    const allCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
+    allCells.forEach((cell) => {
+      cell.style.minHeight = "80px";
+      cell.style.height = "80px";
+      cell.style.display = "flex";
+      cell.style.alignItems = "flex-start"; // Changed to flex-start for better alignment
+      cell.style.padding = "8px 6px"; // Adjusted padding
+    });
+
+    // Special alignment for specific columns that need to match instructor column
+    const specificCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
+    specificCells.forEach((cell, index) => {
+      // Target the first few columns (section, topic, unreserved, reserved seats)
+      if (index < 4) {
+        cell.style.alignItems = "center";
+        cell.style.paddingTop = "8px";
+        cell.style.paddingBottom = "8px";
+
+        // Target the inner typography elements that have center alignment
+        const typographyElements = cell.querySelectorAll(
+          ".cx-MuiTypography-alignCenter"
+        );
+        typographyElements.forEach((typography) => {
+          typography.style.display = "flex";
+          typography.style.alignItems = "center";
+          typography.style.justifyContent = "center";
+          typography.style.height = "100%";
+        });
+      }
+    });
+  }
+
+  // Create a container that uses the extra height
+  const container = document.createElement("div");
+  container.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    justify-content: flex-start;
+    align-items: flex-start;
+  `;
+
+  // Keep the original text with proper ellipsis handling
   const nameSpan = document.createElement("div");
-  nameSpan.className = "pr-name";
-  nameSpan.textContent = nameText;
+  nameSpan.textContent = originalText;
+  nameSpan.style.cssText = `
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    max-width: 100%;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  `;
 
-  // The main container becomes a vertical flex container
-  professorNameElement.classList.add("pr-wrap");
-  professorNameElement.appendChild(nameSpan);
-
-  // Wrap the not found badge in the rating container for consistency
+  // Add the not found badge below with more space
   const notFoundContainer = document.createElement("div");
-  notFoundContainer.className = "pr-rating-container";
+  notFoundContainer.style.cssText = `
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    flex-shrink: 0;
+    margin-top: 8px;
+  `;
   notFoundContainer.appendChild(notFoundEl);
-  professorNameElement.appendChild(notFoundContainer);
+
+  container.appendChild(nameSpan);
+  container.appendChild(notFoundContainer);
+
+  // Replace the content
+  professorNameElement.innerHTML = "";
+  professorNameElement.appendChild(container);
 
   console.log(
     `✅ Successfully injected desktop vertical not found UI for: ${professorName}`
@@ -431,6 +625,21 @@ function findAndLogProfessors() {
   console.log(
     `🧹 Cleaned up ${existingRatings.length} existing rating elements`
   );
+
+  // Also clean up any corrupted text content in instructor elements
+  const instructorElements = document.querySelectorAll('[role="cell"]');
+  instructorElements.forEach((element) => {
+    const textNodes = element.childNodes;
+    for (let i = textNodes.length - 1; i >= 0; i--) {
+      const node = textNodes[i];
+      if (
+        node.nodeType === Node.TEXT_NODE &&
+        node.textContent.includes("Add to PolyRatings")
+      ) {
+        node.remove();
+      }
+    }
+  });
 
   // Step 1: Try mobile approach first
   const dtElements = document.querySelectorAll("dt");
