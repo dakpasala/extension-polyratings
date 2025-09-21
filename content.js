@@ -38,6 +38,15 @@ function prInjectStyles() {
         text-overflow: ellipsis;
       }
       
+      /* Add ellipsis to Wait List Open column to prevent text cutoff */
+      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5) .cx-MuiTypography-noWrap div[aria-hidden="true"] {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
+        display: block !important;
+      }
+      
       /* --- Styles for Vertical Rating Layout (FIXED) --- */
       .pr-wrap { 
         display: flex; 
