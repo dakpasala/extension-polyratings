@@ -119,7 +119,7 @@ function prInjectStyles() {
       
       /* Mobile approach spacing - add space below content, not to cell height */
       .polyratings-rating-element {
-        margin-top: -1px; /* Move rating elements up slightly */
+        margin-top: 2px; /* Add small top margin to prevent clipping */
         margin-bottom: 0; /* No bottom margin to avoid pushing headers */
       }
       
