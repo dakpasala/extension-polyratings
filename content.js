@@ -43,12 +43,12 @@ function prInjectStyles() {
         display: flex; 
         flex-direction: column;
         align-items: flex-start;
-        justify-content: center; /* Center vertically */
-        gap: 3px; 
+        justify-content: flex-start;
+        gap: 0;
         width: 100%; 
         line-height: 1.2;
-        min-height: 48px; /* Ensure consistent height */
-        padding: 4px 0; /* Add some padding for better alignment */
+        min-height: auto;
+        padding: 0;
       }
       
       .pr-name {
@@ -59,7 +59,9 @@ function prInjectStyles() {
         font-size: inherit;
         font-weight: inherit;
         color: inherit;
-        margin: 0; /* Remove any default margins */
+        margin: 0;
+        line-height: 1.3;
+        height: auto;
       }
       
       .pr-rating-container {
@@ -68,7 +70,8 @@ function prInjectStyles() {
         align-items: center;
         gap: 4px;
         width: 100%;
-        margin-top: 2px; /* Push rating down slightly */
+        margin-top: 4px;
+        margin-bottom: 0;
       }
       
       /* Star rating styles */
@@ -84,24 +87,36 @@ function prInjectStyles() {
         gap: 1px;
       }
       
-      /* When space is very tight, show only first star */
-      @media (max-width: 1200px) {
-        .polyratings-rating-element .star-rating svg:not(:first-child) {
-          display: none;
-        }
+      /* Compact mode - show only first star */
+      .polyratings-rating-element .star-rating.compact-mode svg:not(:first-child) {
+        display: none !important;
       }
       
-      /* When space is extremely tight, show only rating text */
-      @media (max-width: 800px) {
-        .polyratings-rating-element .star-rating {
-          display: none;
-        }
-      }
+      
 
-      /* Ensure proper table cell alignment */
+      /* Ensure proper table cell alignment - don't modify cell height */
       .cx-MuiGrid-grid-xs-4 .pr-wrap {
-        height: 100%;
-        justify-content: center;
+        height: auto;
+        justify-content: flex-start;
+        align-items: flex-start;
+      }
+      
+      /* Don't modify the base cell height - let it stay natural */
+      .cx-MuiGrid-grid-xs-4 {
+        height: auto;
+        min-height: auto;
+      }
+      
+      /* Mobile approach spacing - add space below content, not to cell height */
+      .polyratings-rating-element {
+        margin-top: 4px; /* Small gap below instructor name */
+        margin-bottom: 0; /* No bottom margin to avoid pushing headers */
+      }
+      
+      /* Ensure the rating doesn't affect table row height */
+      .polyratings-rating-element {
+        display: inline-block;
+        vertical-align: top;
       }
     `;
   document.documentElement.appendChild(style);
@@ -129,6 +144,8 @@ function createRatingElement(professor) {
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         margin-left: 8px;
+        max-width: 100%;
+        overflow: hidden;
     `;
   ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
 
@@ -180,6 +197,34 @@ function createRatingElement(professor) {
   ratingContainer.appendChild(ratingText);
   ratingContainer.appendChild(stars);
 
+  // Add a function to check if the element is getting cropped and adjust accordingly
+  const checkAndAdjustLayout = () => {
+    const rect = ratingContainer.getBoundingClientRect();
+    const parentRect = ratingContainer.parentElement.getBoundingClientRect();
+
+    // Only switch to compact mode if the element is actually getting cropped
+    // Use a more conservative threshold and check if the element is actually overflowing
+    if (
+      rect.width > parentRect.width * 0.95 ||
+      rect.right > parentRect.right - 10
+    ) {
+      stars.classList.add("compact-mode");
+    } else {
+      stars.classList.remove("compact-mode");
+    }
+  };
+
+  // Check layout after a short delay to ensure DOM is ready
+  setTimeout(checkAndAdjustLayout, 200);
+
+  // Also check on window resize with debouncing
+  let resizeTimeout;
+  const debouncedCheck = () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(checkAndAdjustLayout, 150);
+  };
+  window.addEventListener("resize", debouncedCheck);
+
   return ratingContainer;
 }
 
@@ -200,11 +245,20 @@ function createNotFoundBadge(professorName) {
         cursor: pointer;
         white-space: nowrap;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        margin-left: 8px;
+        max-width: 100%;
+        overflow: hidden;
     `;
 
-  // Create the text
+  // Create simple text that will shrink with ellipses
   const notFoundText = document.createElement("span");
   notFoundText.textContent = "Add to PolyRatings";
+  notFoundText.style.cssText = `
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  `;
 
   notFoundContainer.appendChild(notFoundText);
 
@@ -256,7 +310,11 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
     ratingElement.style.marginLeft = "12px";
   }
 
-  // Insert the rating element directly after the professor name text
+  // Add a small line break and spacing before the rating
+  const lineBreak = document.createElement("br");
+  professorElement.appendChild(lineBreak);
+
+  // Insert the rating element with proper spacing
   professorElement.appendChild(ratingElement);
 
   console.log(
