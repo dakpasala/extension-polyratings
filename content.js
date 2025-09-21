@@ -110,7 +110,7 @@ function prInjectStyles() {
       
       /* Mobile approach spacing - add space below content, not to cell height */
       .polyratings-rating-element {
-        margin-top: 4px; /* Small gap below instructor name */
+        margin-top: -1px; /* Move rating elements up slightly */
         margin-bottom: 0; /* No bottom margin to avoid pushing headers */
       }
       
@@ -120,7 +120,7 @@ function prInjectStyles() {
     vertical-align: top;
     font-size: 12px !important;
     padding: 3px 8px !important;
-  }
+      }
     `;
   document.documentElement.appendChild(style);
 }
@@ -138,7 +138,7 @@ function createRatingElement(professor) {
         text-decoration: none;
         padding: 3px 8px; 
         border: 1px solid #7F8A9E; 
-        border-radius: 8px;
+        border-radius: 12px;
         font-size: 12px; 
         color: #090d19; 
         transition: all 0.2s ease;
@@ -182,12 +182,12 @@ function createRatingElement(professor) {
 
   // Add full stars
   for (let i = 0; i < fullStars; i++) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:1em; height:1em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
   }
 
   // Add half star if needed
   if (hasHalfStar) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:1em; height:1em; vertical-align: top;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
   }
 
   // Add empty stars to make it 4 total
@@ -241,7 +241,7 @@ function createNotFoundBadge(professorName) {
         padding: 3px 8px;
         background: rgba(255, 255, 255, 0.9);
         border: 1px solid #7F8A9E;
-        border-radius: 8px;
+        border-radius: 12px;
         font-size: 12px;
         color: #090d19;
         text-decoration: none;
@@ -433,6 +433,7 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     max-width: 100%;
     line-height: 1.3;
     margin-bottom: 4px;
+    margin-top: 2px;
   `;
 
   // Add the rating below with more space
@@ -440,8 +441,10 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   ratingContainer.style.cssText = `
     width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
     flex-shrink: 0;
+    margin-top: -1px;
+    padding-top: 2px;
   `;
   ratingContainer.appendChild(ratingEl);
 
@@ -561,6 +564,7 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
     max-width: 100%;
     line-height: 1.3;
     margin-bottom: 4px;
+    margin-top: 2px;
   `;
 
   // Add the not found badge below with more space
@@ -568,9 +572,10 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
   notFoundContainer.style.cssText = `
     width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
     flex-shrink: 0;
-    margin-top: 8px;
+    margin-top: -1px;
+    padding-top: 2px;
   `;
   notFoundContainer.appendChild(notFoundEl);
 
