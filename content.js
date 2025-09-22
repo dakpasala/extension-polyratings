@@ -101,6 +101,11 @@ function prInjectStyles() {
         display: none !important;
       }
       
+      /* Alternative compact mode selector for debugging */
+      .star-rating.compact-mode svg:not(:first-child) {
+        display: none !important;
+      }
+      
       
 
       /* Ensure proper table cell alignment - don't modify cell height */
@@ -215,15 +220,32 @@ function createRatingElement(professor) {
     const rect = ratingContainer.getBoundingClientRect();
     const parentRect = ratingContainer.parentElement.getBoundingClientRect();
 
-    // Only switch to compact mode if the element is actually getting cropped
-    // Use a more conservative threshold and check if the element is actually overflowing
-    if (
-      rect.width > parentRect.width * 0.95 ||
-      rect.right > parentRect.right - 10
-    ) {
+    // Debug logging to see what's happening
+    // Check if element is overflowing - use a small buffer to prevent cropping
+    const isOverflowing = rect.right > parentRect.right - 2; // Switch to compact when within 2px of edge
+
+    console.log("Rating element bounds:", {
+      elementRight: rect.right,
+      parentRight: parentRect.right,
+      elementWidth: rect.width,
+      parentWidth: parentRect.width,
+      isOverflowing: isOverflowing,
+    });
+
+    if (isOverflowing) {
+      console.log("Switching to compact mode");
       stars.classList.add("compact-mode");
+      console.log(
+        "Stars element classes after adding compact-mode:",
+        stars.className
+      );
     } else {
+      console.log("Switching to full mode");
       stars.classList.remove("compact-mode");
+      console.log(
+        "Stars element classes after removing compact-mode:",
+        stars.className
+      );
     }
   };
 
