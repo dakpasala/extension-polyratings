@@ -126,6 +126,25 @@ function prInjectStyles() {
       .polyratings-rating-element {
         margin-top: 2px; /* Add small top margin to prevent clipping */
         margin-bottom: 0; /* No bottom margin to avoid pushing headers */
+        transition: all 0.3s ease-in-out;
+        opacity: 1;
+        transform: translateY(0);
+      }
+      
+      /* Smooth fade-in animation for new ratings */
+      .polyratings-rating-element.fade-in {
+        animation: fadeIn 0.3s ease-in-out;
+      }
+      
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
       
       /* Ensure the rating doesn't affect table row height */
@@ -215,50 +234,11 @@ function createRatingElement(professor) {
   ratingContainer.appendChild(ratingText);
   ratingContainer.appendChild(stars);
 
-  // Add a function to check if the element is getting cropped and adjust accordingly
-  const checkAndAdjustLayout = () => {
-    const rect = ratingContainer.getBoundingClientRect();
-    const parentRect = ratingContainer.parentElement.getBoundingClientRect();
+  // Always use compact mode (1 star) for simplicity
+  stars.classList.add("compact-mode");
 
-    // Debug logging to see what's happening
-    // Check if element is overflowing - use a small buffer to prevent cropping
-    const isOverflowing = rect.right > parentRect.right - 2; // Switch to compact when within 2px of edge
-
-    console.log("Rating element bounds:", {
-      elementRight: rect.right,
-      parentRight: parentRect.right,
-      elementWidth: rect.width,
-      parentWidth: parentRect.width,
-      isOverflowing: isOverflowing,
-    });
-
-    if (isOverflowing) {
-      console.log("Switching to compact mode");
-      stars.classList.add("compact-mode");
-      console.log(
-        "Stars element classes after adding compact-mode:",
-        stars.className
-      );
-    } else {
-      console.log("Switching to full mode");
-      stars.classList.remove("compact-mode");
-      console.log(
-        "Stars element classes after removing compact-mode:",
-        stars.className
-      );
-    }
-  };
-
-  // Check layout after a short delay to ensure DOM is ready
-  setTimeout(checkAndAdjustLayout, 200);
-
-  // Also check on window resize with debouncing
-  let resizeTimeout;
-  const debouncedCheck = () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(checkAndAdjustLayout, 150);
-  };
-  window.addEventListener("resize", debouncedCheck);
+  // Add fade-in animation
+  ratingContainer.classList.add("fade-in");
 
   return ratingContainer;
 }
@@ -653,6 +633,19 @@ function getElementPath(element) {
 function findAndLogProfessors() {
   console.log("🔍 Starting professor search in iframe...");
 
+  // Only clean up if we actually need to re-process
+  // Check if we already have ratings for current professors
+  const currentProfessors = document.querySelectorAll('[role="cell"]');
+  const hasExistingRatings =
+    document.querySelectorAll(".polyratings-rating-element").length > 0;
+
+  if (hasExistingRatings) {
+    console.log(
+      "⏭️ Ratings already exist, skipping cleanup to prevent flickering"
+    );
+    return;
+  }
+
   // First, clean up any existing rating elements to prevent duplicates
   const existingRatings = document.querySelectorAll(
     ".polyratings-rating-element"
@@ -903,7 +896,18 @@ function findAndLogProfessors() {
 // Function to set up the MutationObserver
 function setupMutationObserver() {
   console.log("👀 Setting up MutationObserver in iframe...");
+
+  // Add debouncing to prevent excessive re-runs
+  let debounceTimeout;
+  let isProcessing = false;
+
   const observer = new MutationObserver((mutations) => {
+    // Skip if we're already processing
+    if (isProcessing) {
+      console.log("⏭️ Already processing, skipping mutation");
+      return;
+    }
+
     console.log(
       `🔄 DOM changed in iframe! ${mutations.length} mutation(s) detected`
     );
@@ -973,8 +977,18 @@ function setupMutationObserver() {
       console.log(
         "🚀 Relevant changes detected in iframe, running professor search..."
       );
-      // Add a small delay to ensure DOM is fully updated
-      setTimeout(findAndLogProfessors, 100);
+
+      // Clear any existing timeout
+      clearTimeout(debounceTimeout);
+
+      // Set processing flag
+      isProcessing = true;
+
+      // Add a delay to ensure DOM is fully updated and debounce
+      debounceTimeout = setTimeout(() => {
+        findAndLogProfessors();
+        isProcessing = false;
+      }, 500); // Increased delay for better stability
     } else {
       console.log(
         "⏭️ No relevant changes detected in iframe, skipping professor search"
