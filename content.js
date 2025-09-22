@@ -133,13 +133,13 @@ function prInjectStyles() {
       
       /* Smooth fade-in animation for new ratings */
       .polyratings-rating-element.fade-in {
-        animation: fadeIn 0.3s ease-in-out;
+        animation: fadeIn 0.15s ease-in-out;
       }
       
       @keyframes fadeIn {
         from {
           opacity: 0;
-          transform: translateY(-5px);
+          transform: translateY(-3px);
         }
         to {
           opacity: 1;
@@ -988,7 +988,7 @@ function setupMutationObserver() {
       debounceTimeout = setTimeout(() => {
         findAndLogProfessors();
         isProcessing = false;
-      }, 500); // Increased delay for better stability
+      }, 150); // Reduced delay for snappier response
     } else {
       console.log(
         "⏭️ No relevant changes detected in iframe, skipping professor search"
