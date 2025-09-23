@@ -891,6 +891,423 @@ function findAndLogProfessors() {
   console.log(
     `🎯 Professor search complete. Found ${professorCount} professors.`
   );
+
+  // Also try to inject the Ask Agent button
+  injectAskAgentButton();
+}
+
+// Function to open the agent popup
+function openAgentPopup(button) {
+  console.log("🤖 Opening agent popup...");
+
+  // Change button to "Active Agent" state
+  button.textContent = "Active Agent";
+  button.style.background = "linear-gradient(135deg, #4CAF50, #45a049)";
+  button.style.color = "#fff";
+
+  // Create popup container
+  const popup = document.createElement("div");
+  popup.className = "agent-popup";
+  popup.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out;
+  `;
+
+  // Create chat container
+  const chatContainer = document.createElement("div");
+  chatContainer.style.cssText = `
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    width: 400px;
+    max-width: 90vw;
+    height: 500px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    animation: slideUp 0.4s ease-out;
+  `;
+
+  // Create header
+  const header = document.createElement("div");
+  header.style.cssText = `
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    padding: 16px 20px;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  `;
+  header.innerHTML = `
+    <span>🤖 PolyRatings Agent</span>
+    <button class="close-agent-btn" style="
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #000;
+      padding: 0;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">×</button>
+  `;
+
+  // Create chat messages area
+  const messagesArea = document.createElement("div");
+  messagesArea.className = "agent-messages";
+  messagesArea.style.cssText = `
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    background: #f8f9fa;
+  `;
+
+  // Add welcome message
+  const welcomeMessage = document.createElement("div");
+  welcomeMessage.style.cssText = `
+    background: white;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #FFD700;
+  `;
+  welcomeMessage.innerHTML = `
+    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">👋 Hi! I'm your PolyRatings Agent</div>
+    <div style="color: #666; font-size: 14px; line-height: 1.4;">
+      I can help you analyze professor ratings, compare courses, and answer questions about your schedule. 
+      <br><br>
+      <strong>🚧 Building in progress...</strong> More features coming soon!
+    </div>
+  `;
+  messagesArea.appendChild(welcomeMessage);
+
+  // Create input area
+  const inputArea = document.createElement("div");
+  inputArea.style.cssText = `
+    padding: 16px 20px;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 12px;
+  `;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Ask me anything about professors or courses...";
+  input.style.cssText = `
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 24px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  `;
+
+  const sendBtn = document.createElement("button");
+  sendBtn.textContent = "Send";
+  sendBtn.style.cssText = `
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    border: none;
+    border-radius: 24px;
+    padding: 12px 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+  `;
+
+  // Add event listeners
+  const closeBtn = header.querySelector(".close-agent-btn");
+  closeBtn.addEventListener("click", closeAgentPopup);
+
+  sendBtn.addEventListener("click", () => {
+    const message = input.value.trim();
+    if (message) {
+      addUserMessage(messagesArea, message);
+      input.value = "";
+
+      // Add bot response
+      setTimeout(() => {
+        addBotMessage(
+          messagesArea,
+          "🚧 Building in progress... This feature is coming soon!"
+        );
+      }, 500);
+    }
+  });
+
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      sendBtn.click();
+    }
+  });
+
+  // Assemble popup
+  inputArea.appendChild(input);
+  inputArea.appendChild(sendBtn);
+
+  chatContainer.appendChild(header);
+  chatContainer.appendChild(messagesArea);
+  chatContainer.appendChild(inputArea);
+  popup.appendChild(chatContainer);
+
+  // Add to document
+  document.body.appendChild(popup);
+
+  // Focus input
+  setTimeout(() => input.focus(), 100);
+
+  // Add CSS animations
+  if (!document.querySelector("#agent-popup-styles")) {
+    const style = document.createElement("style");
+    style.id = "agent-popup-styles";
+    style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      
+      @keyframes slideUp {
+        from { 
+          opacity: 0;
+          transform: translateY(30px) scale(0.95);
+        }
+        to { 
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+      
+      .agent-popup input:focus {
+        border-color: #FFD700 !important;
+      }
+      
+      .agent-popup button:hover {
+        transform: translateY(-1px);
+      }
+      
+      @keyframes slideInRight {
+        from {
+          opacity: 0;
+          transform: translateX(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      
+      @keyframes slideInLeft {
+        from {
+          opacity: 0;
+          transform: translateX(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
+// Function to close the agent popup
+function closeAgentPopup() {
+  console.log("🤖 Closing agent popup...");
+
+  const popup = document.querySelector(".agent-popup");
+  if (popup) {
+    popup.remove();
+  }
+
+  // Reset button to original state
+  const button = document.querySelector(".ask-agent-button");
+  if (button) {
+    button.textContent = "Ask Agent";
+    button.style.background = "linear-gradient(135deg, #FFD700, #FFA500)";
+    button.style.color = "#000";
+  }
+}
+
+// Function to add user message
+function addUserMessage(container, message) {
+  const messageDiv = document.createElement("div");
+  messageDiv.style.cssText = `
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    padding: 12px 16px;
+    border-radius: 18px 18px 4px 18px;
+    margin-bottom: 12px;
+    margin-left: 40px;
+    font-size: 14px;
+    word-wrap: break-word;
+    animation: slideInRight 0.3s ease-out;
+  `;
+  messageDiv.textContent = message;
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Function to add bot message
+function addBotMessage(container, message) {
+  const messageDiv = document.createElement("div");
+  messageDiv.style.cssText = `
+    background: white;
+    color: #333;
+    padding: 12px 16px;
+    border-radius: 18px 18px 18px 4px;
+    margin-bottom: 12px;
+    margin-right: 40px;
+    font-size: 14px;
+    word-wrap: break-word;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    animation: slideInLeft 0.3s ease-out;
+  `;
+  messageDiv.textContent = message;
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Function to inject the Ask Agent button
+function injectAskAgentButton() {
+  console.log("🤖 Looking for Cancel/Ok buttons to add Ask Agent button...");
+
+  // Look for common button patterns in Material-UI
+  const buttonSelectors = [
+    'button[type="button"]',
+    ".MuiButton-root",
+    "button",
+    '[role="button"]',
+  ];
+
+  let foundButtons = [];
+  buttonSelectors.forEach((selector) => {
+    const buttons = document.querySelectorAll(selector);
+    buttons.forEach((button) => {
+      const text = button.textContent.trim().toLowerCase();
+      if (
+        text.includes("cancel") ||
+        text.includes("ok") ||
+        text.includes("submit")
+      ) {
+        foundButtons.push(button);
+      }
+    });
+  });
+
+  console.log(`🔍 Found ${foundButtons.length} potential action buttons`);
+
+  if (foundButtons.length > 0) {
+    // Find the container that holds these buttons
+    const buttonContainer =
+      foundButtons[0].closest("div") || foundButtons[0].parentElement;
+
+    if (buttonContainer) {
+      // Check if we already added the button
+      if (document.querySelector(".ask-agent-button")) {
+        console.log("⏭️ Ask Agent button already exists, skipping...");
+        return;
+      }
+
+      // Create the Ask Agent button
+      const askAgentButton = document.createElement("button");
+      askAgentButton.className = "ask-agent-button";
+      askAgentButton.textContent = "Ask Agent";
+      askAgentButton.style.cssText = `
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-right: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      `;
+
+      // Add hover effect
+      askAgentButton.addEventListener("mouseenter", () => {
+        askAgentButton.style.transform = "translateY(-1px)";
+        askAgentButton.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
+      });
+
+      askAgentButton.addEventListener("mouseleave", () => {
+        askAgentButton.style.transform = "translateY(0)";
+        askAgentButton.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
+      });
+
+      // Add click handler
+      askAgentButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("🤖 Ask Agent button clicked!");
+
+        // Toggle the popup
+        if (document.querySelector(".agent-popup")) {
+          closeAgentPopup();
+        } else {
+          openAgentPopup(askAgentButton);
+        }
+      });
+
+      // Insert the button before the existing buttons
+      buttonContainer.insertBefore(askAgentButton, foundButtons[0]);
+
+      console.log("✅ Ask Agent button injected successfully!");
+    }
+  } else {
+    console.log(
+      "❌ Could not find Cancel/Ok buttons to place Ask Agent button"
+    );
+  }
+}
+
+// Function to set up button observer (runs more frequently)
+function setupButtonObserver() {
+  console.log("🔘 Setting up button observer...");
+
+  // Try to inject button immediately
+  injectAskAgentButton();
+
+  // Set up a more frequent check for buttons
+  const buttonCheckInterval = setInterval(() => {
+    if (document.querySelector(".ask-agent-button")) {
+      console.log("✅ Ask Agent button found, stopping button observer");
+      clearInterval(buttonCheckInterval);
+    } else {
+      injectAskAgentButton();
+    }
+  }, 1000); // Check every second
+
+  // Stop checking after 30 seconds
+  setTimeout(() => {
+    clearInterval(buttonCheckInterval);
+    console.log("⏰ Button observer timeout reached");
+  }, 30000);
 }
 
 // Function to set up the MutationObserver
@@ -1037,6 +1454,7 @@ if (window.top === window) {
     iframe.addEventListener("load", () => {
       console.log("📥 Iframe loaded, setting up observer...");
       setupMutationObserver();
+      setupButtonObserver();
     });
 
     // If iframe is already loaded, set up observer immediately
@@ -1048,14 +1466,17 @@ if (window.top === window) {
         "📥 Iframe already loaded, setting up observer immediately..."
       );
       setupMutationObserver();
+      setupButtonObserver();
     }
   } else {
     console.log(
       "❌ Schedule Builder iframe not found, setting up observer anyway..."
     );
     setupMutationObserver();
+    setupButtonObserver();
   }
 } else {
   console.log("📄 We're already in an iframe");
   setupMutationObserver();
+  setupButtonObserver();
 }
