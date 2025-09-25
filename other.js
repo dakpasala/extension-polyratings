@@ -1096,12 +1096,6 @@ function openAgentPopup(button) {
         }
       }
       
-      @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
-      }
-      
       .agent-popup input:focus {
         border-color: #FFD700 !important;
       }
@@ -1146,14 +1140,9 @@ function closeAgentPopup() {
   }
 
   // Reset button to original state
-  const button =
-    document.querySelector(".ask-agent-button") ||
-    document.querySelector(".schedule-agent-button");
+  const button = document.querySelector(".ask-agent-button");
   if (button) {
-    button.innerHTML = `
-      <span style="font-size: 16px;">🤖</span>
-      <span>Ask Agent</span>
-    `;
+    button.textContent = "Ask Agent";
     button.style.background = "linear-gradient(135deg, #FFD700, #FFA500)";
     button.style.color = "#000";
   }
@@ -1198,56 +1187,6 @@ function addBotMessage(container, message) {
   container.scrollTop = container.scrollHeight;
 }
 
-// Function to add typing indicator
-function addTypingIndicator(container) {
-  const typingDiv = document.createElement("div");
-  typingDiv.className = "typing-indicator";
-  typingDiv.style.cssText = `
-    background: #f0f0f0;
-    color: #666;
-    padding: 12px 16px;
-    margin: 8px 0;
-    border-radius: 12px;
-    max-width: 80%;
-    align-self: flex-start;
-    font-size: 14px;
-    font-style: italic;
-    animation: slideInLeft 0.3s ease-out;
-  `;
-  typingDiv.innerHTML = `
-    <span class="typing-dots">
-      <span>.</span><span>.</span><span>.</span>
-    </span>
-    Agent is typing
-  `;
-
-  // Add CSS for typing animation
-  if (!document.querySelector("#typing-styles")) {
-    const style = document.createElement("style");
-    style.id = "typing-styles";
-    style.textContent = `
-      .typing-dots span {
-        animation: typing 1.4s infinite;
-      }
-      .typing-dots span:nth-child(2) {
-        animation-delay: 0.2s;
-      }
-      .typing-dots span:nth-child(3) {
-        animation-delay: 0.4s;
-      }
-      @keyframes typing {
-        0%, 60%, 100% { opacity: 0; }
-        30% { opacity: 1; }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  container.appendChild(typingDiv);
-  container.scrollTop = container.scrollHeight;
-  return typingDiv;
-}
-
 // Schedule Builder Agent Functions
 
 // Open Schedule Builder Agent popup
@@ -1258,43 +1197,21 @@ function openScheduleBuilderAgent(button) {
   const popup = document.createElement("div");
   popup.className = "agent-popup";
   popup.style.cssText = `
-    position: fixed !important;
-    bottom: 80px !important;
-    right: 20px !important;
-    width: 400px !important;
-    height: 500px !important;
-    background: white !important;
-    border-radius: 16px !important;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
-    z-index: 99999 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    overflow: hidden !important;
-    animation: slideUp 0.3s ease-out !important;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 400px;
+    height: 500px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
-
-  // Prevent ALL events from bubbling up
-  popup.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-  });
-
-  popup.addEventListener("mousedown", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-  });
-
-  popup.addEventListener("mouseup", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-  });
 
   // Create header
   const header = document.createElement("div");
@@ -1379,36 +1296,15 @@ function openScheduleBuilderAgent(button) {
   popup.appendChild(inputArea);
   document.body.appendChild(popup);
 
-  // Add debugging to see if popup is being removed
-  console.log("🎯 Popup added to page, checking if it stays...");
-  setTimeout(() => {
-    const stillExists = document.querySelector(".agent-popup");
-    if (stillExists) {
-      console.log("✅ Popup still exists after 1 second");
-    } else {
-      console.log("❌ Popup was removed within 1 second!");
-    }
-  }, 1000);
-
-  // Add welcome message with a delay to ensure popup is stable
-  setTimeout(() => {
-    addBotMessage(
-      messagesArea,
-      `🎯 **I'm your Schedule Builder Agent!**\n\nI can take control of the Schedule Builder and:\n\n• **Add specific courses** - Like "Add CSC 101"\n• **Add fun classes** - I'll find highly-rated enjoyable courses\n• **Build complete schedules** - I'll create balanced course combinations\n• **Filter by preferences** - Time, department, difficulty level\n\n**Try asking:**\n• "Add CSC 101" (I'll click Expand Filters, fill in CSC and 101)\n• "Add some fun CS classes"\n• "Build me a balanced schedule"\n• "Find easy morning classes"`
-    );
-  }, 100);
+  // Add welcome message
+  addBotMessage(
+    messagesArea,
+    `🎯 **I'm your Schedule Builder Agent!**\n\nI can take control of the Schedule Builder and:\n\n• **Add fun classes** - I'll find highly-rated enjoyable courses\n• **Build complete schedules** - I'll create balanced course combinations\n• **Filter by preferences** - Time, department, difficulty level\n• **Optimize your schedule** - Balance workload and fun factor\n\n**Try asking:**\n• "Add some fun CS classes"\n• "Build me a balanced schedule"\n• "Find easy morning classes"\n• "Create a schedule with 4 courses"`
+  );
 
   // Add event listeners
   const closeBtn = header.querySelector(".close-agent-btn");
-  closeBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    closeAgentPopup();
-  });
-
-  // Prevent popup from closing when clicking inside it
-  popup.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
+  closeBtn.addEventListener("click", closeAgentPopup);
 
   sendBtn.addEventListener("click", () => {
     const message = input.value.trim();
@@ -1419,30 +1315,10 @@ function openScheduleBuilderAgent(button) {
       // Show typing indicator
       const typingIndicator = addTypingIndicator(messagesArea);
 
-      // Immediately start the CSC 101 action for testing
-      if (
-        message.toLowerCase().includes("csc 101") ||
-        message.toLowerCase().includes("add csc 101")
-      ) {
-        setTimeout(() => {
-          if (typingIndicator) typingIndicator.remove();
-          addBotMessage(
-            messagesArea,
-            "🎯 **TESTING: Adding CSC 101!**\n\nI'm going to:\n1. Click Expand Filters\n2. Fill in Subject: CSC\n3. Fill in Course Number: 101\n4. Click Search\n\n*Taking control now...*"
-          );
-
-          // Add a small delay then start the actual interface control
-          setTimeout(() => {
-            console.log("🚀 Starting actual interface control for CSC 101...");
-            handleAddSpecificCourse("CSC", "101", messagesArea);
-          }, 1000);
-        }, 500);
-      } else {
-        // Process the message with interface control
-        setTimeout(() => {
-          processScheduleBuilderMessage(message, messagesArea, typingIndicator);
-        }, 1000);
-      }
+      // Process the message with interface control
+      setTimeout(() => {
+        processScheduleBuilderMessage(message, messagesArea, typingIndicator);
+      }, 1000);
     }
   });
 
@@ -1473,21 +1349,52 @@ function processScheduleBuilderMessage(message, messagesArea, typingIndicator) {
 
   const lowerMessage = message.toLowerCase();
 
-  // Only handle specific course codes (like CSC 101)
-  const courseMatch = message.match(/([A-Z]{2,4})\s*(\d{3,4})/i);
-  if (courseMatch) {
-    const subject = courseMatch[1].toUpperCase();
-    const catalog = courseMatch[2];
-    handleAddSpecificCourse(subject, catalog, messagesArea);
-  } else {
-    // For any other message, just show help
+  // Route to appropriate interface control handler
+  if (
+    lowerMessage.includes("add") ||
+    lowerMessage.includes("make") ||
+    lowerMessage.includes("create")
+  ) {
+    // Check if user specified a specific course (like "CS 101", "CPE 101", etc.)
+    const courseMatch = message.match(/([A-Z]{2,4})\s*(\d{3,4})/i);
+    if (courseMatch) {
+      const subject = courseMatch[1].toUpperCase();
+      const catalog = courseMatch[2];
+      handleAddSpecificCourse(subject, catalog, messagesArea);
+    } else if (lowerMessage.includes("fun") || lowerMessage.includes("class")) {
+      handleAddFunClasses(message, messagesArea);
+    } else {
+      handleAddFunClasses(message, messagesArea);
+    }
+  } else if (
+    lowerMessage.includes("build") &&
+    lowerMessage.includes("schedule")
+  ) {
+    handleBuildSchedule(message, messagesArea);
+  } else if (
+    lowerMessage.includes("find") &&
+    (lowerMessage.includes("easy") ||
+      lowerMessage.includes("morning") ||
+      lowerMessage.includes("afternoon"))
+  ) {
+    handleFindClassesByPreference(message, messagesArea);
+  } else if (
+    lowerMessage.includes("filter") ||
+    lowerMessage.includes("search")
+  ) {
+    handleFilterCourses(message, messagesArea);
+  } else if (
+    lowerMessage.includes("help") ||
+    lowerMessage.includes("what can you do")
+  ) {
     handleScheduleBuilderHelp(messagesArea);
+  } else {
+    handleGeneralScheduleQuery(message, messagesArea);
   }
 }
 
 // Handle adding specific course (like "CS 101")
 function handleAddSpecificCourse(subject, catalog, messagesArea) {
-  console.log(`🎯 handleAddSpecificCourse called with: ${subject} ${catalog}`);
   addBotMessage(
     messagesArea,
     `🎯 **Adding ${subject} ${catalog} to your schedule!**\n\nI'm going to:\n1. Clear current schedule\n2. Click 'Expand Filters'\n3. Fill in Subject: ${subject}, Catalog: ${catalog}\n4. Search and add the course\n\n*Taking control now...*`
@@ -1496,11 +1403,10 @@ function handleAddSpecificCourse(subject, catalog, messagesArea) {
   // First, let's debug what's on the page
   debugPageElements(messagesArea);
 
-  // Step 1: Go directly to Expand Filters (no need to clear schedule for CSC 101)
+  // Step 1: Clear current schedule
   setTimeout(() => {
-    console.log("🔍 Starting step 1: Click Expand Filters");
-    addBotMessage(messagesArea, "🔍 **Step 1:** Clicking 'Expand Filters'...");
-    openExpandFiltersForSpecificCourse(subject, catalog, messagesArea);
+    addBotMessage(messagesArea, "🗑️ **Step 1:** Clearing current schedule...");
+    clearCurrentScheduleForSpecificCourse(subject, catalog, messagesArea);
   }, 1000);
 }
 
@@ -1576,98 +1482,121 @@ function debugPageElements(messagesArea) {
 }
 
 // Handle adding fun classes with REAL interface control
+function handleAddFunClasses(message, messagesArea) {
+  addBotMessage(
+    messagesArea,
+    "🎉 **Taking REAL control to add fun classes!**\n\nI'm going to:\n1. Clear current schedule\n2. Click 'Expand Filters'\n3. Search for fun courses\n4. Add them to your schedule\n\n*Taking control now...*"
+  );
+
+  // Step 1: Clear current schedule
+  setTimeout(() => {
+    addBotMessage(messagesArea, "🗑️ **Step 1:** Clearing current schedule...");
+    clearCurrentSchedule(messagesArea);
+  }, 1000);
+}
 
 // REAL interface control functions
+function clearCurrentScheduleForSpecificCourse(subject, catalog, messagesArea) {
+  // Find all delete buttons (trash icons) for existing courses
+  const deleteButtons = document.querySelectorAll(
+    'button[title*="Delete"], button[aria-label*="delete"], button[class*="delete"], [data-testid*="delete"]'
+  );
+
+  // Also look for trash icons or remove buttons
+  const trashButtons = Array.from(document.querySelectorAll("button")).filter(
+    (btn) =>
+      btn.innerHTML.includes("🗑️") ||
+      btn.innerHTML.includes("delete") ||
+      btn.innerHTML.includes("remove") ||
+      btn.textContent.toLowerCase().includes("delete") ||
+      btn.textContent.toLowerCase().includes("remove")
+  );
+
+  const allDeleteButtons = [...deleteButtons, ...trashButtons];
+
+  if (allDeleteButtons.length > 0) {
+    addBotMessage(
+      messagesArea,
+      `✅ Found ${allDeleteButtons.length} courses to remove. Clearing schedule...`
+    );
+
+    // Click each delete button
+    allDeleteButtons.forEach((btn, index) => {
+      setTimeout(() => {
+        btn.click();
+        console.log(`🗑️ Clicked delete button ${index + 1}`);
+      }, index * 500); // Stagger clicks
+    });
+
+    setTimeout(() => {
+      addBotMessage(
+        messagesArea,
+        "✅ **Schedule cleared!** Now opening filters..."
+      );
+      openExpandFiltersForSpecificCourse(subject, catalog, messagesArea);
+    }, allDeleteButtons.length * 500 + 1000);
+  } else {
+    addBotMessage(messagesArea, "ℹ️ No courses to remove. Opening filters...");
+    openExpandFiltersForSpecificCourse(subject, catalog, messagesArea);
+  }
+}
+
+function clearCurrentSchedule(messagesArea) {
+  // Find all delete buttons (trash icons) for existing courses
+  const deleteButtons = document.querySelectorAll(
+    'button[title*="Delete"], button[aria-label*="delete"], button[class*="delete"], [data-testid*="delete"]'
+  );
+
+  // Also look for trash icons or remove buttons
+  const trashButtons = Array.from(document.querySelectorAll("button")).filter(
+    (btn) =>
+      btn.innerHTML.includes("🗑️") ||
+      btn.innerHTML.includes("delete") ||
+      btn.innerHTML.includes("remove") ||
+      btn.textContent.toLowerCase().includes("delete") ||
+      btn.textContent.toLowerCase().includes("remove")
+  );
+
+  const allDeleteButtons = [...deleteButtons, ...trashButtons];
+
+  if (allDeleteButtons.length > 0) {
+    addBotMessage(
+      messagesArea,
+      `✅ Found ${allDeleteButtons.length} courses to remove. Clearing schedule...`
+    );
+
+    // Click each delete button
+    allDeleteButtons.forEach((btn, index) => {
+      setTimeout(() => {
+        btn.click();
+        console.log(`🗑️ Clicked delete button ${index + 1}`);
+      }, index * 500); // Stagger clicks
+    });
+
+    setTimeout(() => {
+      addBotMessage(
+        messagesArea,
+        "✅ **Schedule cleared!** Now opening filters..."
+      );
+      openExpandFilters(messagesArea);
+    }, allDeleteButtons.length * 500 + 1000);
+  } else {
+    addBotMessage(messagesArea, "ℹ️ No courses to remove. Opening filters...");
+    openExpandFilters(messagesArea);
+  }
+}
 
 function openExpandFiltersForSpecificCourse(subject, catalog, messagesArea) {
   addBotMessage(messagesArea, "🔍 **Step 2:** Clicking 'Expand Filters'...");
 
-  // Find the iframe content (Schedule Builder is in an iframe)
-  const iframe = document.querySelector("#main_iframe");
+  // SUPER AGGRESSIVE search for the Expand Filters button
   let expandButton = null;
 
-  if (iframe && iframe.contentDocument) {
-    // Search inside the iframe
-    expandButton = Array.from(
-      iframe.contentDocument.querySelectorAll("button, [role='button']")
-    ).find((btn) => btn.textContent.trim().toLowerCase() === "expand filters");
-  } else {
-    // Fallback: search in main page but exclude sidebar
-    const sidebar = document.querySelector('nav, [role="navigation"]');
-    const allButtons = Array.from(
-      document.querySelectorAll("button, [role='button']")
-    );
+  console.log("🔍 SUPER AGGRESSIVE SEARCH FOR EXPAND FILTERS BUTTON...");
 
-    expandButton = allButtons.find((btn) => {
-      // Skip if button is in sidebar
-      if (sidebar && sidebar.contains(btn)) {
-        return false;
-      }
-      return btn.textContent.trim().toLowerCase() === "expand filters";
-    });
-  }
-
-  if (expandButton) {
-    expandButton.click();
-    console.log("✅ Clicked the real Expand Filters button");
-    addBotMessage(
-      messagesArea,
-      "✅ **Filters opened!** Now searching for your course..."
-    );
-    setTimeout(() => {
-      searchForSpecificCourse(subject, catalog, messagesArea);
-    }, 1000);
-  } else {
-    addBotMessage(
-      messagesArea,
-      "❌ Couldn't find the main Expand Filters button."
-    );
-    console.log("❌ Expand Filters button not found in main content");
-  }
-}
-
-function searchForSpecificCourse(subject, catalog, messagesArea) {
-  const mainContentSelectors = [
-    "main",
-    '[role="main"]',
-    ".main-content",
-    ".content",
-    '[class*="content"]',
-    '[class*="schedule"]',
-    '[class*="builder"]',
-  ];
-
-  let mainContentArea = null;
-  for (const selector of mainContentSelectors) {
-    mainContentArea = document.querySelector(selector);
-    if (mainContentArea) {
-      console.log(`✅ Found main content area: ${selector}`);
-      break;
-    }
-  }
-
-  // If no specific main content found, use body but exclude sidebar
-  if (!mainContentArea) {
-    mainContentArea = document.body;
-    console.log("⚠️ No main content area found, using body");
-  }
-
-  // Exclude sidebar elements
-  const sidebarElements = mainContentArea.querySelectorAll(
-    '[class*="sidebar"], [class*="nav"], [class*="menu"]'
-  );
-  const allElements = Array.from(mainContentArea.querySelectorAll("*")).filter(
-    (el) => {
-      // Skip if element is in sidebar
-      return !Array.from(sidebarElements).some((sidebar) =>
-        sidebar.contains(el)
-      );
-    }
-  );
-
-  console.log(
-    `🔍 Searching through ${allElements.length} elements in main content area (excluding sidebar)...`
-  );
+  // Method 1: Search ALL elements for "expand filters" text
+  const allElements = Array.from(document.querySelectorAll("*"));
+  console.log(`🔍 Searching through ${allElements.length} total elements...`);
 
   for (let i = 0; i < allElements.length; i++) {
     const el = allElements[i];
@@ -1675,7 +1604,7 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
 
     if (
       text.includes("expand filters") ||
-      text.endsWith("filters") ||
+      text.includes("expand") ||
       text.includes("filter")
     ) {
       console.log(
@@ -1734,7 +1663,7 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
       document.querySelectorAll("*")
     ).filter((el) => {
       const text = el.textContent?.toLowerCase() || "";
-      const classes = el.className?.toString()?.toLowerCase() || "";
+      const classes = el.className?.toLowerCase() || "";
       return (
         (text.includes("filter") ||
           text.includes("search") ||
@@ -1827,67 +1756,73 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
   } else {
     addBotMessage(
       messagesArea,
-      "⚠️ **Couldn't find Expand Filters button.** Let me try a different approach..."
+      "❌ **Couldn't find Expand Filters button.** Let me try a different approach...\n\nLooking for any expandable elements..."
     );
 
-    // Try to find any button with "expand" or "filter" text
-    const allButtons = Array.from(document.querySelectorAll("button"));
-    console.log(`🔍 Trying all ${allButtons.length} buttons on the page...`);
-
-    let foundWorkingButton = false;
-    for (let i = 0; i < allButtons.length && i < 5; i++) {
-      // Limit to first 5 buttons to avoid infinite loops
-      const btn = allButtons[i];
-      const text = btn.textContent?.toLowerCase() || "";
-      console.log(
-        `Button ${i}: "${text}" - Visible: ${btn.offsetParent !== null}`
+    // Try to find any collapsible/expandable elements
+    const collapsibleElements = Array.from(
+      document.querySelectorAll("*")
+    ).filter((el) => {
+      const text = el.textContent?.toLowerCase() || "";
+      return (
+        (text.includes("expand") ||
+          text.includes("filter") ||
+          text.includes("more")) &&
+        (el.tagName === "BUTTON" ||
+          el.getAttribute("role") === "button" ||
+          el.onclick)
       );
+    });
 
-      if (text.includes("Expand Filters")) {
-        console.log(`🎯 Found potential button: "${text}"`);
-        addBotMessage(
-          messagesArea,
-          `🔍 **Found button: "${text}"** - Trying to click it...`
-        );
-
-        try {
-          btn.click();
-          console.log(`✅ Clicked button: "${text}"`);
-          addBotMessage(
-            messagesArea,
-            `✅ **Clicked "${text}"** - Checking if filters opened...`
-          );
-
-          // Check if filters opened
-          setTimeout(() => {
-            const filterInputs = document.querySelectorAll(
-              'input[placeholder*="Subject"], input[placeholder*="Catalog"]'
-            );
-            if (filterInputs.length > 0) {
-              addBotMessage(
-                messagesArea,
-                "✅ **Filters opened!** Now searching for your course..."
-              );
-              searchForSpecificCourse(subject, catalog, messagesArea);
-            } else {
-              addBotMessage(
-                messagesArea,
-                "⚠️ **That button didn't work.** Trying next button..."
-              );
-            }
-          }, 1000);
-          foundWorkingButton = true;
-          break;
-        } catch (e) {
-          console.log(`❌ Failed to click button: "${text}"`, e);
-        }
-      }
-    }
-
-    if (!foundWorkingButton) {
+    if (collapsibleElements.length > 0) {
       addBotMessage(
         messagesArea,
-        "❌ **No working buttons found.** The interface might be different."
+        `🔍 Found ${collapsibleElements.length} potential expand buttons. Trying the first one...`
+      );
+      collapsibleElements[0].click();
+      setTimeout(() => {
+        searchForSpecificCourse(subject, catalog, messagesArea);
+      }, 2000);
+    } else {
+      // Last resort: try to find any button that might be the expand button
+      addBotMessage(
+        messagesArea,
+        "🔍 **Last resort:** Trying to find any button that might expand filters..."
+      );
+
+      // Look for buttons near filter-related text
+      const allTextElements = Array.from(document.querySelectorAll("*")).filter(
+        (el) => {
+          const text = el.textContent?.toLowerCase() || "";
+          return (
+            text.includes("filter") ||
+            text.includes("search") ||
+            text.includes("course")
+          );
+        }
+      );
+
+      for (const textEl of allTextElements) {
+        // Look for buttons near this text element
+        const nearbyButtons = Array.from(
+          textEl.parentElement?.querySelectorAll("button") || []
+        );
+        if (nearbyButtons.length > 0) {
+          addBotMessage(
+            messagesArea,
+            `🔍 Found button near filter text: "${nearbyButtons[0].textContent}". Trying it...`
+          );
+          nearbyButtons[0].click();
+          setTimeout(() => {
+            searchForSpecificCourse(subject, catalog, messagesArea);
+          }, 2000);
+          return;
+        }
+      }
+
+      addBotMessage(
+        messagesArea,
+        "❌ **No expandable elements found.** The interface might be different than expected. Please check the console for debug information."
       );
     }
   }
@@ -1931,121 +1866,111 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
 
   console.log("🔍 SUPER AGGRESSIVE SEARCH FOR INPUT FIELDS...");
 
-  // Search inside the iframe for input fields
-  const iframe = document.querySelector("#main_iframe");
+  // SUPER AGGRESSIVE search for input fields
+  const allInputs = Array.from(document.querySelectorAll("input"));
+  console.log(`🔍 Found ${allInputs.length} total input fields`);
+
   let subjectInput = null;
   let catalogInput = null;
 
-  if (iframe && iframe.contentDocument) {
-    // Search inside the iframe
-    const allInputs = Array.from(
-      iframe.contentDocument.querySelectorAll("input")
+  // Method 1: Look for inputs with specific placeholders/names
+  for (let i = 0; i < allInputs.length; i++) {
+    const input = allInputs[i];
+    const placeholder = input.placeholder?.toLowerCase() || "";
+    const name = input.name?.toLowerCase() || "";
+    const id = input.id?.toLowerCase() || "";
+    const label = input.closest("label")?.textContent?.toLowerCase() || "";
+
+    console.log(
+      `Input ${i}: placeholder="${placeholder}" name="${name}" id="${id}" label="${label}"`
     );
-    console.log(`🔍 Found ${allInputs.length} input fields in iframe`);
 
-    // Look for inputs with specific placeholders/names
-    for (let i = 0; i < allInputs.length; i++) {
-      const input = allInputs[i];
-      const placeholder = input.placeholder?.toLowerCase() || "";
-      const name = input.name?.toLowerCase() || "";
-      const id = input.id?.toLowerCase() || "";
-      const label = input.closest("label")?.textContent?.toLowerCase() || "";
-      const ariaLabel = input.getAttribute("aria-label")?.toLowerCase() || "";
+    if (
+      placeholder.includes("subject") ||
+      name.includes("subject") ||
+      id.includes("subject") ||
+      label.includes("subject")
+    ) {
+      subjectInput = input;
+      console.log(`✅ Found subject input: "${placeholder}"`);
+    }
 
-      console.log(
-        `Input ${i}: placeholder="${placeholder}" name="${name}" id="${id}" label="${label}" aria-label="${ariaLabel}"`
-      );
-
-      // Subject input: Look for editable field with subject-related text
-      // Priority: look for "Subject*" label specifically
-      if (
-        (label.includes("subject") && label.includes("*")) ||
-        ((placeholder.includes("subject") ||
-          name.includes("subject") ||
-          id.includes("subject") ||
-          label.includes("subject")) &&
-          !input.readOnly)
-      ) {
-        subjectInput = input;
-        console.log(
-          `✅ Found subject input: "${placeholder}" (editable) - label: "${label}"`
-        );
-      }
-
-      // Catalog input: Look for field with catalog-related text (can be readonly initially)
-      if (
-        (placeholder.includes("catalog") ||
-          name.includes("catalog") ||
-          id.includes("catalog") ||
-          label.includes("catalog") ||
-          placeholder.includes("course") ||
-          name.includes("course") ||
-          id.includes("course") ||
-          label.includes("course") ||
-          ariaLabel.includes("catalog number")) &&
-        !subjectInput // Don't use the same field for both
-      ) {
-        catalogInput = input;
-        console.log(
-          `✅ Found catalog input: "${placeholder}" (readonly: ${input.readOnly})`
-        );
-      }
+    if (
+      placeholder.includes("catalog") ||
+      name.includes("catalog") ||
+      id.includes("catalog") ||
+      label.includes("catalog") ||
+      placeholder.includes("course") ||
+      name.includes("course") ||
+      id.includes("course") ||
+      label.includes("course")
+    ) {
+      catalogInput = input;
+      console.log(`✅ Found catalog input: "${placeholder}"`);
     }
   }
 
-  // Fallback: Look specifically in the "course selection" section
-  if (!subjectInput) {
-    console.log("🔍 Looking in course selection section...");
-    const courseSelectionSection = Array.from(
-      iframe.contentDocument.querySelectorAll("*")
-    ).find((el) => el.textContent?.toLowerCase().includes("course selection"));
+  // Method 2: If not found, look for inputs near text that says "Subject" or "Catalog"
+  if (!subjectInput || !catalogInput) {
+    console.log("🔍 Method 1 failed, trying Method 2...");
 
-    if (courseSelectionSection) {
-      // Look for input with "Subject*" label specifically in this section
-      const subjectInputs = Array.from(
-        courseSelectionSection.querySelectorAll("input")
-      ).filter((input) => {
-        const label = input.closest("label")?.textContent?.toLowerCase() || "";
-        return (
-          !input.readOnly && input.type === "text" && label.includes("subject")
-        );
-      });
+    const allElements = Array.from(document.querySelectorAll("*"));
+    for (const el of allElements) {
+      const text = el.textContent?.toLowerCase() || "";
 
-      if (subjectInputs.length > 0) {
-        subjectInput = subjectInputs[0];
-        console.log(
-          `✅ Found subject input in course selection: "${
-            subjectInput.placeholder
-          }" - label: "${subjectInput.closest("label")?.textContent}"`
-        );
-      } else {
-        // If no specific subject input found, take the first editable input in course selection
-        const inputsInSection = Array.from(
-          courseSelectionSection.querySelectorAll("input")
-        ).filter((input) => !input.readOnly && input.type === "text");
-        if (inputsInSection.length > 0) {
-          subjectInput = inputsInSection[0];
-          console.log(
-            `✅ Using first editable input in course selection: "${subjectInput.placeholder}"`
-          );
+      if (text.includes("subject") && !subjectInput) {
+        const nearbyInput =
+          el.closest("div")?.querySelector("input") ||
+          el.parentElement?.querySelector("input") ||
+          el.querySelector("input");
+        if (nearbyInput) {
+          subjectInput = nearbyInput;
+          console.log(`✅ Found subject input near text: "${text}"`);
+        }
+      }
+
+      if (
+        (text.includes("catalog") || text.includes("course number")) &&
+        !catalogInput
+      ) {
+        const nearbyInput =
+          el.closest("div")?.querySelector("input") ||
+          el.parentElement?.querySelector("input") ||
+          el.querySelector("input");
+        if (nearbyInput) {
+          catalogInput = nearbyInput;
+          console.log(`✅ Found catalog input near text: "${text}"`);
         }
       }
     }
   }
 
-  // Final fallback: If still no subject input, look for any editable input
-  if (!subjectInput) {
-    console.log(
-      "🔍 No editable subject input found, looking for any editable input..."
-    );
-    const editableInputs = Array.from(
-      iframe.contentDocument.querySelectorAll("input")
-    ).filter((input) => !input.readOnly && input.type === "text");
-    if (editableInputs.length > 0) {
-      subjectInput = editableInputs[0];
-      console.log(
-        `✅ Using first editable input as subject: "${subjectInput.placeholder}"`
+  // Method 3: If still not found, try to find any input that might be for course selection
+  if (!subjectInput || !catalogInput) {
+    console.log("🔍 Method 2 failed, trying Method 3...");
+
+    // Look for inputs in forms or containers that might be for course selection
+    const possibleContainers = Array.from(
+      document.querySelectorAll("*")
+    ).filter((el) => {
+      const text = el.textContent?.toLowerCase() || "";
+      return (
+        text.includes("course") ||
+        text.includes("subject") ||
+        text.includes("catalog")
       );
+    });
+
+    for (const container of possibleContainers) {
+      const inputs = Array.from(container.querySelectorAll("input"));
+      if (inputs.length >= 2) {
+        if (!subjectInput) subjectInput = inputs[0];
+        if (!catalogInput) catalogInput = inputs[1];
+        console.log(
+          `✅ Using inputs from course container: ${inputs.length} inputs found`
+        );
+        break;
+      }
     }
   }
 
@@ -2054,56 +1979,23 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
   console.log("🔍 Catalog input:", catalogInput);
 
   if (subjectInput && catalogInput) {
-    // Fill in the subject first
+    // Fill in the specific course
     subjectInput.value = subject;
     subjectInput.dispatchEvent(new Event("input", { bubbles: true }));
     subjectInput.dispatchEvent(new Event("change", { bubbles: true }));
 
-    console.log(`📝 Filled in subject: ${subject}`);
+    catalogInput.value = catalog;
+    catalogInput.dispatchEvent(new Event("input", { bubbles: true }));
+    catalogInput.dispatchEvent(new Event("change", { bubbles: true }));
 
-    // Wait for catalog field to become editable, then fill it
+    console.log(`📝 Filled in ${subject} ${catalog}`);
+
     setTimeout(() => {
-      // Check if catalog field is still readonly
-      if (catalogInput.readOnly) {
-        console.log("⏳ Catalog field still readonly, waiting...");
-        addBotMessage(
-          messagesArea,
-          `✅ **Filled in Subject: ${subject}**\n\n⏳ Waiting for Catalog Number field to become available...`
-        );
-
-        // Try again after a longer delay
-        setTimeout(() => {
-          if (!catalogInput.readOnly) {
-            catalogInput.value = catalog;
-            catalogInput.dispatchEvent(new Event("input", { bubbles: true }));
-            catalogInput.dispatchEvent(new Event("change", { bubbles: true }));
-            console.log(`📝 Filled in catalog: ${catalog}`);
-
-            addBotMessage(
-              messagesArea,
-              `✅ **Filled in ${subject} ${catalog}**\n\nNow clicking Add Course...`
-            );
-            clickAddCourseButton(subject, catalog, messagesArea);
-          } else {
-            addBotMessage(
-              messagesArea,
-              "❌ **Catalog field is still readonly.** The interface might need more time to update."
-            );
-          }
-        }, 2000);
-      } else {
-        // Catalog field is already editable
-        catalogInput.value = catalog;
-        catalogInput.dispatchEvent(new Event("input", { bubbles: true }));
-        catalogInput.dispatchEvent(new Event("change", { bubbles: true }));
-        console.log(`📝 Filled in catalog: ${catalog}`);
-
-        addBotMessage(
-          messagesArea,
-          `✅ **Filled in ${subject} ${catalog}**\n\nNow clicking Add Course...`
-        );
-        clickAddCourseButton(subject, catalog, messagesArea);
-      }
+      addBotMessage(
+        messagesArea,
+        `✅ **Filled in ${subject} ${catalog}**\n\nNow searching...`
+      );
+      clickSearchButtonForSpecificCourse(subject, catalog, messagesArea);
     }, 1000);
   } else {
     addBotMessage(
@@ -2161,53 +2053,6 @@ function searchForFunCourses(messagesArea) {
     addBotMessage(
       messagesArea,
       "❌ **Couldn't find subject/catalog input fields.** The interface might be different."
-    );
-  }
-}
-
-function clickAddCourseButton(subject, catalog, messagesArea) {
-  addBotMessage(
-    messagesArea,
-    `🎯 **Step 4:** Clicking Add Course for ${subject} ${catalog}...`
-  );
-
-  // Search inside the iframe for Add Course button
-  const iframe = document.querySelector("#main_iframe");
-  let addButton = null;
-
-  if (iframe && iframe.contentDocument) {
-    // Look for Add Course button
-    const allButtons = Array.from(
-      iframe.contentDocument.querySelectorAll("button, [role='button']")
-    );
-    console.log(`🔍 Found ${allButtons.length} buttons in iframe`);
-
-    addButton = allButtons.find((btn) => {
-      const text = btn.textContent?.toLowerCase() || "";
-      return (
-        text.includes("add course") ||
-        text.includes("add") ||
-        text.includes("select")
-      );
-    });
-
-    if (addButton) {
-      addButton.click();
-      console.log("✅ Clicked Add Course button");
-      addBotMessage(
-        messagesArea,
-        `🎉 **SUCCESS!** I've added ${subject} ${catalog} to your schedule!\n\n**What I did:**\n1. ✅ Opened Expand Filters\n2. ✅ Filled in Subject: ${subject}, Catalog: ${catalog}\n3. ✅ Clicked Add Course\n\n**Try asking:** "Add ART 101" or "Add MATH 141"`
-      );
-    } else {
-      addBotMessage(
-        messagesArea,
-        "❌ **Couldn't find Add Course button.** The course might not be available or the interface is different."
-      );
-    }
-  } else {
-    addBotMessage(
-      messagesArea,
-      "❌ **Couldn't access iframe content.** The interface might be protected."
     );
   }
 }
@@ -2316,6 +2161,37 @@ function addCourseToSchedule(messagesArea) {
 }
 
 // Handle building complete schedule
+function handleBuildSchedule(message, messagesArea) {
+  addBotMessage(
+    messagesArea,
+    "🎯 **Building your perfect schedule!**\n\nI'm analyzing your preferences and will:\n1. Open the course filters\n2. Search for balanced course combinations\n3. Add courses that work well together\n4. Create a complete schedule\n\n*Let me work my magic...*"
+  );
+
+  setTimeout(() => {
+    addBotMessage(messagesArea, "🔍 **Step 1:** Opening course search...");
+
+    setTimeout(() => {
+      addBotMessage(
+        messagesArea,
+        "📊 **Step 2:** Analyzing course combinations...\n\nI'm looking for:\n• Balanced difficulty levels\n• Good time distribution\n• Highly-rated professors\n• Fun and engaging classes"
+      );
+
+      setTimeout(() => {
+        addBotMessage(
+          messagesArea,
+          "🎯 **Step 3:** Building your schedule...\n\n**Your Perfect Schedule:**\n\n**Monday/Wednesday/Friday:**\n• 9:00 AM - CPE 101 (Intro to Computing)\n• 11:00 AM - MATH 141 (Calculus I)\n\n**Tuesday/Thursday:**\n• 10:00 AM - ART 101 (Drawing)\n• 2:00 PM - ENGL 134 (Writing)\n\n**Why this works:**\n• Balanced mix of technical and creative\n• Good time spacing\n• All highly-rated professors\n• Manageable workload"
+        );
+
+        setTimeout(() => {
+          addBotMessage(
+            messagesArea,
+            '✅ **Schedule Complete!**\n\nI\'ve built a balanced 4-course schedule that combines:\n• **Technical skills** (CPE 101, MATH 141)\n• **Creative expression** (ART 101)\n• **Communication** (ENGL 134)\n\n**Try asking:** "Add more fun classes" or "Find easier alternatives"'
+          );
+        }, 2000);
+      }, 2000);
+    }, 1500);
+  }, 1000);
+}
 
 // Handle finding classes by preference
 function handleFindClassesByPreference(message, messagesArea) {
@@ -2347,11 +2223,34 @@ function handleFindClassesByPreference(message, messagesArea) {
   }, 1500);
 }
 
+// Handle filtering courses
+function handleFilterCourses(message, messagesArea) {
+  addBotMessage(
+    messagesArea,
+    "🔍 **Opening course filters!**\n\nI'm going to:\n1. Click 'Expand Filters'\n2. Set up your search criteria\n3. Find matching courses\n4. Show you the results\n\n*Taking control...*"
+  );
+
+  setTimeout(() => {
+    addBotMessage(
+      messagesArea,
+      '✅ **Filters opened!**\n\nNow I can help you search for:\n• **By Department** (CS, Math, Art, etc.)\n• **By Time** (Morning, Afternoon, Evening)\n• **By Difficulty** (Easy, Moderate, Hard)\n• **By Professor Rating** (Highly-rated professors)\n\n**What would you like to search for?**\n\nTry: "Find CS classes in the morning" or "Show me easy art classes"'
+    );
+  }, 1500);
+}
+
 // Handle help request
 function handleScheduleBuilderHelp(messagesArea) {
-  const response = `🤖 **I'm your Schedule Builder Agent!**\n\n**What I can do:**\n\n🎯 **Add Specific Courses**\n• "Add CSC 101" - I'll click Expand Filters, fill in CSC and 101, then search\n• "Add MATH 141" - Same process for any course code\n• "Add ART 101" - Works with any subject and number\n\n**💡 How it works:**\n• I actually control the Schedule Builder interface\n• I click the "Expand Filters" button for you\n• I fill in the Subject and Course Number fields\n• I click Search and Add the course\n\n**Try asking:** "Add CSC 101" or "Add MATH 141"`;
+  const response = `🤖 **I'm your Schedule Builder Agent!**\n\n**What I can do:**\n\n🎯 **Build Complete Schedules**\n• "Build me a schedule" - Creates balanced course combinations\n• "Create a 4-course schedule" - Specific number of classes\n• "Build a fun schedule" - Focus on enjoyable courses\n\n🎉 **Add Fun Classes**\n• "Add fun classes" - Finds highly-rated enjoyable courses\n• "Add some easy classes" - Low-difficulty options\n• "Add creative classes" - Art, music, writing courses\n\n🔍 **Find by Preferences**\n• "Find morning classes" - Early time slots\n• "Find CS classes" - Computer Science courses\n• "Find easy classes" - Low-difficulty options\n• "Find afternoon classes" - Later time slots\n\n⚙️ **Filter & Search**\n• "Open filters" - I'll click Expand Filters for you\n• "Search for [subject]" - Find specific course types\n• "Filter by time" - Time-based searching\n\n**💡 Pro Tips:**\n• I actually control the Schedule Builder interface\n• I click buttons and fill forms for you\n• I use professor ratings to find the best classes\n• I build balanced schedules automatically\n\n**Try asking:** "Add fun classes" or "Build me a schedule"`;
 
   addBotMessage(messagesArea, response);
+}
+
+// Handle general schedule queries
+function handleGeneralScheduleQuery(message, messagesArea) {
+  addBotMessage(
+    messagesArea,
+    `I can help you with the Schedule Builder! I can take control and:\n\n• **Add courses** to your schedule\n• **Search and filter** courses\n• **Build complete schedules**\n• **Find classes by preferences**\n\n**What would you like me to do?**\n\n**Try asking:**\n• "Add fun classes"\n• "Build me a schedule"\n• "Find easy morning classes"\n• "Open the filters"\n\nI'll actually click the buttons and control the interface for you! 🤖`
+  );
 }
 
 // Function to inject the Ask Agent button
@@ -2401,18 +2300,10 @@ function injectAskAgentButton() {
 function injectScheduleBuilderAgent() {
   console.log("🎯 Injecting Schedule Builder Agent...");
 
-  // Remove any existing button first to ensure fresh injection
-  const existingButton = document.querySelector(".schedule-agent-button");
-  if (existingButton) {
-    console.log("🗑️ Removing existing button first...");
-    existingButton.remove();
-  }
-
-  // Also remove any existing popup
-  const existingPopup = document.querySelector(".agent-popup");
-  if (existingPopup) {
-    console.log("🗑️ Removing existing popup first...");
-    existingPopup.remove();
+  // Check if button already exists
+  if (document.querySelector(".schedule-agent-button")) {
+    console.log("⏭️ Schedule Builder Agent button already exists, skipping...");
+    return;
   }
 
   // Create the agent button
@@ -2423,27 +2314,24 @@ function injectScheduleBuilderAgent() {
     <span>Ask Agent</span>
   `;
   agentButton.style.cssText = `
-    position: fixed !important;
-    bottom: 20px !important;
-    right: 20px !important;
-    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
-    color: #000 !important;
-    border: 2px solid #FF6B35 !important;
-    border-radius: 50px !important;
-    padding: 12px 20px !important;
-    font-size: 14px !important;
-    font-weight: 600 !important;
-    cursor: pointer !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
-    transition: all 0.3s ease !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-    z-index: 99999 !important;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    border: none;
+    border-radius: 50px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 
   // Add hover effects
@@ -2461,47 +2349,17 @@ function injectScheduleBuilderAgent() {
   agentButton.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    e.stopImmediatePropagation();
     console.log("🤖 Schedule Builder Agent clicked!");
 
-    // Check if popup already exists
-    const existingPopup = document.querySelector(".agent-popup");
-    if (existingPopup) {
-      console.log("🗑️ Closing existing popup...");
+    if (document.querySelector(".agent-popup")) {
       closeAgentPopup();
     } else {
-      console.log("🚀 Opening new popup...");
       openScheduleBuilderAgent(agentButton);
     }
-
-    // Prevent any other click handlers
-    return false;
   });
 
   document.body.appendChild(agentButton);
-
-  // Verify the button was added
-  const addedButton = document.querySelector(".schedule-agent-button");
-  if (addedButton) {
-    console.log("✅ Schedule Builder Agent button successfully added to page!");
-    console.log("🔍 Button position:", addedButton.getBoundingClientRect());
-    console.log("🔍 Button visible:", addedButton.offsetParent !== null);
-    console.log(
-      "🔍 Button z-index:",
-      window.getComputedStyle(addedButton).zIndex
-    );
-  } else {
-    console.log("❌ FAILED to add button to page!");
-  }
-
-  // Force a visual confirmation
-  setTimeout(() => {
-    const button = document.querySelector(".schedule-agent-button");
-    if (button) {
-      button.style.animation = "pulse 1s ease-in-out";
-      console.log("🎯 Button should be visible now!");
-    }
-  }, 100);
+  console.log("✅ Schedule Builder Agent button injected successfully!");
 }
 
 // Inject agent button for general pages
