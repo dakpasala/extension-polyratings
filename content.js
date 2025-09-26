@@ -1187,6 +1187,675 @@ function addBotMessage(container, message) {
   container.scrollTop = container.scrollHeight;
 }
 
+// AI-Powered Professor Summary Feature
+class ProfessorAIAnalyzer {
+  constructor() {
+    this.model = null;
+    this.isLoading = false;
+    this.init();
+  }
+
+  async init() {
+    console.log("🤖 Initializing AI Professor Analyzer...");
+    try {
+      // Load Web LLM
+      await this.loadWebLLM();
+      console.log("✅ AI model loaded successfully!");
+    } catch (error) {
+      console.error("❌ Failed to load AI model:", error);
+    }
+  }
+
+  async loadWebLLM() {
+    console.log("🤖 Loading Web LLM for real AI analysis...");
+
+    try {
+      // Check if Web LLM is already loaded
+      if (window.webllm) {
+        console.log("✅ Web LLM already loaded!");
+        this.model = window.webllm;
+        return;
+      }
+
+      // Load Web LLM script - using a more reliable approach
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/@mlc-ai/web-llm@0.1.0/dist/webllm.js";
+      script.crossOrigin = "anonymous";
+      script.async = true;
+      script.defer = true;
+      script.type = "text/javascript";
+      script.onload = async () => {
+        console.log("✅ Web LLM script loaded!");
+
+        try {
+          // Initialize Web LLM with a more reliable approach
+          const { createModel } = window.webllm;
+
+          // Use a smaller, faster model for better performance
+          this.model = await createModel("llama-2-7b-chat", {
+            modelUrl:
+              "https://huggingface.co/mlc-ai/llama-2-7b-chat-w4a16-mlc/resolve/main/",
+            wasmUrl:
+              "https://huggingface.co/mlc-ai/llama-2-7b-chat-w4a16-mlc/resolve/main/",
+            tokenizerUrl:
+              "https://huggingface.co/mlc-ai/llama-2-7b-chat-w4a16-mlc/resolve/main/",
+          });
+
+          console.log("🎉 Web LLM model initialized successfully!");
+        } catch (error) {
+          console.error("❌ Failed to initialize Web LLM model:", error);
+          console.log("❌ Web LLM initialization failed - AI will not work");
+          this.model = null;
+        }
+      };
+
+      script.onerror = () => {
+        console.error("❌ Failed to load Web LLM script");
+        console.log("❌ Web LLM script failed to load - AI will not work");
+        this.model = null;
+      };
+
+      document.head.appendChild(script);
+
+      // Wait for model to load
+      let attempts = 0;
+      while (!this.model && attempts < 100) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        attempts++;
+      }
+
+      if (!this.model) {
+        throw new Error("Web LLM failed to load within timeout");
+      }
+    } catch (error) {
+      console.error("❌ Web LLM loading failed:", error);
+      console.log("❌ Web LLM loading failed - AI will not work");
+      this.model = null;
+    }
+  }
+
+  async analyzeProfessor(professorData) {
+    this.isLoading = true;
+    console.log("🔍 Analyzing professor data with AI...");
+
+    try {
+      // Wait for model to be ready if it's still loading
+      if (!this.model) {
+        console.log("⏳ Waiting for AI model to load...");
+        let attempts = 0;
+        while (!this.model && attempts < 50) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          attempts++;
+        }
+      }
+
+      // Prepare data for AI analysis
+      const analysisPrompt = this.createAnalysisPrompt(professorData);
+      console.log(
+        "📝 Analysis prompt prepared:",
+        analysisPrompt.substring(0, 200) + "..."
+      );
+
+      // Generate AI response
+      const response = await this.generateResponse(analysisPrompt);
+
+      this.isLoading = false;
+      console.log("✅ AI analysis completed successfully!");
+      return response;
+    } catch (error) {
+      this.isLoading = false;
+      console.error("❌ AI analysis failed:", error);
+      throw error;
+    }
+  }
+
+  createAnalysisPrompt(professorData) {
+    const { name, ratings, reviews, grades, courses } = professorData;
+
+    return `Analyze this professor data and provide a helpful summary:
+
+PROFESSOR: ${name}
+
+RATINGS: ${ratings.map((r) => `${r.stars}/5 - ${r.comment}`).join("\n")}
+
+REVIEWS: ${reviews.join("\n")}
+
+GRADES: ${grades ? grades.join(", ") : "Not available"}
+
+COURSES: ${courses ? courses.join(", ") : "Not available"}
+
+Please provide:
+1. Overall rating summary (X.X/5 based on Y reviews)
+2. Key strengths (what students love)
+3. Common concerns (what students mention)
+4. Teaching style insights
+5. Recommendation (who should take this professor)
+6. Grade expectations
+
+Keep it concise, helpful, and student-friendly. Use emojis and bullet points for readability.`;
+  }
+
+  async generateResponse(prompt) {
+    try {
+      // Check if we have a real Web LLM model
+      if (this.model && typeof this.model.generate === "function") {
+        console.log("🤖 Using real Web LLM for AI analysis...");
+
+        // Use Web LLM to generate response
+        const response = await this.model.generate(prompt, {
+          maxTokens: 500,
+          temperature: 0.7,
+          topP: 0.9,
+        });
+
+        console.log("✅ Web LLM generated response successfully!");
+        return response;
+      } else {
+        console.log("❌ Web LLM not ready, cannot analyze professor data");
+        throw new Error("AI model not loaded - cannot analyze professor data");
+      }
+    } catch (error) {
+      console.error("❌ AI generation failed:", error);
+      throw new Error("AI analysis failed - cannot generate response");
+    }
+  }
+
+  generateSmartResponse(prompt) {
+    // Extract professor name from prompt
+    const professorName =
+      prompt.match(/PROFESSOR: (.+)/)?.[1] || "Unknown Professor";
+
+    // Analyze the data in the prompt
+    const ratings = prompt.match(/RATINGS: (.+?)(?=REVIEWS:|$)/s)?.[1] || "";
+    const reviews = prompt.match(/REVIEWS: (.+?)(?=GRADES:|$)/s)?.[1] || "";
+
+    // Count ratings and calculate average
+    const ratingMatches = ratings.match(/(\d+)\/5/g) || [];
+    const totalRatings = ratingMatches.length;
+    const averageRating =
+      totalRatings > 0
+        ? (
+            ratingMatches.reduce((sum, rating) => sum + parseInt(rating), 0) /
+            totalRatings
+          ).toFixed(1)
+        : "N/A";
+
+    // Analyze sentiment from reviews
+    const positiveWords = [
+      "good",
+      "great",
+      "excellent",
+      "amazing",
+      "love",
+      "best",
+      "helpful",
+      "clear",
+      "engaging",
+    ];
+    const negativeWords = [
+      "bad",
+      "terrible",
+      "awful",
+      "hate",
+      "worst",
+      "confusing",
+      "boring",
+      "difficult",
+    ];
+
+    const reviewText = reviews.toLowerCase();
+    const positiveCount = positiveWords.reduce(
+      (count, word) => count + (reviewText.split(word).length - 1),
+      0
+    );
+    const negativeCount = negativeWords.reduce(
+      (count, word) => count + (reviewText.split(word).length - 1),
+      0
+    );
+
+    // Generate smart response based on analysis
+    let response = `🤖 **AI Analysis for ${professorName}**\n\n`;
+
+    if (totalRatings > 0) {
+      response += `**Overall Rating**: ${averageRating}/5 ⭐ (Based on ${totalRatings} reviews)\n\n`;
+    } else {
+      response += `**Overall Rating**: No ratings found\n\n`;
+    }
+
+    // Key strengths based on positive sentiment
+    if (positiveCount > negativeCount) {
+      response += `**Key Strengths**:\n`;
+      if (reviewText.includes("clear") || reviewText.includes("explain")) {
+        response += `• Clear explanations and teaching style\n`;
+      }
+      if (reviewText.includes("helpful") || reviewText.includes("office")) {
+        response += `• Helpful office hours and approachable\n`;
+      }
+      if (
+        reviewText.includes("engaging") ||
+        reviewText.includes("interesting")
+      ) {
+        response += `• Engaging lectures and interesting content\n`;
+      }
+      if (reviewText.includes("care") || reviewText.includes("student")) {
+        response += `• Cares about student success\n`;
+      }
+      response += `\n`;
+    }
+
+    // Common concerns based on negative sentiment
+    if (negativeCount > 0) {
+      response += `**Common Concerns**:\n`;
+      if (reviewText.includes("difficult") || reviewText.includes("hard")) {
+        response += `• Course can be challenging\n`;
+      }
+      if (reviewText.includes("fast") || reviewText.includes("pace")) {
+        response += `• Fast-paced lectures\n`;
+      }
+      if (reviewText.includes("grade") || reviewText.includes("tough")) {
+        response += `• Tough grader\n`;
+      }
+      if (reviewText.includes("confusing") || reviewText.includes("unclear")) {
+        response += `• Sometimes unclear explanations\n`;
+      }
+      response += `\n`;
+    }
+
+    // Teaching style insights
+    response += `**Teaching Style**: `;
+    if (
+      reviewText.includes("interactive") ||
+      reviewText.includes("discussion")
+    ) {
+      response += `Interactive, encourages class participation`;
+    } else if (
+      reviewText.includes("lecture") ||
+      reviewText.includes("presentation")
+    ) {
+      response += `Lecture-based, structured presentations`;
+    } else {
+      response += `Traditional classroom approach`;
+    }
+    response += `\n\n`;
+
+    // Recommendation
+    response += `**Recommendation**: `;
+    if (parseFloat(averageRating) >= 4.0) {
+      response += `Highly recommended! Great choice for most students.`;
+    } else if (parseFloat(averageRating) >= 3.0) {
+      response += `Good professor, but consider your learning style and workload.`;
+    } else {
+      response += `Consider other options or be prepared for a challenging experience.`;
+    }
+    response += `\n\n`;
+
+    // Grade expectations
+    response += `**Grade Expectations**: `;
+    if (reviewText.includes("easy") || reviewText.includes("generous")) {
+      response += `Generally generous grading, A- to A+ range with effort`;
+    } else if (reviewText.includes("tough") || reviewText.includes("strict")) {
+      response += `Strict grading, expect B to B+ range with good effort`;
+    } else {
+      response += `Standard grading, B+ to A- range with consistent effort`;
+    }
+
+    return response;
+  }
+
+  generateMockResponse(prompt) {
+    // Fallback mock response for testing
+    return `🤖 **AI Analysis** (Mock Response)
+
+**Overall Rating**: 4.2/5 ⭐ (Based on 47 reviews)
+
+**Key Strengths**:
+• Clear explanations and engaging lectures
+• Helpful office hours and approachable
+• Cares about student success
+
+**Common Concerns**:
+• Homework can be challenging
+• Fast-paced lectures
+• Tough grader
+
+**Teaching Style**: Interactive, uses real-world examples, encourages questions
+
+**Recommendation**: Great for students who want to learn deeply and don't mind working hard. Good choice for motivated learners!
+
+**Grade Expectations**: Expect B+ to A- range with effort, A+ possible with extra work`;
+  }
+}
+
+// Initialize AI analyzer
+const professorAI = new ProfessorAIAnalyzer();
+
+// Preload professor data from background script
+console.log("🚀 Preloading professor data...");
+chrome.runtime.sendMessage({ type: "preloadData" }, (response) => {
+  console.log("📨 Preload response:", response);
+});
+
+// AI Chat Interface
+function createAIChatInterface() {
+  // Remove existing chat if it exists
+  const existingChat = document.querySelector(".ai-chat-interface");
+  if (existingChat) {
+    existingChat.remove();
+  }
+
+  // Create chat container
+  const chatContainer = document.createElement("div");
+  chatContainer.className = "ai-chat-interface";
+  chatContainer.style.cssText = `
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    width: 350px !important;
+    height: 500px !important;
+    background: white !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    border: 2px solid #FFD700 !important;
+  `;
+
+  // Create header
+  const header = document.createElement("div");
+  header.style.cssText = `
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #000 !important;
+    padding: 16px 20px !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  `;
+  header.innerHTML = `
+    <span>🤖 Professor AI</span>
+    <button class="close-ai-chat" style="
+      background: none !important;
+      border: none !important;
+      font-size: 20px !important;
+      cursor: pointer !important;
+      color: #000 !important;
+      padding: 0 !important;
+      width: 24px !important;
+      height: 24px !important;
+    ">×</button>
+  `;
+
+  // Create messages area
+  const messagesArea = document.createElement("div");
+  messagesArea.className = "ai-messages";
+  messagesArea.style.cssText = `
+    flex: 1 !important;
+    padding: 16px !important;
+    overflow-y: auto !important;
+    background: #f8f9fa !important;
+  `;
+
+  // Create input area
+  const inputArea = document.createElement("div");
+  inputArea.style.cssText = `
+    padding: 16px !important;
+    background: white !important;
+    border-top: 1px solid #e0e0e0 !important;
+    display: flex !important;
+    gap: 8px !important;
+  `;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Ask about any professor...";
+  input.style.cssText = `
+    flex: 1 !important;
+    padding: 12px 16px !important;
+    border: 2px solid #e0e0e0 !important;
+    border-radius: 25px !important;
+    outline: none !important;
+    font-size: 14px !important;
+    transition: border-color 0.2s !important;
+  `;
+
+  const sendBtn = document.createElement("button");
+  sendBtn.textContent = "Ask";
+  sendBtn.style.cssText = `
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #000 !important;
+    border: none !important;
+    border-radius: 25px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: transform 0.2s !important;
+  `;
+
+  // Assemble chat
+  inputArea.appendChild(input);
+  inputArea.appendChild(sendBtn);
+  chatContainer.appendChild(header);
+  chatContainer.appendChild(messagesArea);
+  chatContainer.appendChild(inputArea);
+  document.body.appendChild(chatContainer);
+
+  // Add welcome message
+  addAIMessage(
+    messagesArea,
+    `🤖 **Welcome to Professor AI!**\n\nI can analyze any professor's ratings and reviews to give you:\n\n• **Smart summaries** of what students say\n• **Key insights** about teaching style\n• **Grade expectations** and difficulty\n• **Recommendations** for different types of students\n\n**AI Status**: ${
+      professorAI.model ? "✅ Real AI Ready" : "⏳ Loading AI..."
+    }\n\n**Try asking:**\n• "Is Professor Smith good?"\n• "What do students say about Dr. Johnson?"\n• "Should I take MATH 141 with Professor Davis?"`
+  );
+
+  // Event listeners
+  const closeBtn = header.querySelector(".close-ai-chat");
+  closeBtn.addEventListener("click", () => {
+    chatContainer.remove();
+  });
+
+  sendBtn.addEventListener("click", () => {
+    const message = input.value.trim();
+    if (message) {
+      addUserMessage(messagesArea, message);
+      input.value = "";
+      handleAIQuery(message, messagesArea);
+    }
+  });
+
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      sendBtn.click();
+    }
+  });
+
+  // Focus input
+  setTimeout(() => input.focus(), 100);
+}
+
+// Add AI message to chat
+function addAIMessage(container, message) {
+  const messageDiv = document.createElement("div");
+  messageDiv.style.cssText = `
+    background: #e3f2fd !important;
+    color: #1976d2 !important;
+    padding: 12px 16px !important;
+    margin: 8px 0 !important;
+    border-radius: 12px !important;
+    max-width: 85% !important;
+    align-self: flex-start !important;
+    font-size: 14px !important;
+    white-space: pre-line !important;
+  `;
+  messageDiv.textContent = message;
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Add user message to chat
+function addUserMessage(container, message) {
+  const messageDiv = document.createElement("div");
+  messageDiv.style.cssText = `
+    background: #f0f0f0 !important;
+    color: #333 !important;
+    padding: 12px 16px !important;
+    margin: 8px 0 !important;
+    border-radius: 12px !important;
+    max-width: 85% !important;
+    align-self: flex-end !important;
+    font-size: 14px !important;
+  `;
+  messageDiv.textContent = message;
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Handle AI queries
+async function handleAIQuery(message, messagesArea) {
+  // Show typing indicator
+  const typingDiv = document.createElement("div");
+  typingDiv.className = "typing-indicator";
+  typingDiv.style.cssText = `
+    background: #e3f2fd !important;
+    color: #1976d2 !important;
+    padding: 12px 16px !important;
+    margin: 8px 0 !important;
+    border-radius: 12px !important;
+    max-width: 85% !important;
+    align-self: flex-start !important;
+    font-size: 14px !important;
+    font-style: italic !important;
+  `;
+  typingDiv.innerHTML = `🤖 Analyzing professor data...`;
+  messagesArea.appendChild(typingDiv);
+  messagesArea.scrollTop = messagesArea.scrollHeight;
+
+  try {
+    // Extract professor data from the page
+    const professorData = await extractProfessorDataFromPage(message);
+
+    if (!professorData) {
+      typingDiv.remove();
+      addAIMessage(
+        messagesArea,
+        `❌ **Couldn't find professor data for "${message}"**\n\nMake sure you're asking about a professor by name (e.g., "John Smith" or "Dr. Johnson").\n\n**Available professors**: Check the console for the full list.`
+      );
+      return;
+    }
+
+    // Analyze with AI
+    const aiResponse = await professorAI.analyzeProfessor(professorData);
+
+    // Remove typing indicator and show response
+    typingDiv.remove();
+    addAIMessage(messagesArea, aiResponse);
+  } catch (error) {
+    console.error("AI query failed:", error);
+    typingDiv.remove();
+
+    if (error.message.includes("AI model not loaded")) {
+      addAIMessage(
+        messagesArea,
+        `❌ **AI Model Not Ready**\n\nThe AI is still loading. Please wait a moment and try again.\n\n**Status**: Loading Web LLM model...`
+      );
+    } else if (error.message.includes("AI analysis failed")) {
+      addAIMessage(
+        messagesArea,
+        `❌ **AI Analysis Failed**\n\nThere was an error processing the professor data.\n\n**Error**: ${error.message}\n\nTry refreshing the page and asking again.`
+      );
+    } else {
+      addAIMessage(
+        messagesArea,
+        `❌ **Analysis Error**\n\nCould not analyze the professor data.\n\n**Error**: ${error.message}\n\nMake sure you're on a page with professor ratings.`
+      );
+    }
+  }
+}
+
+// Extract professor data from the current page
+async function extractProfessorDataFromPage(query) {
+  console.log("🔍 Extracting professor data from page...");
+
+  // Look for professor name in the query
+  const professorName = extractProfessorNameFromQuery(query);
+  if (!professorName) {
+    console.log("❌ No professor name found in query");
+    return null;
+  }
+
+  console.log(`🔍 Looking up professor: "${professorName}"`);
+
+  try {
+    // Get professor data from background script
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: "getProfRating", profName: professorName },
+        (response) => {
+          resolve(response);
+        }
+      );
+    });
+
+    console.log("📨 Background script response:", response);
+
+    if (response.status === "success" && response.professor) {
+      const professor = response.professor;
+      console.log("✅ Found professor in database:", professor);
+
+      // Convert background script data to AI format
+      const professorData = {
+        name: professor.name,
+        ratings: [
+          {
+            stars: professor.rating.toString(),
+            comment: `Overall rating: ${professor.rating}/5.0`,
+          },
+        ],
+        reviews: [
+          `Professor ${professor.name} has a rating of ${professor.rating}/5.0`,
+        ],
+        grades: [],
+        courses: [],
+        link: professor.link,
+      };
+
+      console.log("📊 Converted professor data for AI:", professorData);
+      return professorData;
+    } else if (response.status === "not_found") {
+      console.log("❌ Professor not found in database");
+      return null;
+    } else {
+      console.log("❌ Error getting professor data:", response.message);
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Error communicating with background script:", error);
+    return null;
+  }
+}
+
+// Extract professor name from user query
+function extractProfessorNameFromQuery(query) {
+  // Simple extraction - look for common patterns
+  const patterns = [
+    /professor\s+([a-z\s]+)/i,
+    /dr\.?\s+([a-z\s]+)/i,
+    /([a-z]+\s+[a-z]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+
+  return null;
+}
+
 // Function to inject the Ask Agent button
 function injectAskAgentButton() {
   console.log("🤖 Looking for Cancel/Ok buttons to add Ask Agent button...");
@@ -1231,7 +1900,7 @@ function injectAskAgentButton() {
       // Create the Ask Agent button
       const askAgentButton = document.createElement("button");
       askAgentButton.className = "ask-agent-button";
-      askAgentButton.textContent = "Ask Agent";
+      askAgentButton.textContent = "🤖 Professor AI";
       askAgentButton.style.cssText = `
         background: linear-gradient(135deg, #FFD700, #FFA500);
         color: #000;
@@ -1266,11 +1935,11 @@ function injectAskAgentButton() {
         e.stopPropagation();
         console.log("🤖 Ask Agent button clicked!");
 
-        // Toggle the popup
-        if (document.querySelector(".agent-popup")) {
-          closeAgentPopup();
+        // Toggle the AI chat
+        if (document.querySelector(".ai-chat-interface")) {
+          document.querySelector(".ai-chat-interface").remove();
         } else {
-          openAgentPopup(askAgentButton);
+          createAIChatInterface();
         }
       });
 
