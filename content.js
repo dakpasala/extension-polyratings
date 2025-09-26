@@ -1939,9 +1939,17 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
   if (iframe && iframe.contentDocument) {
     // Search inside the iframe
     const allInputs = Array.from(
-      iframe.contentDocument.querySelectorAll("input")
+      iframe.contentDocument.querySelectorAll(`
+        input, 
+        select, 
+        textarea, 
+        [role="combobox"], 
+        [role="textbox"], 
+        [contenteditable="true"]
+      `)
     );
     console.log(`🔍 Found ${allInputs.length} input fields in iframe`);
+    console.log(`🔍 Found input values: ${allInputs.map(val => String(val)).join(", ")}`);
 
     // Look for inputs with specific placeholders/names
     for (let i = 0; i < allInputs.length; i++) {
@@ -2024,7 +2032,12 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
           courseSelectionSection.querySelectorAll("input")
         ).filter((input) => !input.readOnly && input.type === "text");
         if (inputsInSection.length > 0) {
+          console.log(`🔍 Found ${inputsInSection.length} editable inputs in course selection`);
           subjectInput = inputsInSection[0];
+          console.log("🔍 Subject input:", subjectInput);
+          for (let i = 0; i < inputsInSection.length; i++) { 
+            console.log("Editable Input: ", inputsInSection[i]);
+          }
           console.log(
             `✅ Using first editable input in course selection: "${subjectInput.placeholder}"`
           );
@@ -2042,9 +2055,11 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
       iframe.contentDocument.querySelectorAll("input")
     ).filter((input) => !input.readOnly && input.type === "text");
     if (editableInputs.length > 0) {
+      
+    
       subjectInput = editableInputs[0];
       console.log(
-        `✅ Using first editable input as subject: "${subjectInput.placeholder}"`
+        `✅ Using first editable input as subject: "${subjectInput}"`
       );
     }
   }
@@ -2106,9 +2121,147 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
       }
     }, 1000);
   } else {
+    // Fallback: Try the COURSE SELECTION section approach
+    console.log("🔍 Trying COURSE SELECTION section approach...");
+    tryCourseSelectionApproach(subject, catalog, messagesArea);
+  }
+}
+
+function tryCourseSelectionApproach(subject, catalog, messagesArea) {
+  addBotMessage(
+    messagesArea,
+    `🔍 **Trying COURSE SELECTION approach...**\n\nLooking for the two boxes below "COURSE SELECTION"...`
+  );
+
+  // Find COURSE SELECTION section
+  const iframe = document.querySelector("#main_iframe");
+  if (!iframe || !iframe.contentDocument) {
+    addBotMessage(messagesArea, "❌ **Couldn't access iframe content.**");
+    return;
+  }
+
+  const courseSelectionSection = Array.from(
+    iframe.contentDocument.querySelectorAll("*")
+  ).find((el) => el.textContent?.toLowerCase().includes("course selection"));
+
+  if (courseSelectionSection) {
+    console.log("✅ Found COURSE SELECTION section");
+
+    // Get all input fields in the course selection section
+    const allInputs = Array.from(
+      courseSelectionSection.querySelectorAll("input")
+    );
+    console.log(
+      `🔍 Found ${allInputs.length} input fields in course selection section`
+    );
+
+    // Look specifically for the Subject* field (not the GE/GWR dropdown)
+    const subjectInputs = allInputs.filter((input) => {
+      const placeholder = input.placeholder?.toLowerCase() || "";
+      const label = input.closest("label")?.textContent?.toLowerCase() || "";
+      const ariaLabel = input.getAttribute("aria-label")?.toLowerCase() || "";
+
+      // Look for Subject* field specifically
+      const isSubjectField = label.includes("subject") && label.includes("*");
+
+      // Skip GE/GWR dropdown fields
+      const isGEGWRField =
+        placeholder.includes("ge") ||
+        placeholder.includes("gwr") ||
+        label.includes("ge") ||
+        label.includes("gwr") ||
+        ariaLabel.includes("ge") ||
+        ariaLabel.includes("gwr");
+
+      if (isGEGWRField) {
+        console.log(
+          `⏭️ Skipping GE/GWR field: "${placeholder || label || ariaLabel}"`
+        );
+        return false;
+      }
+
+      if (isSubjectField) {
+        console.log(`✅ Found Subject* field: "${label}"`);
+        return true;
+      }
+
+      return false; // Only return true for Subject* fields
+    });
+
+    // Look for Catalog Number field
+    const catalogInputs = allInputs.filter((input) => {
+      const label = input.closest("label")?.textContent?.toLowerCase() || "";
+      const ariaLabel = input.getAttribute("aria-label")?.toLowerCase() || "";
+
+      return (
+        (label.includes("catalog") || ariaLabel.includes("catalog number")) &&
+        !input.readOnly &&
+        input.type === "text" &&
+        input.offsetParent !== null
+      );
+    });
+
+    console.log(`🔍 Found ${subjectInputs.length} Subject* fields`);
+    console.log(`🔍 Found ${catalogInputs.length} Catalog Number fields`);
+
+    if (subjectInputs.length > 0 && catalogInputs.length > 0) {
+      // Use the specific Subject* field
+      const subjectInput = subjectInputs[0];
+      // Use the specific Catalog Number field
+      const catalogInput = catalogInputs[0];
+
+      console.log(
+        `📝 First box (Subject): "${
+          subjectInput.placeholder ||
+          subjectInput.getAttribute("aria-label") ||
+          "no label"
+        }"`
+      );
+      console.log(
+        `📝 Second box (Catalog): "${
+          catalogInput.placeholder ||
+          catalogInput.getAttribute("aria-label") ||
+          "no label"
+        }"`
+      );
+
+      // Fill first box (Subject)
+      addBotMessage(
+        messagesArea,
+        `📝 **Filling first box with ${subject}...**`
+      );
+      subjectInput.value = subject;
+      subjectInput.dispatchEvent(new Event("input", { bubbles: true }));
+      subjectInput.dispatchEvent(new Event("change", { bubbles: true }));
+      console.log(`✅ Filled first box with: ${subject}`);
+
+      // Wait a moment, then fill second box (Catalog)
+      setTimeout(() => {
+        addBotMessage(
+          messagesArea,
+          `📝 **Filling second box with ${catalog}...**`
+        );
+        catalogInput.value = catalog;
+        catalogInput.dispatchEvent(new Event("input", { bubbles: true }));
+        catalogInput.dispatchEvent(new Event("change", { bubbles: true }));
+        console.log(`✅ Filled second box with: ${catalog}`);
+
+        addBotMessage(
+          messagesArea,
+          `✅ **Filled in ${subject} ${catalog}**\n\nNow clicking Add Course...`
+        );
+        clickAddCourseButton(subject, catalog, messagesArea);
+      }, 1000);
+    } else {
+      addBotMessage(
+        messagesArea,
+        `❌ **Found ${subjectInputs.length} Subject* fields and ${catalogInputs.length} Catalog Number fields. Need at least 1 of each.**`
+      );
+    }
+  } else {
     addBotMessage(
       messagesArea,
-      "❌ **Couldn't find subject/catalog input fields.** The interface might be different."
+      "❌ **Couldn't find COURSE SELECTION section.**"
     );
   }
 }
