@@ -1949,7 +1949,9 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
       `)
     );
     console.log(`🔍 Found ${allInputs.length} input fields in iframe`);
-    console.log(`🔍 Found input values: ${allInputs.map(val => String(val)).join(", ")}`);
+    console.log(
+      `🔍 Found input values: ${allInputs.map((val) => String(val)).join(", ")}`
+    );
 
     // Look for inputs with specific placeholders/names
     for (let i = 0; i < allInputs.length; i++) {
@@ -2025,17 +2027,19 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
           `✅ Found subject input in course selection: "${
             subjectInput.placeholder
           }" - label: "${subjectInput.closest("label")?.textContent}"`
-        );
+        );git 
       } else {
         // If no specific subject input found, take the first editable input in course selection
         const inputsInSection = Array.from(
           courseSelectionSection.querySelectorAll("input")
         ).filter((input) => !input.readOnly && input.type === "text");
         if (inputsInSection.length > 0) {
-          console.log(`🔍 Found ${inputsInSection.length} editable inputs in course selection`);
+          console.log(
+            `🔍 Found ${inputsInSection.length} editable inputs in course selection`
+          );
           subjectInput = inputsInSection[0];
           console.log("🔍 Subject input:", subjectInput);
-          for (let i = 0; i < inputsInSection.length; i++) { 
+          for (let i = 0; i < inputsInSection.length; i++) {
             console.log("Editable Input: ", inputsInSection[i]);
           }
           console.log(
@@ -2055,8 +2059,6 @@ function searchForSpecificCourse(subject, catalog, messagesArea) {
       iframe.contentDocument.querySelectorAll("input")
     ).filter((input) => !input.readOnly && input.type === "text");
     if (editableInputs.length > 0) {
-      
-    
       subjectInput = editableInputs[0];
       console.log(
         `✅ Using first editable input as subject: "${subjectInput}"`
