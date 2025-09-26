@@ -633,18 +633,9 @@ function getElementPath(element) {
 function findAndLogProfessors() {
   console.log("🔍 Starting professor search in iframe...");
 
-  // Only clean up if we actually need to re-process
-  // Check if we already have ratings for current professors
-  const currentProfessors = document.querySelectorAll('[role="cell"]');
-  const hasExistingRatings =
-    document.querySelectorAll(".polyratings-rating-element").length > 0;
-
-  if (hasExistingRatings) {
-    console.log(
-      "⏭️ Ratings already exist, skipping cleanup to prevent flickering"
-    );
-    return;
-  }
+  // Always process professors to ensure "Add to PolyRatings" buttons appear
+  // for professors not in the database
+  console.log("🔄 Processing all professors to ensure complete coverage...");
 
   // First, clean up any existing rating elements to prevent duplicates
   const existingRatings = document.querySelectorAll(
@@ -703,6 +694,14 @@ function findAndLogProfessors() {
             `👨‍🏫 Processing professor ${profIndex + 1}: ${professorName}`
           );
 
+          // Special debugging for Andrea Schuman
+          if (
+            professorName.toLowerCase().includes("andrea") ||
+            professorName.toLowerCase().includes("schuman")
+          ) {
+            console.log("🔍 DEBUG: Found Andrea Schuman, processing...");
+          }
+
           // Send message to background script to get professor rating
           chrome.runtime.sendMessage(
             { type: "getProfRating", profName: professorName },
@@ -714,6 +713,17 @@ function findAndLogProfessors() {
                 injectRatingUI(nextElement, response.professor, profIndex);
               } else if (response.status === "not_found") {
                 console.log("❌ Professor not found in database");
+
+                // Special debugging for Andrea Schuman
+                if (
+                  professorName.toLowerCase().includes("andrea") ||
+                  professorName.toLowerCase().includes("schuman")
+                ) {
+                  console.log(
+                    "🔍 DEBUG: Andrea Schuman not found, creating Add to PolyRatings button..."
+                  );
+                }
+
                 // First remove any existing not found badges for this professor
                 const existingNotFound = nextElement.querySelectorAll(
                   `[data-professor="${professorName}"]`
@@ -728,6 +738,16 @@ function findAndLogProfessors() {
                   notFoundBadge.style.marginLeft = "12px";
                 }
                 nextElement.appendChild(notFoundBadge);
+
+                // Special debugging for Andrea Schuman
+                if (
+                  professorName.toLowerCase().includes("andrea") ||
+                  professorName.toLowerCase().includes("schuman")
+                ) {
+                  console.log(
+                    "🔍 DEBUG: Andrea Schuman Add to PolyRatings button should now be visible!"
+                  );
+                }
               } else {
                 console.log(
                   "❌ Error getting professor data:",
@@ -1479,4 +1499,525 @@ if (window.top === window) {
   console.log("📄 We're already in an iframe");
   setupMutationObserver();
   setupButtonObserver();
+}
+
+// AI-Powered Professor Summary Feature using Gemini API
+class ProfessorAIAnalyzer {
+  constructor() {
+    this.isLoading = false;
+    console.log("🤖 AI Professor Analyzer initialized with Gemini API");
+  }
+
+  async analyzeProfessor(professorData) {
+    this.isLoading = true;
+    console.log("🔍 Analyzing professor data with Gemini AI...");
+
+    try {
+      // Send to background script for Gemini analysis
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "getProfRating", profName: professorData.name },
+          (response) => {
+            resolve(response);
+          }
+        );
+      });
+
+      this.isLoading = false;
+
+      if (response.status === "success" && response.analysis) {
+        console.log("✅ Professor found with AI analysis!");
+        return response.analysis;
+      } else if (
+        response.status === "ai_analysis" &&
+        response.professor.analysis
+      ) {
+        console.log("✅ Gemini AI analysis completed!");
+        return response.professor.analysis;
+      } else if (response.status === "success") {
+        console.log("✅ Professor found in database");
+        return `**Professor Found**: ${response.professor.name}\n**Rating**: ${response.professor.rating}/5.0\n**Link**: [View Profile](${response.professor.link})`;
+      } else {
+        throw new Error("No analysis available");
+      }
+    } catch (error) {
+      this.isLoading = false;
+      console.error("❌ AI analysis failed:", error);
+      throw error;
+    }
+  }
+
+  async generateResponse(message) {
+    try {
+      // Send general message to background script for Gemini analysis
+      const response = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "getGeminiResponse", message: message },
+          (response) => {
+            resolve(response);
+          }
+        );
+      });
+
+      if (response.status === "success") {
+        return response.analysis;
+      } else {
+        throw new Error("Gemini API not available");
+      }
+    } catch (error) {
+      console.error("❌ Gemini generation failed:", error);
+      throw new Error("AI analysis failed - cannot generate response");
+    }
+  }
+}
+
+// Initialize AI analyzer
+const professorAI = new ProfessorAIAnalyzer();
+
+// AI Chat Interface
+function createAIChatInterface() {
+  // Remove existing chat if it exists
+  const existingChat = document.querySelector(".ai-chat-interface");
+  if (existingChat) {
+    existingChat.remove();
+  }
+
+  // Create chat container
+  const chatContainer = document.createElement("div");
+  chatContainer.className = "ai-chat-interface";
+  chatContainer.style.cssText = `
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    width: 350px !important;
+    height: 500px !important;
+    background: white !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3) !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    border: 2px solid #FFD700 !important;
+  `;
+
+  // Create header
+  const header = document.createElement("div");
+  header.style.cssText = `
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #000 !important;
+    padding: 16px 20px !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  `;
+  header.innerHTML = `
+    <span>🤖 Professor AI</span>
+    <button class="close-ai-chat" style="
+      background: none !important;
+      border: none !important;
+      font-size: 20px !important;
+      cursor: pointer !important;
+      color: #000 !important;
+      padding: 0 !important;
+      width: 24px !important;
+      height: 24px !important;
+    ">×</button>
+  `;
+
+  // Create messages area
+  const messagesArea = document.createElement("div");
+  messagesArea.className = "ai-messages";
+  messagesArea.style.cssText = `
+    flex: 1 !important;
+    padding: 16px !important;
+    overflow-y: auto !important;
+    background: #f8f9fa !important;
+  `;
+
+  // Create input area
+  const inputArea = document.createElement("div");
+  inputArea.style.cssText = `
+    padding: 16px !important;
+    background: white !important;
+    border-top: 1px solid #e0e0e0 !important;
+    display: flex !important;
+    gap: 8px !important;
+  `;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Ask about any professor...";
+  input.style.cssText = `
+    flex: 1 !important;
+    padding: 12px 16px !important;
+    border: 2px solid #e0e0e0 !important;
+    border-radius: 25px !important;
+    outline: none !important;
+    font-size: 14px !important;
+    transition: border-color 0.2s !important;
+  `;
+
+  const sendBtn = document.createElement("button");
+  sendBtn.textContent = "Ask";
+  sendBtn.style.cssText = `
+    background: linear-gradient(135deg, #FFD700, #FFA500) !important;
+    color: #000 !important;
+    border: none !important;
+    border-radius: 25px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: transform 0.2s !important;
+  `;
+
+  // Assemble chat
+  inputArea.appendChild(input);
+  inputArea.appendChild(sendBtn);
+  chatContainer.appendChild(header);
+  chatContainer.appendChild(messagesArea);
+  chatContainer.appendChild(inputArea);
+  document.body.appendChild(chatContainer);
+
+  // Add welcome message
+  addAIMessage(
+    messagesArea,
+    `🤖 **Welcome to Professor AI!**\n\nI'm powered by **Gemini AI** and can help you with:\n\n• **Professor analysis** - Ask about any professor\n• **General questions** - "Hey how are you?"\n• **Course advice** - Get recommendations\n• **Smart insights** - AI-powered analysis\n\n**Try asking:**\n• "Hey how are you?"\n• "Is Professor Smith good?"\n• "What's the weather like?"`
+  );
+
+  // Event listeners
+  const closeBtn = header.querySelector(".close-ai-chat");
+  closeBtn.addEventListener("click", () => {
+    chatContainer.remove();
+  });
+
+  sendBtn.addEventListener("click", () => {
+    const message = input.value.trim();
+    if (message) {
+      addUserMessage(messagesArea, message);
+      input.value = "";
+      handleAIQuery(message, messagesArea);
+    }
+  });
+
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      sendBtn.click();
+    }
+  });
+
+  // Focus input
+  setTimeout(() => input.focus(), 100);
+}
+
+// Add AI message to chat
+function addAIMessage(container, message) {
+  const messageDiv = document.createElement("div");
+  messageDiv.style.cssText = `
+    background: #e3f2fd !important;
+    color: #1976d2 !important;
+    padding: 12px 16px !important;
+    margin: 8px 0 !important;
+    border-radius: 12px !important;
+    max-width: 85% !important;
+    align-self: flex-start !important;
+    font-size: 14px !important;
+    white-space: pre-line !important;
+  `;
+  messageDiv.textContent = message;
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Add user message to chat
+function addUserMessage(container, message) {
+  const messageDiv = document.createElement("div");
+  messageDiv.style.cssText = `
+    background: #f0f0f0 !important;
+    color: #333 !important;
+    padding: 12px 16px !important;
+    margin: 8px 0 !important;
+    border-radius: 12px !important;
+    max-width: 85% !important;
+    align-self: flex-end !important;
+    font-size: 14px !important;
+  `;
+  messageDiv.textContent = message;
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+}
+
+// Handle AI queries
+async function handleAIQuery(message, messagesArea) {
+  // Show typing indicator
+  const typingDiv = document.createElement("div");
+  typingDiv.className = "typing-indicator";
+  typingDiv.style.cssText = `
+    background: #e3f2fd !important;
+    color: #1976d2 !important;
+    padding: 12px 16px !important;
+    margin: 8px 0 !important;
+    border-radius: 12px !important;
+    max-width: 85% !important;
+    align-self: flex-start !important;
+    font-size: 14px !important;
+    font-style: italic !important;
+  `;
+  typingDiv.innerHTML = `🤖 Analyzing with Gemini AI...`;
+  messagesArea.appendChild(typingDiv);
+  messagesArea.scrollTop = messagesArea.scrollHeight;
+
+  try {
+    // Check if it's a general question or professor question
+    const isGeneralQuestion =
+      !message.toLowerCase().includes("professor") &&
+      !message.toLowerCase().includes("dr.") &&
+      !message.toLowerCase().includes("teacher") &&
+      !message.match(/([A-Z][a-z]+\s+[A-Z][a-z]+)/);
+
+    if (isGeneralQuestion) {
+      // Handle general questions with Gemini
+      console.log("🤖 Handling general question with Gemini...");
+      const aiResponse = await professorAI.generateResponse(message);
+      typingDiv.remove();
+      addAIMessage(messagesArea, aiResponse);
+    } else {
+      // Handle professor-specific questions
+      const professorData = await extractProfessorDataFromPage(message);
+
+      if (!professorData) {
+        typingDiv.remove();
+        addAIMessage(
+          messagesArea,
+          `❌ **Couldn't find professor data for "${message}"**\n\nMake sure you're asking about a professor by name (e.g., "John Smith" or "Dr. Johnson").\n\n**Available professors**: Check the console for the full list.`
+        );
+        return;
+      }
+
+      // Analyze with AI
+      const aiResponse = await professorAI.analyzeProfessor(professorData);
+
+      // Remove typing indicator and show response
+      typingDiv.remove();
+      addAIMessage(messagesArea, aiResponse);
+    }
+  } catch (error) {
+    console.error("AI query failed:", error);
+    typingDiv.remove();
+
+    if (error.message.includes("AI model not loaded")) {
+      addAIMessage(
+        messagesArea,
+        `❌ **AI Model Not Ready**\n\nThe AI is still loading. Please wait a moment and try again.\n\n**Status**: Loading Gemini AI...`
+      );
+    } else if (error.message.includes("AI analysis failed")) {
+      addAIMessage(
+        messagesArea,
+        `❌ **AI Analysis Failed**\n\nThere was an error processing the professor data.\n\n**Error**: ${error.message}\n\nTry refreshing the page and asking again.`
+      );
+    } else {
+      addAIMessage(
+        messagesArea,
+        `❌ **Analysis Error**\n\nCould not analyze the professor data.\n\n**Error**: ${error.message}\n\nMake sure you're on a page with professor ratings.`
+      );
+    }
+  }
+}
+
+// Extract professor data from the current page
+async function extractProfessorDataFromPage(query) {
+  console.log("🔍 Extracting professor data from page...");
+
+  // Look for professor name in the query
+  const professorName = extractProfessorNameFromQuery(query);
+  if (!professorName) {
+    console.log("❌ No professor name found in query");
+    return null;
+  }
+
+  console.log(`🔍 Looking up professor: "${professorName}"`);
+
+  try {
+    // Get professor data from background script
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: "getProfRating", profName: professorName },
+        (response) => {
+          resolve(response);
+        }
+      );
+    });
+
+    console.log("📨 Background script response:", response);
+
+    if (response.status === "success" && response.professor) {
+      const professor = response.professor;
+      console.log("✅ Found professor in database:", professor);
+
+      // Return simple professor data - the AI will get the full analysis
+      const professorData = {
+        name: professor.name,
+        rating: professor.rating,
+        link: professor.link,
+      };
+
+      console.log("📊 Professor data for AI:", professorData);
+      return professorData;
+    } else if (response.status === "not_found") {
+      console.log("❌ Professor not found in database");
+      return null;
+    } else {
+      console.log("❌ Error getting professor data:", response.message);
+      return null;
+    }
+  } catch (error) {
+    console.error("❌ Error communicating with background script:", error);
+    return null;
+  }
+}
+
+// Extract professor name from user query
+function extractProfessorNameFromQuery(query) {
+  console.log("🔍 Extracting professor name from query:", query);
+
+  // More flexible extraction patterns
+  const patterns = [
+    /professor\s+([a-z\s,\.]+)/i,
+    /dr\.?\s+([a-z\s,\.]+)/i,
+    /([a-z]+\s+[a-z]+(?:\s+[a-z]+)?)/i,
+    /([a-z]+,\s*[a-z]+)/i, // Last, First format
+  ];
+
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match) {
+      const name = match[1].trim();
+      console.log("✅ Extracted professor name:", name);
+      return name;
+    }
+  }
+
+  // If no pattern matches, try to extract any two words that look like a name
+  const words = query.split(/\s+/);
+  if (words.length >= 2) {
+    // Look for two consecutive capitalized words
+    for (let i = 0; i < words.length - 1; i++) {
+      if (
+        /^[A-Z][a-z]+$/.test(words[i]) &&
+        /^[A-Z][a-z]+$/.test(words[i + 1])
+      ) {
+        const name = `${words[i]} ${words[i + 1]}`;
+        console.log(
+          "✅ Extracted professor name from capitalized words:",
+          name
+        );
+        return name;
+      }
+    }
+  }
+
+  console.log("❌ No professor name found in query");
+  return null;
+}
+
+// Function to inject the Ask Agent button
+function injectAskAgentButton() {
+  console.log("🤖 Looking for Cancel/Ok buttons to add Ask Agent button...");
+
+  // Look for common button patterns in Material-UI
+  const buttonSelectors = [
+    'button[type="button"]',
+    ".MuiButton-root",
+    "button",
+    '[role="button"]',
+  ];
+  let foundButtons = [];
+  buttonSelectors.forEach((selector) => {
+    const buttons = document.querySelectorAll(selector);
+    buttons.forEach((button) => {
+      const text = button.textContent.trim().toLowerCase();
+      if (
+        text.includes("cancel") ||
+        text.includes("ok") ||
+        text.includes("submit")
+      ) {
+        foundButtons.push(button);
+      }
+    });
+  });
+  console.log(`🔍 Found ${foundButtons.length} potential action buttons`);
+  if (foundButtons.length > 0) {
+    const buttonContainer =
+      foundButtons[0].closest("div") || foundButtons[0].parentElement;
+    if (buttonContainer) {
+      if (document.querySelector(".ask-agent-button")) {
+        console.log("⏭️ Ask Agent button already exists, skipping...");
+        return;
+      }
+      const askAgentButton = document.createElement("button");
+      askAgentButton.className = "ask-agent-button";
+      askAgentButton.textContent = "🤖 Professor AI";
+      askAgentButton.style.cssText = `
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-right: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      `;
+      askAgentButton.addEventListener("mouseenter", () => {
+        askAgentButton.style.transform = "translateY(-1px)";
+        askAgentButton.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
+      });
+      askAgentButton.addEventListener("mouseleave", () => {
+        askAgentButton.style.transform = "translateY(0)";
+        askAgentButton.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
+      });
+      askAgentButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("🤖 Ask Agent button clicked!");
+        if (document.querySelector(".ai-chat-interface")) {
+          document.querySelector(".ai-chat-interface").remove();
+        } else {
+          createAIChatInterface();
+        }
+      });
+      buttonContainer.insertBefore(askAgentButton, foundButtons[0]);
+      console.log("✅ Ask Agent button injected successfully!");
+    }
+  } else {
+    console.log(
+      "❌ Could not find Cancel/Ok buttons to place Ask Agent button"
+    );
+  }
+}
+
+// Function to set up the button observer
+function setupButtonObserver() {
+  console.log("🔘 Setting up button observer...");
+  injectAskAgentButton();
+  const buttonCheckInterval = setInterval(() => {
+    if (document.querySelector(".ask-agent-button")) {
+      console.log("✅ Ask Agent button found, stopping button observer");
+      clearInterval(buttonCheckInterval);
+    } else {
+      injectAskAgentButton();
+    }
+  }, 1000);
+  setTimeout(() => {
+    clearInterval(buttonCheckInterval);
+    console.log("⏰ Button observer timeout reached");
+  }, 30000);
 }
