@@ -991,9 +991,14 @@ function openAgentPopup(button) {
   welcomeMessage.innerHTML = `
     <div style="font-weight: 600; margin-bottom: 8px; color: #333;">👋 Hi! I'm your PolyRatings Agent</div>
     <div style="color: #666; font-size: 14px; line-height: 1.4;">
-      I can help you analyze professor ratings, compare courses, and answer questions about your schedule. 
+      I can help you get AI-powered professor summaries and ratings! Just ask me about any professor by name.
       <br><br>
-      <strong>🚧 Building in progress...</strong> More features coming soon!
+      <strong>Try asking:</strong><br>
+      • "Tell me about John Smith"<br>
+      • "How is Professor Johnson?"<br>
+      • "Rate Dr. Williams"<br>
+      <br>
+      I'll analyze their PolyRatings data and give you helpful insights!
     </div>
   `;
   messagesArea.appendChild(welcomeMessage);
@@ -1044,13 +1049,48 @@ function openAgentPopup(button) {
       addUserMessage(messagesArea, message);
       input.value = "";
 
-      // Add bot response
-      setTimeout(() => {
-        addBotMessage(
-          messagesArea,
-          "🚧 Building in progress... This feature is coming soon!"
-        );
-      }, 500);
+      // Show typing indicator
+      const typingIndicator = addTypingIndicator(messagesArea);
+
+      // Send query to background script
+      chrome.runtime.sendMessage(
+        { type: "chatbotQuery", query: message },
+        (response) => {
+          // Remove typing indicator
+          if (typingIndicator) {
+            typingIndicator.remove();
+          }
+
+          if (response && response.status === "success") {
+            // Professor found with data
+            const professor = response.professor;
+            const botResponse = `**${professor.name}** (${professor.rating}/4.0 ⭐)
+            
+${professor.analysis}
+
+[View full profile](${professor.link})`;
+            addBotMessage(messagesArea, botResponse);
+          } else if (response && response.status === "ai_analysis") {
+            // Professor not in database but AI provided analysis
+            const professor = response.professor;
+            const botResponse = `**${professor.name}** (Not in PolyRatings database)
+            
+${professor.analysis}
+
+[Add to PolyRatings](${professor.link})`;
+            addBotMessage(messagesArea, botResponse);
+          } else if (response && response.status === "general_response") {
+            // General response
+            addBotMessage(messagesArea, response.message);
+          } else {
+            // Error or fallback
+            addBotMessage(
+              messagesArea,
+              "Sorry, I couldn't process your request. Try asking about a specific professor by name!"
+            );
+          }
+        }
+      );
     }
   });
 
@@ -1167,6 +1207,28 @@ function addUserMessage(container, message) {
   container.scrollTop = container.scrollHeight;
 }
 
+// Function to add typing indicator
+function addTypingIndicator(container) {
+  const typingDiv = document.createElement("div");
+  typingDiv.className = "typing-indicator";
+  typingDiv.style.cssText = `
+    background: white;
+    color: #666;
+    padding: 12px 16px;
+    border-radius: 18px 18px 18px 4px;
+    margin-bottom: 12px;
+    margin-right: 40px;
+    font-size: 14px;
+    font-style: italic;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    animation: slideInLeft 0.3s ease-out;
+  `;
+  typingDiv.textContent = "🤖 Thinking...";
+  container.appendChild(typingDiv);
+  container.scrollTop = container.scrollHeight;
+  return typingDiv;
+}
+
 // Function to add bot message
 function addBotMessage(container, message) {
   const messageDiv = document.createElement("div");
@@ -1181,8 +1243,18 @@ function addBotMessage(container, message) {
     word-wrap: break-word;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     animation: slideInLeft 0.3s ease-out;
+    line-height: 1.4;
   `;
-  messageDiv.textContent = message;
+
+  // Parse markdown-like formatting
+  let formattedMessage = message
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") // Bold
+    .replace(
+      /\[(.*?)\]\((.*?)\)/g,
+      '<a href="$2" target="_blank" style="color: #FFD700; text-decoration: none;">$1</a>'
+    ); // Links
+
+  messageDiv.innerHTML = formattedMessage;
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
 }
