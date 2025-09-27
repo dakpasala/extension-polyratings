@@ -23,7 +23,38 @@ const sampleProfessors = [
     }
 ];
 
-// Function to fetch professor data from GitHub
+// Function to parse CSV data
+function parseCSV(csvText) {
+    const lines = csvText.split('\n');
+    const headers = lines[0].split(',');
+    const data = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line) {
+            const values = line.split(',');
+            const row = {};
+            headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+            });
+            data.push(row);
+        }
+    }
+    
+    return data;
+}
+
+// Function to convert CSV data to the expected format
+function convertCSVToProfessorData(csvData) {
+    return csvData.map(row => ({
+        name: row.fullName,
+        rating: parseFloat(row.overallRating) || 0,
+        numEvals: parseInt(row.numEvals) || 0,
+        link: `https://polyratings.dev/professor/${row.id}`
+    }));
+}
+
+// Function to fetch professor data from GitHub CSV
 async function fetchProfessorData() {
     if (isFetching) {
         console.log("⏳ Already fetching professor data, waiting...");
@@ -35,12 +66,12 @@ async function fetchProfessorData() {
         return professorCache;
     }
     
-    console.log("🌐 Fetching professor data from GitHub...");
+    console.log("🌐 Fetching professor data from GitHub CSV...");
     isFetching = true;
     
     try {
-        console.log("📡 Making request to GitHub...");
-        const response = await fetch('https://raw.githubusercontent.com/SahilGoel05/scraper/main/scraper/data/professors.json');
+        console.log("📡 Making request to GitHub CSV...");
+        const response = await fetch('https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professors_data.csv');
         
         console.log("📊 Response status:", response.status);
         console.log("📊 Response headers:", response.headers);
@@ -49,15 +80,23 @@ async function fetchProfessorData() {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const data = await response.json();
-        console.log("📋 Raw data received:", data);
+        const csvText = await response.text();
+        console.log("📋 Raw CSV data received, length:", csvText.length);
+        
+        // Parse CSV data
+        const csvData = parseCSV(csvText);
+        console.log("📋 Parsed CSV data:", csvData.slice(0, 3)); // Log first 3 rows
+        
+        // Convert to expected format
+        const data = convertCSVToProfessorData(csvData);
+        console.log("📋 Converted data:", data.slice(0, 3)); // Log first 3 converted rows
         
         if (!Array.isArray(data)) {
             throw new Error("Data is not an array");
         }
         
         professorCache = data;
-        console.log(`✅ Successfully fetched ${data.length} professors from GitHub`);
+        console.log(`✅ Successfully fetched ${data.length} professors from GitHub CSV`);
         
         // Also store in chrome.storage for persistence
         chrome.storage.local.set({ 'professorData': data }, () => {
@@ -66,7 +105,7 @@ async function fetchProfessorData() {
         
         return data;
     } catch (error) {
-        console.log("❌ Error fetching professor data from GitHub:", error);
+        console.log("❌ Error fetching professor data from GitHub CSV:", error);
         console.log("🔄 Trying to load from chrome.storage as fallback...");
         
         // Try to load from chrome.storage as fallback
