@@ -1,4 +1,10 @@
 console.log("PolyRatings Enhancer background script is active.");
+console.log("🚀 Background script loaded at:", new Date().toISOString());
+console.log("🚀 Chrome runtime available:", typeof chrome !== "undefined");
+console.log(
+  "🚀 Chrome runtime onMessage available:",
+  typeof chrome.runtime.onMessage !== "undefined"
+);
 
 // Cache for professor data
 let professorCache = null;
@@ -44,26 +50,134 @@ function parseCSV(csvText) {
   return data;
 }
 
-// Function to convert CSV data to the expected format
-function convertCSVToProfessorData(csvData) {
-  return csvData.map((row) => ({
-    name: row.fullName,
-    rating: parseFloat(row.overallRating) || 0,
-    numEvals: parseInt(row.numEvals) || 0,
-    link: `https://polyratings.dev/professor/${row.id}`,
-    // Enhanced data for AI analysis
-    clarity: parseFloat(row.clarityRating) || 0,
-    helpfulness: parseFloat(row.helpfulnessRating) || 0,
-    easiness: parseFloat(row.easinessRating) || 0,
-    hotness: parseFloat(row.hotnessRating) || 0,
-    comments: row.comments || "",
-    department: row.department || "",
-    courses: row.courses || "",
-  }));
+// Function to convert CSV data to the expected format - merge ratings and comments
+function convertCSVToProfessorData(ratingsData, commentsData) {
+  // Start with ratings data (has the overall ratings and star ratings)
+  const professorMap = new Map();
+
+  // First pass: Process ratings data (professors_data.csv)
+  ratingsData.forEach((row) => {
+    const profName = row.fullName; // 4th column in professors_data.csv
+    if (!profName) return;
+
+    console.log(`📋 Processing ratings for: "${profName}"`);
+    professorMap.set(profName, {
+      name: profName,
+      rating: parseFloat(row.overallRating) || 0,
+      numEvals: parseInt(row.numEvals) || 0,
+      link: `https://polyratings.dev/professor/${row.id}`,
+      clarity: parseFloat(row.materialClear) || 0, // materialClear column
+      helpfulness: parseFloat(row.studentDifficulties) || 0, // studentDifficulties column
+      easiness: 0, // Not available in this CSV
+      hotness: 0, // Not available in this CSV
+      comments: "",
+      department: row.department || "",
+      courses: row.courses || "",
+      allComments: [], // Store all individual comments
+      gradeLevels: [], // Track grade levels
+      grades: [], // Track actual grades received
+    });
+  });
+
+  // Second pass: Process comments data and merge (professor_detailed_reviews.csv)
+  commentsData.forEach((row) => {
+    const profName = row.professor_name; // 2nd column in professor_detailed_reviews.csv
+    if (!profName) return;
+
+    console.log(`📝 Processing comments for: "${profName}"`);
+
+    // If professor exists in ratings data, add comments
+    if (professorMap.has(profName)) {
+      const prof = professorMap.get(profName);
+      console.log(`✅ Found existing professor "${profName}", adding comments`);
+
+      // Collect comments
+      const comment = row.rating_text || "";
+      if (comment && comment.trim()) {
+        prof.allComments.push(comment.trim());
+      }
+
+      // Track grade levels and grades
+      if (row.grade_level && row.grade_level !== "N/A") {
+        prof.gradeLevels.push(row.grade_level);
+      }
+      if (row.grade && row.grade !== "N/A") {
+        prof.grades.push(row.grade);
+      }
+    } else {
+      // If professor not in ratings data, create entry with comments only
+      console.log(
+        `⚠️ Professor "${profName}" not in ratings data, creating comments-only entry`
+      );
+      professorMap.set(profName, {
+        name: profName,
+        rating: 0,
+        numEvals: 0,
+        link: `https://polyratings.dev/professor/${
+          row.professor_id || profName.toLowerCase().replace(/\s+/g, "-")
+        }`,
+        clarity: 0,
+        helpfulness: 0,
+        easiness: 0,
+        hotness: 0,
+        comments: "",
+        department: row.professor_department || "",
+        courses: row.course_code || "",
+        allComments: [],
+        gradeLevels: [],
+        grades: [],
+      });
+
+      const prof = professorMap.get(profName);
+
+      // Collect comments
+      const comment = row.rating_text || "";
+      if (comment && comment.trim()) {
+        prof.allComments.push(comment.trim());
+      }
+
+      // Track grade levels and grades
+      if (row.grade_level && row.grade_level !== "N/A") {
+        prof.gradeLevels.push(row.grade_level);
+      }
+      if (row.grade && row.grade !== "N/A") {
+        prof.grades.push(row.grade);
+      }
+    }
+  });
+
+  // Convert map to array - ratings are already calculated, just process comments
+  return Array.from(professorMap.values()).map((prof) => {
+    // Combine all comments (limit to ~2000 characters as requested)
+    prof.comments = prof.allComments.join(" | ").substring(0, 2000);
+
+    // Calculate grade level distribution
+    const gradeLevelCounts = {};
+    prof.gradeLevels.forEach((level) => {
+      gradeLevelCounts[level] = (gradeLevelCounts[level] || 0) + 1;
+    });
+    prof.gradeLevelDistribution = gradeLevelCounts;
+
+    // Calculate grade distribution
+    const gradeCounts = {};
+    prof.grades.forEach((grade) => {
+      gradeCounts[grade] = (gradeCounts[grade] || 0) + 1;
+    });
+    prof.gradeDistribution = gradeCounts;
+
+    // Clean up temporary arrays
+    delete prof.allComments;
+    delete prof.gradeLevels;
+    delete prof.grades;
+
+    return prof;
+  });
 }
 
-// Function to fetch professor data from GitHub CSV
+// Function to fetch professor data from both CSVs
 async function fetchProfessorData() {
+  console.log("🚀 fetchProfessorData() called!");
+
   if (isFetching) {
     console.log("⏳ Already fetching professor data, waiting...");
     return;
@@ -74,32 +188,76 @@ async function fetchProfessorData() {
     return professorCache;
   }
 
-  console.log("🌐 Fetching professor data from GitHub CSV...");
+  console.log("🌐 Fetching professor data from both CSVs...");
   isFetching = true;
 
   try {
-    console.log("📡 Making request to GitHub CSV...");
-    const response = await fetch(
-      "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professors_data.csv"
-    );
+    // Fetch both CSVs in parallel
+    console.log("📡 Making requests to both GitHub CSVs...");
+    const [ratingsResponse, commentsResponse] = await Promise.all([
+      fetch(
+        "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professors_data.csv"
+      ),
+      fetch(
+        "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professor_detailed_reviews.csv"
+      ),
+    ]);
 
-    console.log("📊 Response status:", response.status);
-    console.log("📊 Response headers:", response.headers);
+    console.log("📊 Ratings response status:", ratingsResponse.status);
+    console.log("📊 Comments response status:", commentsResponse.status);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    if (!ratingsResponse.ok || !commentsResponse.ok) {
+      throw new Error(
+        `HTTP error! ratings: ${ratingsResponse.status}, comments: ${commentsResponse.status}`
+      );
     }
 
-    const csvText = await response.text();
-    console.log("📋 Raw CSV data received, length:", csvText.length);
+    const [ratingsCsvText, commentsCsvText] = await Promise.all([
+      ratingsResponse.text(),
+      commentsResponse.text(),
+    ]);
 
-    // Parse CSV data
-    const csvData = parseCSV(csvText);
-    console.log("📋 Parsed CSV data:", csvData.slice(0, 3)); // Log first 3 rows
+    console.log("📋 Raw ratings CSV length:", ratingsCsvText.length);
+    console.log("📋 Raw comments CSV length:", commentsCsvText.length);
+    console.log(
+      "📋 First 500 chars of ratings CSV:",
+      ratingsCsvText.substring(0, 500)
+    );
+    console.log(
+      "📋 First 500 chars of comments CSV:",
+      commentsCsvText.substring(0, 500)
+    );
 
-    // Convert to expected format
-    const data = convertCSVToProfessorData(csvData);
-    console.log("📋 Converted data:", data.slice(0, 3)); // Log first 3 converted rows
+    // Parse both CSV data
+    const ratingsData = parseCSV(ratingsCsvText);
+    const commentsData = parseCSV(commentsCsvText);
+
+    console.log("📋 Parsed ratings data:", ratingsData.slice(0, 3));
+    console.log("📋 Parsed comments data:", commentsData.slice(0, 3));
+    console.log(
+      "📋 Ratings CSV headers:",
+      ratingsData.length > 0 ? Object.keys(ratingsData[0]) : "No data"
+    );
+    console.log(
+      "📋 Comments CSV headers:",
+      commentsData.length > 0 ? Object.keys(commentsData[0]) : "No data"
+    );
+
+    // Convert to expected format - merge both datasets
+    const data = convertCSVToProfessorData(ratingsData, commentsData);
+    console.log("📋 Converted data:", data.slice(0, 3));
+    console.log(
+      "📋 Sample converted professor with comments:",
+      data.length > 0
+        ? {
+            name: data[0].name,
+            comments: data[0].comments,
+            commentsLength: data[0].comments
+              ? data[0].comments.length
+              : "undefined",
+          }
+        : "No data"
+    );
 
     if (!Array.isArray(data)) {
       throw new Error("Data is not an array");
@@ -109,6 +267,30 @@ async function fetchProfessorData() {
     console.log(
       `✅ Successfully fetched ${data.length} professors from GitHub CSV`
     );
+    console.log(
+      "📋 Sample professor names:",
+      data.slice(0, 5).map((p) => p.name)
+    );
+    console.log(
+      "📋 Sample professor with comments:",
+      data.slice(0, 2).map((p) => ({
+        name: p.name,
+        commentsLength: p.comments ? p.comments.length : 0,
+        hasComments: p.comments && p.comments.length > 0,
+      }))
+    );
+
+    // Debug: Check if specific professors are in the data
+    const testNames = ["John Seng", "Andrea Schuman", "John Oliver"];
+    testNames.forEach((name) => {
+      const found = data.find((p) =>
+        p.name.toLowerCase().includes(name.toLowerCase())
+      );
+      console.log(
+        `🔍 Test search for "${name}":`,
+        found ? `FOUND - ${found.name}` : "NOT FOUND"
+      );
+    });
 
     // Also store in chrome.storage for persistence
     chrome.storage.local.set({ professorData: data }, () => {
@@ -158,13 +340,26 @@ function findProfessor(profName) {
   }
 
   console.log(`🔍 Searching for professor: "${profName}"`);
-  console.log(
-    `📋 Available professors:`,
-    professorCache.map((p) => p.name)
-  );
 
   // Normalize the professor name for better matching
   const normalizedSearchName = profName.toLowerCase().trim();
+
+  console.log(
+    `📋 Available professors (first 10):`,
+    professorCache.slice(0, 10).map((p) => p.name)
+  );
+  console.log(`📋 Total professors in cache: ${professorCache.length}`);
+
+  // Debug: Check if any professor names contain the search term
+  const matchingNames = professorCache.filter(
+    (p) =>
+      p.name.toLowerCase().includes(normalizedSearchName) ||
+      normalizedSearchName.includes(p.name.toLowerCase())
+  );
+  console.log(
+    `🔍 Names containing "${profName}":`,
+    matchingNames.map((p) => p.name)
+  );
 
   // Search through the cached data
   for (const professor of professorCache) {
@@ -315,29 +510,58 @@ async function callGeminiAnalysis(profName, professorData = null) {
         comments,
         department,
         courses,
+        gradeLevelDistribution,
+        gradeDistribution,
       } = professorData;
+
+      // Log the student comments being fed to Gemini API
+      console.log("📝 Student Comments being sent to Gemini API:");
+      console.log("📝 Full comments length:", comments.length);
+      console.log(
+        "📝 Comments preview (first 1000 chars):",
+        comments.substring(0, 1000)
+      );
+      console.log("📝 Full comments:", comments);
+
+      // Format grade level distribution
+      const gradeLevelInfo =
+        Object.keys(gradeLevelDistribution).length > 0
+          ? `Grade Level Distribution: ${Object.entries(gradeLevelDistribution)
+              .map(([level, count]) => `${level} (${count})`)
+              .join(", ")}`
+          : "Grade Level Distribution: Not available";
+
+      // Format grade distribution
+      const gradeInfo =
+        Object.keys(gradeDistribution).length > 0
+          ? `Grade Distribution: ${Object.entries(gradeDistribution)
+              .map(([grade, count]) => `${grade} (${count})`)
+              .join(", ")}`
+          : "Grade Distribution: Not available";
 
       prompt = `You are a helpful Cal Poly student assistant. Analyze this professor's data and provide a concise, helpful summary for students considering their class.
 
 Professor: "${profName}"
 Overall Rating: ${rating}/4.0 (${numEvals} evaluations)
-Clarity: ${clarity}/4.0
-Helpfulness: ${helpfulness}/4.0  
-Easiness: ${easiness}/4.0
-Hotness: ${hotness}/4.0
+Material Clear: ${clarity}/4.0
+Student Difficulties: ${helpfulness}/4.0
 Department: ${department}
 Courses: ${courses}
 
-Student Comments: "${comments.substring(0, 1000)}${
-        comments.length > 1000 ? "..." : ""
+${gradeLevelInfo}
+${gradeInfo}
+
+Student Comments: "${comments.substring(0, 2000)}${
+        comments.length > 2000 ? "..." : ""
       }"
 
 Provide a 2-3 sentence summary that helps students understand:
 1. What this professor is known for (teaching style, strengths)
 2. What to expect (workload, difficulty, helpfulness)
 3. Any notable characteristics from student feedback
+4. How different grade levels (freshman, sophomore, etc.) typically perform
 
-Be honest, helpful, and student-friendly. Focus on practical advice for course selection.`;
+Be honest, helpful, and student-friendly. Focus on practical advice for course selection. If you notice patterns in the grade level distribution or grade distribution, mention them to help students understand what to expect.`;
     } else {
       // Fallback for professors not in database
       prompt = `You are a helpful Cal Poly student assistant. A student is asking about professor "${profName}" who is not found in the PolyRatings database.
@@ -464,6 +688,9 @@ If they're asking about general Cal Poly academic advice, provide brief helpful 
 // Message listener for communication with content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log("📨 Received message in background script:", message);
+  console.log("📨 Message type:", message.type);
+  console.log("📨 Professor name:", message.profName);
+  console.log("📨 Sender:", sender);
 
   if (message.type === "getProfRating") {
     console.log(
@@ -491,6 +718,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (professor) {
           console.log("✅ Found professor data:", professor);
+          console.log("🔍 Professor comments field:", professor.comments);
+          console.log("🔍 Comments type:", typeof professor.comments);
+          console.log(
+            "🔍 Comments length:",
+            professor.comments ? professor.comments.length : "undefined"
+          );
           // Generate AI analysis for found professors
           console.log("🤖 Generating AI analysis for found professor...");
           const analysis = await callGeminiAnalysis(

@@ -1,5 +1,12 @@
 // PolyRatings Enhancer - Content Script (Complete Fixed Version)
 console.log("PolyRatings Enhancer content script loaded!");
+console.log("🚀 Content script loaded at:", new Date().toISOString());
+console.log("🚀 Current URL:", window.location.href);
+console.log("🚀 Chrome runtime available:", typeof chrome !== "undefined");
+console.log(
+  "🚀 Chrome runtime sendMessage available:",
+  typeof chrome.runtime.sendMessage !== "undefined"
+);
 
 // Set to track processed professors to prevent duplicates
 const processedProfessors = new Set();
