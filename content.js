@@ -382,7 +382,12 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     ".cx-MuiExpansionPanelSummary-root"
   );
 
-  if (parentCell && expansionPanel && expansionSummary) {
+  // Check if this panel has "class notes" - if so, skip height modifications
+  const hasClassNotes =
+    expansionPanel &&
+    expansionPanel.textContent.toLowerCase().includes("class notes");
+
+  if (parentCell && expansionPanel && expansionSummary && !hasClassNotes) {
     // Set height for the expansion panel summary (the actual row) - increased height
     expansionSummary.style.minHeight = "80px";
     expansionSummary.style.height = "80px";
@@ -513,7 +518,12 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
     ".cx-MuiExpansionPanelSummary-root"
   );
 
-  if (parentCell && expansionPanel && expansionSummary) {
+  // Check if this panel has "class notes" - if so, skip height modifications
+  const hasClassNotes =
+    expansionPanel &&
+    expansionPanel.textContent.toLowerCase().includes("class notes");
+
+  if (parentCell && expansionPanel && expansionSummary && !hasClassNotes) {
     // Set height for the expansion panel summary (the actual row) - increased height
     expansionSummary.style.minHeight = "80px";
     expansionSummary.style.height = "80px";
