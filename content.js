@@ -161,6 +161,31 @@ function prInjectStyles() {
     font-size: 12px !important;
     padding: 3px 8px !important;
       }
+      
+      /* Keep CLASS NOTES section properly spaced without affecting the main panel */
+      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .px-3.py-2 {
+        padding-bottom: 30px !important;
+        margin-bottom: 15px !important;
+      }
+      
+      /* Push down the instructor, days, start, end columns when CLASS NOTES is present */
+      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiExpansionPanelSummary-root {
+        align-items: center !important;
+      }
+      
+      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap {
+        align-items: center !important;
+      }
+      
+      /* Specifically target the instructor column and adjacent columns */
+      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(6),
+      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(7),
+      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(8),
+      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(9) {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
     `;
   document.documentElement.appendChild(style);
 }
@@ -387,6 +412,13 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     expansionPanel &&
     expansionPanel.textContent.toLowerCase().includes("class notes");
 
+  // If CLASS NOTES is present, keep the expansion panel summary at normal position
+  if (hasClassNotes && parentCell && expansionPanel && expansionSummary) {
+    console.log("📝 CLASS NOTES detected, keeping normal panel position");
+    // Don't add any padding/margin to the expansion summary - keep it normal
+    // The CLASS NOTES section will handle its own spacing
+  }
+
   if (parentCell && expansionPanel && expansionSummary && !hasClassNotes) {
     // Set height for the expansion panel summary (the actual row) - increased height
     expansionSummary.style.minHeight = "80px";
@@ -461,14 +493,28 @@ function injectDesktopRatingUI(professorNameElement, professor) {
 
   // Add the rating below with more space
   const ratingContainer = document.createElement("div");
-  ratingContainer.style.cssText = `
-    width: 100%;
-    max-width: 100%;
-    overflow: visible;
-    flex-shrink: 0;
-    margin-top: -1px;
-    padding-top: 2px;
-  `;
+
+  // If CLASS NOTES is present, place rating below with more spacing
+  if (hasClassNotes) {
+    ratingContainer.style.cssText = `
+      width: 100%;
+      max-width: 100%;
+      overflow: visible;
+      flex-shrink: 0;
+      margin-top: 8px;
+      padding-top: 4px;
+    `;
+  } else {
+    ratingContainer.style.cssText = `
+      width: 100%;
+      max-width: 100%;
+      overflow: visible;
+      flex-shrink: 0;
+      margin-top: -1px;
+      padding-top: 2px;
+    `;
+  }
+
   ratingContainer.appendChild(ratingEl);
 
   container.appendChild(nameSpan);
@@ -522,6 +568,13 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
   const hasClassNotes =
     expansionPanel &&
     expansionPanel.textContent.toLowerCase().includes("class notes");
+
+  // If CLASS NOTES is present, keep the expansion panel summary at normal position
+  if (hasClassNotes && parentCell && expansionPanel && expansionSummary) {
+    console.log("📝 CLASS NOTES detected, keeping normal panel position");
+    // Don't add any padding/margin to the expansion summary - keep it normal
+    // The CLASS NOTES section will handle its own spacing
+  }
 
   if (parentCell && expansionPanel && expansionSummary && !hasClassNotes) {
     // Set height for the expansion panel summary (the actual row) - increased height
