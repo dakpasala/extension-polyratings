@@ -181,7 +181,7 @@ function prInjectStyles() {
       .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(1) {
         flex: 1 1 auto !important;      
         justify-content: flex-start !important;
-        max-width: 39% !important;   /* just a little more left */
+        max-width: 49% !important;   /* just a little more left */
         padding-left: 1px !important;
       }
       .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
