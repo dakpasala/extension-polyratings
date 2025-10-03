@@ -157,24 +157,25 @@ function createRatingElement(professor) {
   ratingContainer.target = "_blank";
   ratingContainer.className = "polyratings-rating-element";
   ratingContainer.style.cssText = `
-        display: inline-flex; 
-        align-items: center; 
-        text-decoration: none;
-        padding: 3px 8px; 
-        border: 1px solid #7F8A9E; 
-        border-radius: 12px;
-        font-size: 12px; 
-        color: #090d19; 
-        transition: all 0.2s ease;
-        cursor: pointer; 
-        white-space: nowrap; 
-        background: rgba(255, 255, 255, 0.9);
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 4px;
-        max-width: calc(100% - 4px);
-        overflow: hidden;
-        width: fit-content;
-    `;
+    display: inline-flex; 
+    align-items: center; 
+    text-decoration: none;
+    padding: 3px 8px; 
+    border: 1px solid #7F8A9E; 
+    border-radius: 12px;
+    font-size: 12px; 
+    color: #090d19; 
+    transition: all 0.2s ease;
+    cursor: pointer; 
+    white-space: nowrap; 
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    /* margin-left: 4px;  <-- REMOVE */
+    /* max-width: calc(100% - 4px); <-- REMOVE */
+    overflow: hidden;
+    width: fit-content;
+  `;
+
   ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
 
   ratingContainer.addEventListener("click", (e) => e.stopPropagation());
@@ -238,24 +239,25 @@ function createRatingElement(professor) {
 function createNotFoundBadge(professorName) {
   const notFoundContainer = document.createElement("span");
   notFoundContainer.style.cssText = `
-        display: inline-flex;
-        align-items: center;
-        padding: 3px 8px;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #7F8A9E;
-        border-radius: 12px;
-        font-size: 12px;
-        color: #090d19;
-        text-decoration: none;
-        transition: all 0.2s ease;
-        cursor: pointer;
-        white-space: nowrap;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 4px;
-        max-width: calc(100% - 4px);
-        overflow: hidden;
-        width: fit-content;
-    `;
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #7F8A9E;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #090d19;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    /* margin-left: 4px; <-- REMOVE */
+    /* max-width: calc(100% - 4px); <-- REMOVE */
+    overflow: hidden;
+    width: fit-content;
+  `;
+
 
   // Create simple text that will shrink with ellipses
   const notFoundText = document.createElement("span");
@@ -398,9 +400,10 @@ function injectDesktopRatingUI(professorNameElement, professor) {
       cell.style.minHeight = "80px";
       cell.style.height = "80px";
       cell.style.display = "flex";
-      cell.style.alignItems = "flex-start"; // Changed to flex-start for better alignment
-      cell.style.padding = "8px 6px"; // Adjusted padding
+      cell.style.alignItems = "center";   // match default middle alignment
+      cell.style.padding = "0";           // ⬅️ let the site handle default padding
     });
+    
 
     // Special alignment for specific columns that need to match instructor column
     const specificCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
@@ -434,7 +437,10 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     height: 100%;
     justify-content: flex-start;
     align-items: flex-start;
+    text-align: left;
+    padding-left: 0;
   `;
+
 
   // Keep the original text with proper ellipsis handling
   const nameSpan = document.createElement("div");
@@ -546,9 +552,10 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
       cell.style.minHeight = "80px";
       cell.style.height = "80px";
       cell.style.display = "flex";
-      cell.style.alignItems = "flex-start"; // Changed to flex-start for better alignment
-      cell.style.padding = "8px 6px"; // Adjusted padding
+      cell.style.alignItems = "center";   // match default middle alignment
+      cell.style.padding = "0";           // ⬅️ let the site handle default padding
     });
+    
 
     // Special alignment for specific columns that need to match instructor column
     const specificCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
