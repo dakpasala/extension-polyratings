@@ -13,18 +13,6 @@ const processedProfessors = new Set();
 let currentUrl = window.location.href;
 
 // Function to clear cache when URL changes
-function clearCacheIfUrlChanged() {
-  const newUrl = window.location.href;
-  if (newUrl !== currentUrl) {
-    console.log("🔄 URL changed, clearing professor cache");
-    processedProfessors.clear();
-    currentUrl = newUrl;
-  }
-}
-
-// Monitor URL changes
-setInterval(clearCacheIfUrlChanged, 1000);
-
 function prInjectStyles() {
   if (document.getElementById("pr-style")) return;
   const style = document.createElement("style");
@@ -34,7 +22,7 @@ function prInjectStyles() {
       .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(2), /* Topic Column */
       .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5)  /* Wait List Open Column */
       {
-          flex-basis: 6% !important; /* Slightly reduce width to make more space */
+          flex-basis: 6% !important;
           max-width: 6% !important;
       }
 
@@ -45,7 +33,7 @@ function prInjectStyles() {
         text-overflow: ellipsis;
       }
       
-      /* Add ellipsis to Wait List Open column to prevent text cutoff */
+      /* Add ellipsis to Wait List Open column */
       .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5) .cx-MuiTypography-noWrap div[aria-hidden="true"] {
         white-space: nowrap !important;
         overflow: hidden !important;
@@ -54,16 +42,15 @@ function prInjectStyles() {
         display: block !important;
       }
       
-      /* --- Styles for Vertical Rating Layout (FIXED) --- */
+      /* --- Vertical rating layout --- */
       .pr-wrap { 
         display: flex; 
         flex-direction: column;
-        align-items: flex-start;
-        justify-content: flex-start;
-        gap: 0;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
         width: 100%; 
         line-height: 1.2;
-        min-height: auto;
         padding: 0;
       }
       
@@ -77,123 +64,90 @@ function prInjectStyles() {
         color: inherit;
         margin: 0;
         line-height: 1.3;
-        height: auto;
+        text-align: center;
       }
       
-      .pr-rating-container {
-        display: flex;
-        flex-direction: row;
+      /* Rating badge */
+      .polyratings-rating-element {
+        display: inline-flex;
         align-items: center;
         gap: 4px;
-        width: 100%;
-        margin-top: 8px;
-        margin-bottom: 0;
-      }
-      
-      /* Star rating styles */
-      .polyratings-rating-element {
-        display: inline-flex;
-        align-items: center;
-        gap: 1px;
-      }
-      
-      /* Hide extra stars when space is tight */
-      .polyratings-rating-element .star-rating {
-        display: inline-flex;
-        gap: 1px;
-      }
-      
-      /* Compact mode - show only first star */
-      .polyratings-rating-element .star-rating.compact-mode svg:not(:first-child) {
-        display: none !important;
-      }
-      
-      /* Alternative compact mode selector for debugging */
-      .star-rating.compact-mode svg:not(:first-child) {
-        display: none !important;
-      }
-      
-      
-
-      /* Ensure proper table cell alignment - don't modify cell height */
-      .cx-MuiGrid-grid-xs-4 .pr-wrap {
-        height: auto;
-        justify-content: flex-start;
-        align-items: flex-start;
-      }
-      
-      
-      /* Don't modify the base cell height - let it stay natural */
-      .cx-MuiGrid-grid-xs-4 {
-        height: auto;
-        min-height: auto;
-      }
-      
-      /* Mobile approach spacing - add space below content, not to cell height */
-      .polyratings-rating-element {
-        margin-top: 2px; /* Add small top margin to prevent clipping */
-        margin-bottom: 0; /* No bottom margin to avoid pushing headers */
+        font-size: 12px !important;
+        padding: 3px 8px !important;
+        border: 1px solid #7F8A9E;
+        border-radius: 12px;
+        margin: 0;  /* no extra push */
+        white-space: nowrap;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         transition: all 0.3s ease-in-out;
         opacity: 1;
         transform: translateY(0);
       }
       
-      /* Smooth fade-in animation for new ratings */
       .polyratings-rating-element.fade-in {
         animation: fadeIn 0.2s ease-out;
       }
       
       @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(-2px) scale(0.98);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
+        from { opacity: 0; transform: translateY(-2px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
       }
       
-      /* Ensure smooth rendering */
-      .polyratings-rating-element {
-        will-change: opacity, transform;
-      }
-      
-      /* Ensure the rating doesn't affect table row height */
-  .polyratings-rating-element {
-    display: inline-block;
-    vertical-align: top;
-    font-size: 12px !important;
-    padding: 3px 8px !important;
-      }
-      
-      /* Keep CLASS NOTES section properly spaced without affecting the main panel */
-      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .px-3.py-2 {
-        padding-bottom: 30px !important;
-        margin-bottom: 15px !important;
-      }
-      
-      /* Push down the instructor, days, start, end columns when CLASS NOTES is present */
-      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiExpansionPanelSummary-root {
-        align-items: center !important;
-      }
-      
-      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap {
-        align-items: center !important;
-      }
-      
-      /* Specifically target the instructor column and adjacent columns */
-      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(6),
-      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(7),
-      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(8),
-      .cx-MuiExpansionPanel-root:has(.px-3.py-2) .cx-MuiGrid-item:nth-child(9) {
+      /* --- Row alignment (default = centered) --- */
+      .cx-MuiExpansionPanel-root .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item {
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
       }
-    `;
+
+      /* Instructor cell: stack name + rating but stay centered like other columns */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px; /* space between name and rating */
+      }
+
+      /* Instructor name full width with ellipsis */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) .pr-name,
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div:first-child {
+        width: 100% !important;
+        text-align: center !important;
+        margin: 0 !important;
+        line-height: 1.3 !important;
+      }
+
+      /* --- CLASS NOTES handling --- */
+      /* Add spacing inside notes box only */
+      .cx-MuiExpansionPanel-root .px-3.py-2 {
+        padding-top: 10px !important;
+        padding-bottom: 20px !important;
+        margin-bottom: 10px !important;
+      }
+
+      /* Kill excess inline spacing between instructor name and rating */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] > div:first-child {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+      }
+
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] > div:last-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+      }
+
+      /* Use controlled gap instead of stacked margins/padding */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] {
+        gap: 2px !important;
+      }
+  `;
   document.documentElement.appendChild(style);
 }
+
+
+
 prInjectStyles();
 
 // Function to create rating UI element (SIMPLIFIED - single version only)
@@ -485,40 +439,31 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   // Keep the original text with proper ellipsis handling
   const nameSpan = document.createElement("div");
   nameSpan.textContent = originalText;
+  // Name span (no margins, just line-height)
   nameSpan.style.cssText = `
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    width: 100%;
-    max-width: 100%;
-    line-height: 1.3;
-    margin-bottom: 4px;
-    margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  max-width: 100%;
+  line-height: 1.3;
+  margin: 0;
   `;
 
-  // Add the rating below with more space
   const ratingContainer = document.createElement("div");
 
-  // If CLASS NOTES is present, place rating below with more spacing
-  if (hasClassNotes) {
-    ratingContainer.style.cssText = `
-      width: 100%;
-      max-width: 100%;
-      overflow: visible;
-      flex-shrink: 0;
-      margin-top: 8px;
-      padding-top: 4px;
-    `;
-  } else {
-    ratingContainer.style.cssText = `
-      width: 100%;
-      max-width: 100%;
-      overflow: visible;
-      flex-shrink: 0;
-      margin-top: -1px;
-      padding-top: 2px;
-    `;
-  }
+  // Rating container (no margins/padding, rely on flex gap)
+  ratingContainer.style.cssText = `
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  flex-shrink: 0;
+  `;
+
+
+  // Add the rating below with more space
+  
+ 
 
   ratingContainer.appendChild(ratingEl);
 
