@@ -140,18 +140,23 @@ function prInjectStyles() {
       
       /* Smooth fade-in animation for new ratings */
       .polyratings-rating-element.fade-in {
-        animation: fadeIn 0.15s ease-in-out;
+        animation: fadeIn 0.2s ease-out;
       }
       
       @keyframes fadeIn {
         from {
           opacity: 0;
-          transform: translateY(-3px);
+          transform: translateY(-2px) scale(0.98);
         }
         to {
           opacity: 1;
-          transform: translateY(0);
+          transform: translateY(0) scale(1);
         }
+      }
+      
+      /* Ensure smooth rendering */
+      .polyratings-rating-element {
+        will-change: opacity, transform;
       }
       
       /* Ensure the rating doesn't affect table row height */
@@ -749,7 +754,6 @@ function findAndLogProfessors() {
 
   dtElements.forEach((dt, index) => {
     const dtText = dt.textContent.trim();
-    console.log(`📝 dt[${index}]: "${dtText}"`);
 
     if (dtText === "Instructor:") {
       console.log(`✅ Found "Instructor:" at index ${index}`);
@@ -834,14 +838,8 @@ function findAndLogProfessors() {
         "✅ Successfully found main grid container(s) for desktop approach"
       );
 
-      // Log details about each container for debugging
+      // Process each container efficiently
       mainGridContainers.forEach((container, index) => {
-        console.log(`📦 Grid container ${index + 1}:`, {
-          className: container.className,
-          childCount: container.children.length,
-          textContent: container.textContent.substring(0, 100) + "...",
-        });
-
         // Step 2b: Find the professor name grid item within this container
         const detailsGridItems = container.querySelectorAll(
           ".cx-MuiGrid-grid-xs-5"
@@ -857,14 +855,8 @@ function findAndLogProfessors() {
             "✅ Successfully found details grid item(s) for professor extraction"
           );
 
-          // Log details about each details grid item
+          // Process each details grid item efficiently
           detailsGridItems.forEach((detailsItem, detailsIndex) => {
-            console.log(`📋 Details grid item ${detailsIndex + 1}:`, {
-              className: detailsItem.className,
-              childCount: detailsItem.children.length,
-              textContent: detailsItem.textContent.substring(0, 100) + "...",
-            });
-
             // Step 2c: Navigate to professor name cell within this details grid item
             const professorNameCells = detailsItem.querySelectorAll(
               ".cx-MuiGrid-grid-xs-4"
@@ -1547,7 +1539,7 @@ function setupMutationObserver() {
       debounceTimeout = setTimeout(() => {
         findAndLogProfessors();
         isProcessing = false;
-      }, 150); // Reduced delay for snappier response
+      }, 75); // Faster response while still being safe
     } else {
       console.log(
         "⏭️ No relevant changes detected in iframe, skipping professor search"
@@ -1572,6 +1564,23 @@ function setupMutationObserver() {
   // Run once on initial load
   console.log("🚀 Running initial professor search in iframe...");
   findAndLogProfessors();
+
+  // Add a conservative periodic check to catch any missed professors
+  setInterval(() => {
+    if (!isProcessing) {
+      // Only run if we don't have many ratings (indicating we might have missed some)
+      const currentRatings = document.querySelectorAll(
+        ".polyratings-rating-element"
+      ).length;
+      const currentCells = document.querySelectorAll('[role="cell"]').length;
+
+      if (currentRatings < currentCells / 2) {
+        // Only if we have less than half the expected ratings
+        console.log("🔄 Periodic check - seems like we missed some professors");
+        findAndLogProfessors();
+      }
+    }
+  }, 5000); // Check every 5 seconds - very conservative
 }
 
 // Main execution

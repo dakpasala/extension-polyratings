@@ -724,46 +724,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             "🔍 Comments length:",
             professor.comments ? professor.comments.length : "undefined"
           );
-          // Generate AI analysis for found professors
-          console.log("🤖 Generating AI analysis for found professor...");
-          const analysis = await callGeminiAnalysis(
-            message.profName,
-            professor
-          );
-
+          // Return professor data WITHOUT Gemini analysis to save API credits
           sendResponse({
             status: "success",
-            professor: {
-              ...professor,
-              analysis: analysis,
-            },
+            professor: professor,
           });
         } else {
-          // Try Gemini analysis for professors not in database
-          console.log(
-            "❌ Professor not found in database — calling Gemini for AI analysis..."
-          );
-          const analysis = await callGeminiAnalysis(message.profName);
-
-          if (analysis && analysis !== "AI analysis unavailable.") {
-            sendResponse({
-              status: "ai_analysis",
-              professor: {
-                name: message.profName,
-                rating: "N/A",
-                link: `https://polyratings.dev/new-professor?name=${encodeURIComponent(
-                  message.profName
-                )}`,
-                analysis,
-              },
-            });
-          } else {
-            // Fallback to your original not_found path
-            sendResponse({
-              status: "not_found",
-              message: "Professor not found in database",
-            });
-          }
+          // Professor not found in database - return not found status
+          console.log("❌ Professor not found in database");
+          sendResponse({
+            status: "not_found",
+            message: "Professor not found in database",
+          });
         }
       } catch (error) {
         console.log("❌ Error processing professor rating request:", error);
@@ -838,6 +810,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({
           status: "error",
           message: "Sorry, I couldn't process your query. Please try again.",
+        });
+      }
+    })();
+
+    return true;
+  }
+
+  // New message type for getting Gemini analysis only when needed
+  if (message.type === "getGeminiAnalysis") {
+    console.log("🤖 Getting Gemini analysis for professor:", message.profName);
+
+    // Create async function to handle the Gemini analysis request
+    (async () => {
+      try {
+        // Ensure we have the professor data
+        const data = await fetchProfessorData();
+        const professor = findProfessor(message.profName);
+
+        if (professor) {
+          console.log("✅ Found professor data, calling Gemini...");
+          const analysis = await callGeminiAnalysis(
+            message.profName,
+            professor
+          );
+          sendResponse({
+            status: "success",
+            analysis: analysis,
+            professor: professor,
+          });
+        } else {
+          console.log("❌ Professor not found, calling Gemini anyway...");
+          const analysis = await callGeminiAnalysis(message.profName);
+          sendResponse({
+            status: "ai_analysis",
+            analysis: analysis,
+            professor: {
+              name: message.profName,
+              rating: "N/A",
+              link: `https://polyratings.dev/new-professor?name=${encodeURIComponent(
+                message.profName
+              )}`,
+            },
+          });
+        }
+      } catch (error) {
+        console.log("❌ Error getting Gemini analysis:", error);
+        sendResponse({
+          status: "error",
+          message: "Failed to get Gemini analysis",
         });
       }
     })();
