@@ -40,28 +40,22 @@ function prInjectStyles() {
         display: block !important;
       }
 
-      /* --- Baseline row alignment (FLUSH-LEFT) --- */
+      /* --- Baseline row alignment --- */
       .cx-MuiExpansionPanel-root .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item {
         display: flex !important;
-        align-items: center !important;         /* vertical center */
-        justify-content: flex-start !important;  /* horizontal LEFT (fixes tiny right shift) */
+        align-items: center !important;
+        justify-content: flex-start !important;  
       }
 
-      /* Re-center ONLY cells whose inner text is intentionally centered by MUI */
       .cx-MuiExpansionPanel-root .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:has(.cx-MuiTypography-alignCenter) {
         justify-content: center !important;
       }
 
-      /* Inside the details block (Instructor/Days/Start/End/Room), keep each sub-cell flush-left */
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4 {
-        justify-content: flex-start !important;
-      }
-
-      /* --- Instructor stack (flush-left) --- */
+      /* --- Instructor stack --- */
       .pr-wrap { 
         display: flex; 
         flex-direction: column;
-        align-items: flex-start;   /* flush-left */
+        align-items: flex-start; 
         justify-content: center;
         gap: 4px;
         width: 100%; 
@@ -78,14 +72,15 @@ function prInjectStyles() {
         color: inherit;
         margin: 0;
         line-height: 1.3;
-        text-align: left;          /* flush-left text */
+        text-align: left;
       }
       .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) {
         display: flex !important;
         flex-direction: column !important;
-        align-items: flex-start !important;      /* flush-left like original */
+        align-items: flex-start !important;
         justify-content: center !important;
         gap: 4px;
+        min-width: 0 !important;
       }
       .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) .pr-name,
       .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div:first-child {
@@ -95,7 +90,7 @@ function prInjectStyles() {
         line-height: 1.3 !important;
       }
 
-      /* Rating badge */
+      /* --- Rating badge --- */
       .polyratings-rating-element {
         display: inline-flex;
         align-items: center;
@@ -105,24 +100,62 @@ function prInjectStyles() {
         border: 1px solid #7F8A9E;
         border-radius: 12px;
         margin: 0;
-        white-space: nowrap;
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         transition: all 0.3s ease-in-out;
         opacity: 1;
         transform: translateY(0);
+
+        flex-shrink: 1 !important;
+        min-width: 45px;
+        max-width: 120px;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
       }
       .polyratings-rating-element.fade-in { animation: fadeIn 0.2s ease-out; }
-      @keyframes fadeIn { from { opacity: 0; transform: translateY(-2px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      @keyframes fadeIn { 
+        from { opacity: 0; transform: translateY(-2px) scale(0.98); } 
+        to { opacity: 1; transform: translateY(0) scale(1); } 
+      }
 
-      /* --- CLASS NOTES spacing (doesn't shift columns) --- */
+      .polyratings-rating-element span:first-child {
+        display: inline-block;
+        max-width: 50px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+      }
+
+      @media (max-width: 1100px) {
+        .polyratings-rating-element span:first-child {
+          display: none !important;
+        }
+      }
+      @media (max-width: 1000px) {
+        .polyratings-rating-element .star-rating svg:nth-child(n+2) {
+          display: none !important;
+        }
+      }
+      @media (max-width: 900px) {
+        .polyratings-rating-element[title*="PolyRatings"]::after {
+          content: "Add to...";
+          display: inline-block;
+          margin-left: 4px;
+        }
+        .polyratings-rating-element[title*="PolyRatings"] span {
+          display: none !important;
+        }
+      }
+
+      /* --- CLASS NOTES spacing --- */
       .cx-MuiExpansionPanel-root .px-3.py-2 {
         padding-top: 10px !important;
         padding-bottom: 20px !important;
         margin-bottom: 10px !important;
       }
 
-      /* Kill excess inline spacing between instructor name and rating (from injected inline styles) */
+      /* Kill excess spacing inside instructor cell */
       .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] > div:first-child {
         margin-top: 0 !important;
         margin-bottom: 0 !important;
@@ -132,11 +165,37 @@ function prInjectStyles() {
         padding-top: 0 !important;
       }
       .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] {
-        gap: 2px !important;  /* tight, consistent spacing */
+        gap: 2px !important;
+      }
+
+      /* --- Align checkbox column --- */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:last-child {
+        flex: 0 0 40px !important;   
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        padding-right: 8px !important; 
+      }
+
+      /* --- Keep Instructor snug left, nudge Days/Start/End/Room right --- */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(1) {
+        flex: 1 1 auto !important;      
+        justify-content: flex-start !important;
+        max-width: 39% !important;   /* just a little more left */
+        padding-left: 1px !important;
+      }
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
+        flex: 0 0 12% !important;       
+        max-width: 12% !important;
+        justify-content: flex-start !important;
+        padding-left: 8px !important;   
       }
   `;
   document.documentElement.appendChild(style);
 }
+
+
+
 
 
 prInjectStyles();
