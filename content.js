@@ -19,9 +19,8 @@ function prInjectStyles() {
   style.id = "pr-style";
   style.textContent = `
       /* --- Make space for instructor column --- */
-      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(2), /* Topic Column */
-      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5)  /* Wait List Open Column */
-      {
+      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(2),
+      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5) {
           flex-basis: 6% !important;
           max-width: 6% !important;
       }
@@ -32,7 +31,8 @@ function prInjectStyles() {
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5) .cx-MuiTypography-noWrap div[aria-hidden="true"] {
+      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5) 
+        .cx-MuiTypography-noWrap div[aria-hidden="true"] {
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
@@ -47,7 +47,9 @@ function prInjectStyles() {
         justify-content: flex-start !important;  
       }
 
-      .cx-MuiExpansionPanel-root .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:has(.cx-MuiTypography-alignCenter) {
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiExpansionPanelSummary-root 
+      .cx-MuiGrid-item:has(.cx-MuiTypography-alignCenter) {
         justify-content: center !important;
       }
 
@@ -82,8 +84,10 @@ function prInjectStyles() {
         gap: 4px;
         min-width: 0 !important;
       }
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) .pr-name,
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div:first-child {
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(6) .pr-name,
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(6) > div:first-child {
         width: 100% !important;
         text-align: left !important;
         margin: 0 !important;
@@ -113,6 +117,7 @@ function prInjectStyles() {
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
       }
+
       .polyratings-rating-element.fade-in { animation: fadeIn 0.2s ease-out; }
       @keyframes fadeIn { 
         from { opacity: 0; transform: translateY(-2px) scale(0.98); } 
@@ -156,15 +161,18 @@ function prInjectStyles() {
       }
 
       /* Kill excess spacing inside instructor cell */
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] > div:first-child {
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] > div:first-child {
         margin-top: 0 !important;
         margin-bottom: 0 !important;
       }
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] > div:last-child {
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] > div:last-child {
         margin-top: 0 !important;
         padding-top: 0 !important;
       }
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] {
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(6) > div[style*="flex-direction: column"] {
         gap: 2px !important;
       }
 
@@ -178,22 +186,51 @@ function prInjectStyles() {
       }
 
       /* --- Keep Instructor snug left, nudge Days/Start/End/Room right --- */
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(1) {
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(1) {
         flex: 1 1 auto !important;      
         justify-content: flex-start !important;
-        max-width: 49% !important;   /* just a little more left */
+        max-width: 49% !important;
         padding-left: 1px !important;
       }
-      .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
+
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
         flex: 0 0 12% !important;       
         max-width: 12% !important;
         justify-content: flex-start !important;
         padding-left: 8px !important;   
       }
+
+      /* =====================================================
+         === ALIGN HEADER LABELS WITH DATA CELLS ===
+         ===================================================== */
+      [role="row"] .cx-MuiGrid-grid-xs-5 {
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+      }
+
+      [role="row"] .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(1) {
+        flex: 1 1 auto !important;
+        max-width: 49% !important;
+        padding-left: 1px !important;
+      }
+
+      [role="row"] .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
+        flex: 0 0 12% !important;
+        max-width: 12% !important;
+        padding-left: 8px !important;
+      }
+
+      [role="row"] .cx-MuiGrid-item:last-child {
+        flex: 0 0 40px !important;
+        justify-content: center !important;
+        padding-right: 8px !important;
+      }
   `;
   document.documentElement.appendChild(style);
 }
-
 
 
 
