@@ -228,9 +228,44 @@ function prInjectStyles() {
         justify-content: center !important;
         padding-right: 8px !important;
       }
+
+      /* =====================================================
+         === FINAL MICRO-ALIGNMENT TWEAKS ===
+         ===================================================== */
+
+      /* Center Wait List (99/99) numbers and nudge left columns */
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(3),
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(4),
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(5),
+      .cx-MuiExpansionPanel-root 
+      .cx-MuiGrid-item:nth-child(2) {
+        justify-content: center !important;
+        text-align: center !important;
+        padding-left: -2px !important; /* nudge slightly left */
+      }
+
+      /* Move Instructor & Ratings slightly right */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) {
+        padding-left: 6px !important;
+      }
+
+      /* Nudge Days / Start / End / Room slightly left */
+      .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2),
+      [role="row"] .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
+        padding-left: 4px !important; /* tightened from 8px */
+      }
+
+      /* Subtle global alignment correction */
+      [role="row"] .cx-MuiGrid-grid-xs-5 {
+        margin-left: -2px !important;
+      }
   `;
   document.documentElement.appendChild(style);
 }
+
 
 
 
