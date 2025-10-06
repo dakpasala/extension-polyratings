@@ -23,115 +23,179 @@ function prInjectStyles() {
   const style = document.createElement("style");
   style.id = "pr-style";
   style.textContent = `
-      /* --- Make space for instructor column --- */
-      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(2), /* Topic Column */
-      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5)  /* Wait List Open Column */
-      {
-          flex-basis: 6% !important; /* Slightly reduce width to make more space */
-          max-width: 6% !important;
-      }
-
-      /* Add ellipsis to Topic column for long content */
-      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(2) {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+      /* --- Table Layout Fixes --- */
+      
+      /* Ensure expansion panel summaries don't break out of containers */
+      .cx-MuiExpansionPanelSummary-root {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding: 0 !important;
       }
       
-      /* Add ellipsis to Wait List Open column to prevent text cutoff */
-      .cx-MuiGrid-root.cx-MuiGrid-item.cx-MuiGrid-grid-xs-1:nth-of-type(5) .cx-MuiTypography-noWrap div[aria-hidden="true"] {
-        white-space: nowrap !important;
+      /* Ensure all expansion panels have consistent sizing */
+      .cx-MuiExpansionPanel-root,
+      [class*="cx-MuiExpansionPanel-root"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+      }
+      
+      /* Force all content within expansion panels to respect boundaries */
+      .cx-MuiExpansionPanelSummary-root * {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Comprehensive grid container constraints - catch all variations */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-container,
+      .cx-MuiExpansionPanelSummary-root [class*="cx-MuiGrid-container"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-sizing: border-box !important;
+      }
+      
+      /* Ensure all grid items respect container boundaries */
+      .cx-MuiExpansionPanelSummary-root [class*="cx-MuiGrid-grid-xs"],
+      .cx-MuiExpansionPanelSummary-root [class*="cx-MuiGrid-item"] {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+      }
+      
+      /* Base grid item styling - prevent content overflow and set consistent padding */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item {
+        overflow: hidden !important;
+        padding: 5px 2px !important; /* Small horizontal padding for breathing room */
+        min-height: 38px !important; /* Slightly reduced minimum height */
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important; /* Left align by default to match headers */
+        box-sizing: border-box !important;
+      }
+      
+      /* Checkbox column (first column) - center aligned */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:first-child {
+        justify-content: center !important;
+        padding: 5px 2px !important; /* Small horizontal padding */
+      }
+      
+      /* Section name Typography - left aligned */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiTypography-root.cx-MuiTypography-body2.cx-MuiTypography-noWrap {
+        text-align: left !important;
+      }
+      
+      /* Instructor column (xs-4) - left aligned with more space */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-4 {
+        justify-content: flex-start !important;
+        padding: 5px 2px !important; /* Small horizontal padding */
+      }
+      
+      /* Typography base styling - text truncation with ellipsis */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiTypography-root {
+        width: 100% !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
-        max-width: 100% !important;
+        white-space: nowrap !important;
+        line-height: 1.4 !important;
+        text-align: center !important; /* Default center alignment */
+      }
+      
+      /* Typography in instructor column - left aligned */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-4 .cx-MuiTypography-root {
+        text-align: left !important;
+      }
+      
+      /* Typography for specific columns that should be left aligned */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-2 .cx-MuiTypography-root,
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-3 .cx-MuiTypography-root {
+        text-align: left !important;
+      }
+      
+      /* Only right-align the wait list or status column (typically xs-1 at the end) */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-1:last-child {
+        justify-content: flex-end !important;
+        padding: 5px 2px !important; /* Small horizontal padding */
+      }
+      
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-1:last-child .cx-MuiTypography-root {
+        text-align: right !important;
+      }
+      
+      /* Ensure form controls (checkboxes, buttons) are properly centered */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item input[type="checkbox"],
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item button {
+        margin: 0 auto !important;
         display: block !important;
       }
       
-      /* --- Styles for Vertical Rating Layout (FIXED) --- */
-      .pr-wrap { 
-        display: flex; 
-        flex-direction: column;
-        align-items: flex-start;
-        justify-content: flex-start;
-        gap: 0;
-        width: 100%; 
-        line-height: 1.2;
-        min-height: auto;
-        padding: 0;
+      /* Class notes section - keep left aligned */
+      .cx-MuiDivider-root.mx-3,
+      .cx-MuiDivider-root.mx-3 + *,
+      .cx-MuiDivider-root.mx-3 ~ * {
+        text-align: left !important;
+        justify-content: flex-start !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
       }
       
-      .pr-name {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        width: 100%;
-        font-size: inherit;
-        font-weight: inherit;
-        color: inherit;
-        margin: 0;
-        line-height: 1.3;
-        height: auto;
+      /* Typography in class notes sections */
+      .cx-MuiDivider-root.mx-3 + * .cx-MuiTypography-root,
+      .cx-MuiDivider-root.mx-3 ~ * .cx-MuiTypography-root {
+        text-align: left !important;
+        justify-content: flex-start !important;
+        white-space: normal !important; /* Allow wrapping for class notes */
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
       }
       
-      .pr-rating-container {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 4px;
-        width: 100%;
-        margin-top: 8px;
-        margin-bottom: 0;
+      /* Specific fix for class notes content containers */
+      .cx-MuiExpansionPanelDetails-root,
+      [class*="cx-MuiExpansionPanelDetails"] {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        word-wrap: break-word !important;
       }
       
-      /* Star rating styles */
+      /* Override ellipsis truncation for class notes */
+      .cx-MuiExpansionPanelDetails-root .cx-MuiTypography-root,
+      [class*="cx-MuiExpansionPanelDetails"] .cx-MuiTypography-root {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+      }
+      
+      /* Styles for rating elements */
       .polyratings-rating-element {
-        display: inline-flex;
-        align-items: center;
-        gap: 1px;
+        display: inline-flex !important;
+        align-items: center !important;
+        padding: 4px 10px !important; /* Slightly more padding */
+        border: 1px solid #7F8A9E !important;
+        border-radius: 12px !important;
+        font-size: 12px !important;
+        color: #090d19 !important;
+        background: rgba(255, 255, 255, 0.9) !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
+        margin-top: 4px !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
       }
       
-      /* Hide extra stars when space is tight */
-      .polyratings-rating-element .star-rating {
-        display: inline-flex;
-        gap: 1px;
-      }
-      
-      /* Compact mode - show only first star */
-      .polyratings-rating-element .star-rating.compact-mode svg:not(:first-child) {
-        display: none !important;
-      }
-      
-      /* Alternative compact mode selector for debugging */
-      .star-rating.compact-mode svg:not(:first-child) {
-        display: none !important;
-      }
-      
-      
-
-      /* Ensure proper table cell alignment - don't modify cell height */
-      .cx-MuiGrid-grid-xs-4 .pr-wrap {
-        height: auto;
-        justify-content: flex-start;
-        align-items: flex-start;
-      }
-      
-      
-      /* Don't modify the base cell height - let it stay natural */
-      .cx-MuiGrid-grid-xs-4 {
-        height: auto;
-        min-height: auto;
-      }
-      
-      /* Mobile approach spacing - add space below content, not to cell height */
-      .polyratings-rating-element {
-        margin-top: 2px; /* Add small top margin to prevent clipping */
-        margin-bottom: 0; /* No bottom margin to avoid pushing headers */
-        transition: all 0.3s ease-in-out;
-        opacity: 1;
-        transform: translateY(0);
-      }
-      
-      /* Smooth fade-in animation for new ratings */
+      /* Smooth animations */
       .polyratings-rating-element.fade-in {
         animation: fadeIn 0.15s ease-in-out;
       }
@@ -145,14 +209,6 @@ function prInjectStyles() {
           opacity: 1;
           transform: translateY(0);
         }
-      }
-      
-      /* Ensure the rating doesn't affect table row height */
-  .polyratings-rating-element {
-    display: inline-block;
-    vertical-align: top;
-    font-size: 12px !important;
-    padding: 3px 8px !important;
       }
     `;
   document.documentElement.appendChild(style);
@@ -179,7 +235,7 @@ function createRatingElement(professor) {
         white-space: nowrap; 
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 4px;
+        margin-left: 0px;
         max-width: calc(100% - 4px);
         overflow: hidden;
         width: fit-content;
@@ -200,42 +256,24 @@ function createRatingElement(professor) {
   ratingText.textContent = `${professor.rating}/4`;
   ratingText.style.marginRight = "3px";
 
-  // Create star rating based on professor rating
+  // Create star rating based on professor rating (simplified version)
   const stars = document.createElement("span");
   stars.className = "star-rating";
   stars.style.display = "inline-flex";
   stars.style.gap = "1px";
 
-  // Calculate how many stars to fill based on rating
+  // Simple star calculation - just show one representative star
   const rating = parseFloat(professor.rating);
-  const fullStars = Math.floor(rating);
-  const hasHalfStar = rating % 1 >= 0.5;
-
+  
   let starsHtml = "";
-
-  // Add full stars
-  for (let i = 0; i < fullStars; i++) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
-  }
-
-  // Add half star if needed
-  if (hasHalfStar) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
-  }
-
-  // Add empty stars to make it 4 total
-  const emptyStars = 4 - fullStars - (hasHalfStar ? 1 : 0);
-  for (let i = 0; i < emptyStars; i++) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.8em; height:0.8em; vertical-align: top;" fill="none" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
-  }
+  
+  // Just show one star that represents the rating
+  starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
 
   stars.innerHTML = starsHtml;
 
   ratingContainer.appendChild(ratingText);
   ratingContainer.appendChild(stars);
-
-  // Always use compact mode (1 star) for simplicity
-  stars.classList.add("compact-mode");
 
   // Add fade-in animation
   ratingContainer.classList.add("fade-in");
@@ -260,7 +298,7 @@ function createNotFoundBadge(professorName) {
         cursor: pointer;
         white-space: nowrap;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 4px;
+        margin-left: 0px;
         max-width: calc(100% - 4px);
         overflow: hidden;
         width: fit-content;
@@ -268,7 +306,7 @@ function createNotFoundBadge(professorName) {
 
   // Create simple text that will shrink with ellipses
   const notFoundText = document.createElement("span");
-  notFoundText.textContent = "Add to PolyRatings";
+  notFoundText.textContent = "Add Prof";
   notFoundText.style.cssText = `
     white-space: nowrap;
     overflow: hidden;
@@ -363,77 +401,20 @@ function injectDesktopRatingUI(professorNameElement, professor) {
 
   const ratingEl = createRatingElement(professor);
 
-  // Inject with slightly more height while keeping everything aligned
+  // Simple vertical layout - just add professor name and rating
   const originalText = professorNameElement.textContent.trim();
 
-  // Get the parent cell and the expansion panel row to set consistent height
-  const parentCell = professorNameElement.closest(".cx-MuiGrid-grid-xs-4");
-  const expansionPanel = professorNameElement.closest(
-    ".cx-MuiExpansionPanel-root"
-  );
-  const expansionSummary = professorNameElement.closest(
-    ".cx-MuiExpansionPanelSummary-root"
-  );
-
-  if (parentCell && expansionPanel && expansionSummary) {
-    // Set height for the expansion panel summary (the actual row) - increased height
-    expansionSummary.style.minHeight = "80px";
-    expansionSummary.style.height = "80px";
-
-    // Set height for the main grid container within the expansion panel
-    const mainGrid = expansionSummary.querySelector(
-      ".cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap"
-    );
-    if (mainGrid) {
-      mainGrid.style.minHeight = "80px";
-      mainGrid.style.height = "80px";
-    }
-
-    // Set height for all cells in this row with proper alignment
-    const allCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
-    allCells.forEach((cell) => {
-      cell.style.minHeight = "80px";
-      cell.style.height = "80px";
-      cell.style.display = "flex";
-      cell.style.alignItems = "flex-start"; // Changed to flex-start for better alignment
-      cell.style.padding = "8px 6px"; // Adjusted padding
-    });
-
-    // Special alignment for specific columns that need to match instructor column
-    const specificCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
-    specificCells.forEach((cell, index) => {
-      // Target the first few columns (section, topic, unreserved, reserved seats)
-      if (index < 4) {
-        cell.style.alignItems = "center";
-        cell.style.paddingTop = "8px";
-        cell.style.paddingBottom = "8px";
-
-        // Target the inner typography elements that have center alignment
-        const typographyElements = cell.querySelectorAll(
-          ".cx-MuiTypography-alignCenter"
-        );
-        typographyElements.forEach((typography) => {
-          typography.style.display = "flex";
-          typography.style.alignItems = "center";
-          typography.style.justifyContent = "center";
-          typography.style.height = "100%";
-        });
-      }
-    });
-  }
-
-  // Create a container that uses the extra height
+  // Create a simple container for name and rating
   const container = document.createElement("div");
   container.style.cssText = `
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 100%;
-    justify-content: flex-start;
     align-items: flex-start;
+    gap: 2px;
   `;
 
-  // Keep the original text with proper ellipsis handling
+  // Professor name
   const nameSpan = document.createElement("div");
   nameSpan.textContent = originalText;
   nameSpan.style.cssText = `
@@ -441,21 +422,14 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
-    max-width: 100%;
-    line-height: 1.3;
-    margin-bottom: 4px;
-    margin-top: 2px;
+    line-height: 1.2;
   `;
 
-  // Add the rating below with more space
+  // Rating container
   const ratingContainer = document.createElement("div");
   ratingContainer.style.cssText = `
     width: 100%;
-    max-width: 100%;
-    overflow: visible;
-    flex-shrink: 0;
-    margin-top: -1px;
-    padding-top: 2px;
+    overflow: hidden;
   `;
   ratingContainer.appendChild(ratingEl);
 
@@ -467,7 +441,7 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   professorNameElement.appendChild(container);
 
   console.log(
-    `✅ Successfully injected desktop vertical rating UI for: ${professorName}`
+    `✅ Successfully injected desktop rating UI for: ${professorName}`
   );
 }
 
@@ -494,77 +468,20 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
 
   const notFoundEl = createNotFoundBadge(professorName);
 
-  // Inject with slightly more height while keeping everything aligned
+  // Simple vertical layout - just add professor name and badge
   const originalText = professorNameElement.textContent.trim();
 
-  // Get the parent cell and the expansion panel row to set consistent height
-  const parentCell = professorNameElement.closest(".cx-MuiGrid-grid-xs-4");
-  const expansionPanel = professorNameElement.closest(
-    ".cx-MuiExpansionPanel-root"
-  );
-  const expansionSummary = professorNameElement.closest(
-    ".cx-MuiExpansionPanelSummary-root"
-  );
-
-  if (parentCell && expansionPanel && expansionSummary) {
-    // Set height for the expansion panel summary (the actual row) - increased height
-    expansionSummary.style.minHeight = "80px";
-    expansionSummary.style.height = "80px";
-
-    // Set height for the main grid container within the expansion panel
-    const mainGrid = expansionSummary.querySelector(
-      ".cx-MuiGrid-container.cx-MuiGrid-wrap-xs-nowrap"
-    );
-    if (mainGrid) {
-      mainGrid.style.minHeight = "80px";
-      mainGrid.style.height = "80px";
-    }
-
-    // Set height for all cells in this row with proper alignment
-    const allCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
-    allCells.forEach((cell) => {
-      cell.style.minHeight = "80px";
-      cell.style.height = "80px";
-      cell.style.display = "flex";
-      cell.style.alignItems = "flex-start"; // Changed to flex-start for better alignment
-      cell.style.padding = "8px 6px"; // Adjusted padding
-    });
-
-    // Special alignment for specific columns that need to match instructor column
-    const specificCells = expansionSummary.querySelectorAll(".cx-MuiGrid-item");
-    specificCells.forEach((cell, index) => {
-      // Target the first few columns (section, topic, unreserved, reserved seats)
-      if (index < 4) {
-        cell.style.alignItems = "center";
-        cell.style.paddingTop = "8px";
-        cell.style.paddingBottom = "8px";
-
-        // Target the inner typography elements that have center alignment
-        const typographyElements = cell.querySelectorAll(
-          ".cx-MuiTypography-alignCenter"
-        );
-        typographyElements.forEach((typography) => {
-          typography.style.display = "flex";
-          typography.style.alignItems = "center";
-          typography.style.justifyContent = "center";
-          typography.style.height = "100%";
-        });
-      }
-    });
-  }
-
-  // Create a container that uses the extra height
+  // Create a simple container for name and badge
   const container = document.createElement("div");
   container.style.cssText = `
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 100%;
-    justify-content: flex-start;
     align-items: flex-start;
+    gap: 2px;
   `;
 
-  // Keep the original text with proper ellipsis handling
+  // Professor name
   const nameSpan = document.createElement("div");
   nameSpan.textContent = originalText;
   nameSpan.style.cssText = `
@@ -572,33 +489,26 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
-    max-width: 100%;
-    line-height: 1.3;
-    margin-bottom: 4px;
-    margin-top: 2px;
+    line-height: 1.2;
   `;
 
-  // Add the not found badge below with more space
-  const notFoundContainer = document.createElement("div");
-  notFoundContainer.style.cssText = `
+  // Badge container
+  const badgeContainer = document.createElement("div");
+  badgeContainer.style.cssText = `
     width: 100%;
-    max-width: 100%;
-    overflow: visible;
-    flex-shrink: 0;
-    margin-top: -1px;
-    padding-top: 2px;
+    overflow: hidden;
   `;
-  notFoundContainer.appendChild(notFoundEl);
+  badgeContainer.appendChild(notFoundEl);
 
   container.appendChild(nameSpan);
-  container.appendChild(notFoundContainer);
+  container.appendChild(badgeContainer);
 
   // Replace the content
   professorNameElement.innerHTML = "";
   professorNameElement.appendChild(container);
 
   console.log(
-    `✅ Successfully injected desktop vertical not found UI for: ${professorName}`
+    `✅ Successfully injected desktop not found UI for: ${professorName}`
   );
 }
 
@@ -633,27 +543,35 @@ function getElementPath(element) {
 function findAndLogProfessors() {
   console.log("🔍 Starting professor search in iframe...");
 
-  // Only clean up if we actually need to re-process
-  // Check if we already have ratings for current professors
-  const currentProfessors = document.querySelectorAll('[role="cell"]');
-  const hasExistingRatings =
-    document.querySelectorAll(".polyratings-rating-element").length > 0;
-
-  if (hasExistingRatings) {
-    console.log(
-      "⏭️ Ratings already exist, skipping cleanup to prevent flickering"
-    );
+  // Check if we're processing too frequently
+  if (window.processingProfessors) {
+    console.log("⏭️ Already processing professors, skipping...");
     return;
   }
+  
+  window.processingProfessors = true;
+  
+  // Set a timeout to reset the processing flag
+  setTimeout(() => {
+    window.processingProfessors = false;
+  }, 2000);
 
-  // First, clean up any existing rating elements to prevent duplicates
+  // Don't skip processing on new pages - allow reprocessing for new content
+  console.log("🚀 Processing professors for current page...");
+
+  // Clean up existing ratings to prevent duplicates, but allow reprocessing
   const existingRatings = document.querySelectorAll(
     ".polyratings-rating-element"
   );
-  existingRatings.forEach((rating) => rating.remove());
-  console.log(
-    `🧹 Cleaned up ${existingRatings.length} existing rating elements`
-  );
+  console.log(`🧹 Found ${existingRatings.length} existing rating elements`);
+  
+  // Only clear ratings if we're on a completely different page
+  const currentPageContent = document.body.innerText.substring(0, 200);
+  if (window.lastPageContent && window.lastPageContent !== currentPageContent) {
+    console.log("📄 New page detected, cleaning up old ratings");
+    existingRatings.forEach((rating) => rating.remove());
+  }
+  window.lastPageContent = currentPageContent;
 
   // Also clean up any corrupted text content in instructor elements
   const instructorElements = document.querySelectorAll('[role="cell"]');
@@ -703,6 +621,27 @@ function findAndLogProfessors() {
             `👨‍🏫 Processing professor ${profIndex + 1}: ${professorName}`
           );
 
+          // Check if this specific professor already has a rating in this specific element
+          const existingProfRating = nextElement.querySelector(
+            `[data-professor="${professorName}"]`
+          );
+          
+          if (existingProfRating) {
+            console.log(`⏭️ Professor ${professorName} already has rating in this element, skipping`);
+            return;
+          }
+
+          // Also check if there's already a rating element for this professor name in the parent container
+          const parentContainer = nextElement.closest('.cx-MuiExpansionPanelSummary-root') || nextElement.parentElement;
+          const existingInParent = parentContainer ? parentContainer.querySelector(
+            `[data-professor="${professorName}"]`
+          ) : null;
+          
+          if (existingInParent && existingInParent !== existingProfRating) {
+            console.log(`⏭️ Professor ${professorName} already has rating in parent container, skipping`);
+            return;
+          }
+
           // Send message to background script to get professor rating
           chrome.runtime.sendMessage(
             { type: "getProfRating", profName: professorName },
@@ -714,12 +653,7 @@ function findAndLogProfessors() {
                 injectRatingUI(nextElement, response.professor, profIndex);
               } else if (response.status === "not_found") {
                 console.log("❌ Professor not found in database");
-                // First remove any existing not found badges for this professor
-                const existingNotFound = nextElement.querySelectorAll(
-                  `[data-professor="${professorName}"]`
-                );
-                existingNotFound.forEach((badge) => badge.remove());
-
+                
                 // Inject the "not found" badge
                 const notFoundBadge = createNotFoundBadge(professorName);
                 notFoundBadge.className = "polyratings-rating-element";
@@ -822,6 +756,27 @@ function findAndLogProfessors() {
                 if (professorName && professorName.length > 0) {
                   console.log("✅ Professor name validation passed");
 
+                  // Check if this professor already has a rating in this specific element
+                  const existingRating = professorNameElement.querySelector(
+                    ".polyratings-rating-element, .pr-rating-container"
+                  );
+                  
+                  if (existingRating) {
+                    console.log(`⏭️ Professor ${professorName} already has rating in this element, skipping`);
+                    return;
+                  }
+
+                  // Also check parent containers to avoid duplicates
+                  const parentContainer = professorNameElement.closest('.cx-MuiExpansionPanelSummary-root');
+                  const existingInParent = parentContainer ? parentContainer.querySelector(
+                    `[data-professor="${professorName}"]`
+                  ) : null;
+                  
+                  if (existingInParent) {
+                    console.log(`⏭️ Professor ${professorName} already has rating in parent container, skipping`);
+                    return;
+                  }
+
                   // Process the professor for rating lookup (desktop approach)
                   console.log(
                     `👨‍🏫 Processing desktop professor: ${professorName}`
@@ -891,6 +846,9 @@ function findAndLogProfessors() {
   console.log(
     `🎯 Professor search complete. Found ${professorCount} professors.`
   );
+  
+  // Reset processing flag
+  window.processingProfessors = false;
 
   // Also try to inject the Ask Agent button
   injectAskAgentButton();
@@ -1371,6 +1329,12 @@ function setupMutationObserver() {
             console.log(`🎯 Found desktop grid container directly added`);
             return true;
           }
+          
+          // Check for any professor-related content
+          if (node.textContent && node.textContent.includes("Instructor")) {
+            console.log(`🎯 Found instructor-related content`);
+            return true;
+          }
         }
       }
 
@@ -1405,7 +1369,7 @@ function setupMutationObserver() {
       debounceTimeout = setTimeout(() => {
         findAndLogProfessors();
         isProcessing = false;
-      }, 150); // Reduced delay for snappier response
+      }, 100); // Reduced delay for faster response
     } else {
       console.log(
         "⏭️ No relevant changes detected in iframe, skipping professor search"
