@@ -185,13 +185,13 @@ function prInjectStyles() {
         padding-right: 8px !important; 
       }
 
-      /* --- Keep Instructor snug left, nudge Days/Start/End/Room right --- */
+      /* --- Nudge instructor/days/start/end/room slightly right --- */
       .cx-MuiExpansionPanel-root 
       .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(1) {
         flex: 1 1 auto !important;      
         justify-content: flex-start !important;
         max-width: 49% !important;
-        padding-left: 1px !important;
+        padding-left: 8px !important;
       }
 
       .cx-MuiExpansionPanel-root 
@@ -199,11 +199,11 @@ function prInjectStyles() {
         flex: 0 0 12% !important;       
         max-width: 12% !important;
         justify-content: flex-start !important;
-        padding-left: 8px !important;   
+        padding-left: 12px !important;   
       }
 
       /* =====================================================
-         === ALIGN HEADER LABELS WITH DATA CELLS ===
+         === HEADER ALIGNMENT - CENTER first 5, LEFT rest ===
          ===================================================== */
       [role="row"] .cx-MuiGrid-grid-xs-5 {
         display: flex !important;
@@ -211,16 +211,44 @@ function prInjectStyles() {
         align-items: center !important;
       }
 
+      /* CENTER align Section/Topic/Unreserved/Reserved/Wait List headers */
+      [role="row"] .cx-MuiGrid-item:nth-child(1) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(2) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(3) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(4) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(5) button {
+        justify-content: center !important;
+        text-align: center !important;
+      }
+
+      [role="row"] .cx-MuiGrid-item:nth-child(1) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(2) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(3) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(4) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(5) button .cx-MuiTypography-root {
+        text-align: center !important;
+      }
+
+      /* LEFT align Instructor/Days/Start/End/Room/Status headers with right nudge */
+      [role="row"] .cx-MuiGrid-grid-xs-5 button {
+        justify-content: flex-start !important;
+        text-align: left !important;
+      }
+
+      [role="row"] .cx-MuiGrid-grid-xs-5 button .cx-MuiTypography-root {
+        text-align: left !important;
+      }
+
       [role="row"] .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(1) {
         flex: 1 1 auto !important;
         max-width: 49% !important;
-        padding-left: 1px !important;
+        padding-left: 8px !important;
       }
 
       [role="row"] .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
         flex: 0 0 12% !important;
         max-width: 12% !important;
-        padding-left: 8px !important;
+        padding-left: 12px !important;
       }
 
       [role="row"] .cx-MuiGrid-item:last-child {
@@ -244,18 +272,18 @@ function prInjectStyles() {
       .cx-MuiGrid-item:nth-child(2) {
         justify-content: center !important;
         text-align: center !important;
-        padding-left: -2px !important; /* nudge slightly left */
+        padding-left: -2px !important;
       }
 
       /* Move Instructor & Ratings slightly right */
       .cx-MuiExpansionPanel-root .cx-MuiGrid-item:nth-child(6) {
-        padding-left: 6px !important;
+        padding-left: 12px !important;
       }
 
       /* Nudge Days / Start / End / Room slightly left */
       .cx-MuiExpansionPanel-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2),
       [role="row"] .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4:nth-child(n+2) {
-        padding-left: 4px !important; /* tightened from 8px */
+        padding-left: 12px !important;
       }
 
       /* Subtle global alignment correction */
@@ -265,9 +293,6 @@ function prInjectStyles() {
   `;
   document.documentElement.appendChild(style);
 }
-
-
-
 
 
 prInjectStyles();
