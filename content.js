@@ -85,6 +85,11 @@ function prInjectStyles() {
         padding: 5px 2px !important; /* Small horizontal padding */
       }
       
+      /* Section name Typography - left aligned */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiTypography-root.cx-MuiTypography-body2.cx-MuiTypography-noWrap {
+        text-align: left !important;
+      }
+      
       /* Instructor column (xs-4) - left aligned with more space */
       .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-4 {
         justify-content: flex-start !important;
