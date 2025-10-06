@@ -210,6 +210,94 @@ function prInjectStyles() {
           transform: translateY(0);
         }
       }
+
+      /* ==========================================================
+         === CENTER ALIGN FIRST 5 COLUMNS (header + body) ===
+         ========================================================== */
+
+      /* Header buttons: Section, Topic, Unreserved, Reserved, Waitlist */
+      [role="row"] .cx-MuiGrid-item:nth-child(1) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(2) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(3) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(4) button,
+      [role="row"] .cx-MuiGrid-item:nth-child(5) button {
+        justify-content: center !important;
+        text-align: center !important;
+      }
+
+      [role="row"] .cx-MuiGrid-item:nth-child(1) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(2) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(3) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(4) button .cx-MuiTypography-root,
+      [role="row"] .cx-MuiGrid-item:nth-child(5) button .cx-MuiTypography-root {
+        text-align: center !important;
+      }
+
+      /* Row data alignment for same 5 columns */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(1),
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(2),
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(3),
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(4),
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(5) {
+        justify-content: center !important;
+        text-align: center !important;
+      }
+
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(1) .cx-MuiTypography-root,
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(2) .cx-MuiTypography-root,
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(3) .cx-MuiTypography-root,
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(4) .cx-MuiTypography-root,
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:nth-child(5) .cx-MuiTypography-root {
+        text-align: center !important;
+      }
+
+      /* ==========================================================
+         === NOW: LEFT-ALIGN THE REST (Instructor → Status) ===
+         ========================================================== */
+
+      /* Headers: the nested group (Instructor, Days, Start, End, Room) */
+      [role="row"] .cx-MuiGrid-grid-xs-5 {
+        display: flex !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+      }
+      [role="row"] .cx-MuiGrid-grid-xs-5 button {
+        justify-content: flex-start !important;
+        text-align: left !important;
+      }
+      [role="row"] .cx-MuiGrid-grid-xs-5 button .cx-MuiTypography-root {
+        text-align: left !important;
+      }
+
+      /* Header: Status (last column) */
+      [role="row"] .cx-MuiGrid-grid-xs-1:last-child,
+      [role="row"] .cx-MuiGrid-item:last-child {
+        justify-content: flex-start !important;
+      }
+      [role="row"] .cx-MuiGrid-item:last-child button,
+      [role="row"] .cx-MuiGrid-item:last-child .cx-MuiTypography-root {
+        text-align: left !important;
+      }
+
+      /* Row cells: Instructor → Days → Start → End → Room */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4 {
+        display: flex !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        align-items: center !important;
+      }
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-5 .cx-MuiGrid-grid-xs-4 .cx-MuiTypography-root {
+        text-align: left !important;
+      }
+
+      /* Row cells: Status (last column) */
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-1:last-child,
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:last-child {
+        justify-content: flex-start !important;
+      }
+      .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:last-child .cx-MuiTypography-root {
+        text-align: left !important;
+      }
     `;
   document.documentElement.appendChild(style);
 }
