@@ -71,24 +71,24 @@ function prInjectStyles() {
       /* Base grid item styling - prevent content overflow and set consistent padding */
       .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item {
         overflow: hidden !important;
-        padding: 8px 6px !important;
-        min-height: 48px !important;
+        padding: 5px 2px !important; /* Small horizontal padding for breathing room */
+        min-height: 38px !important; /* Slightly reduced minimum height */
         display: flex !important;
         align-items: center !important;
-        justify-content: center !important; /* Default center alignment */
+        justify-content: flex-start !important; /* Left align by default to match headers */
         box-sizing: border-box !important;
       }
       
       /* Checkbox column (first column) - center aligned */
       .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-item:first-child {
         justify-content: center !important;
-        padding: 8px 4px !important;
+        padding: 5px 2px !important; /* Small horizontal padding */
       }
       
       /* Instructor column (xs-4) - left aligned with more space */
       .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-4 {
         justify-content: flex-start !important;
-        padding: 8px 12px !important;
+        padding: 5px 2px !important; /* Small horizontal padding */
       }
       
       /* Typography base styling - text truncation with ellipsis */
@@ -98,7 +98,7 @@ function prInjectStyles() {
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
         line-height: 1.4 !important;
-        text-align: center !important; /* Default center */
+        text-align: center !important; /* Default center alignment */
       }
       
       /* Typography in instructor column - left aligned */
@@ -115,7 +115,7 @@ function prInjectStyles() {
       /* Only right-align the wait list or status column (typically xs-1 at the end) */
       .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-1:last-child {
         justify-content: flex-end !important;
-        padding: 8px 6px !important;
+        padding: 5px 2px !important; /* Small horizontal padding */
       }
       
       .cx-MuiExpansionPanelSummary-root .cx-MuiGrid-grid-xs-1:last-child .cx-MuiTypography-root {
@@ -190,11 +190,6 @@ function prInjectStyles() {
         box-sizing: border-box !important;
       }
       
-      /* Star rating compact mode */
-      .star-rating.compact-mode svg:not(:first-child) {
-        display: none !important;
-      }
-      
       /* Smooth animations */
       .polyratings-rating-element.fade-in {
         animation: fadeIn 0.15s ease-in-out;
@@ -235,7 +230,7 @@ function createRatingElement(professor) {
         white-space: nowrap; 
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 4px;
+        margin-left: 0px;
         max-width: calc(100% - 4px);
         overflow: hidden;
         width: fit-content;
@@ -256,42 +251,24 @@ function createRatingElement(professor) {
   ratingText.textContent = `${professor.rating}/4`;
   ratingText.style.marginRight = "3px";
 
-  // Create star rating based on professor rating
+  // Create star rating based on professor rating (simplified version)
   const stars = document.createElement("span");
   stars.className = "star-rating";
   stars.style.display = "inline-flex";
   stars.style.gap = "1px";
 
-  // Calculate how many stars to fill based on rating
+  // Simple star calculation - just show one representative star
   const rating = parseFloat(professor.rating);
-  const fullStars = Math.floor(rating);
-  const hasHalfStar = rating % 1 >= 0.5;
-
+  
   let starsHtml = "";
-
-  // Add full stars
-  for (let i = 0; i < fullStars; i++) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
-  }
-
-  // Add half star if needed
-  if (hasHalfStar) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
-  }
-
-  // Add empty stars to make it 4 total
-  const emptyStars = 4 - fullStars - (hasHalfStar ? 1 : 0);
-  for (let i = 0; i < emptyStars; i++) {
-    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.8em; height:0.8em; vertical-align: top;" fill="none" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
-  }
+  
+  // Just show one star that represents the rating
+  starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
 
   stars.innerHTML = starsHtml;
 
   ratingContainer.appendChild(ratingText);
   ratingContainer.appendChild(stars);
-
-  // Always use compact mode (1 star) for simplicity
-  stars.classList.add("compact-mode");
 
   // Add fade-in animation
   ratingContainer.classList.add("fade-in");
@@ -316,7 +293,7 @@ function createNotFoundBadge(professorName) {
         cursor: pointer;
         white-space: nowrap;
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        margin-left: 4px;
+        margin-left: 0px;
         max-width: calc(100% - 4px);
         overflow: hidden;
         width: fit-content;
@@ -324,7 +301,7 @@ function createNotFoundBadge(professorName) {
 
   // Create simple text that will shrink with ellipses
   const notFoundText = document.createElement("span");
-  notFoundText.textContent = "Add to PolyRatings";
+  notFoundText.textContent = "Add Prof";
   notFoundText.style.cssText = `
     white-space: nowrap;
     overflow: hidden;
