@@ -560,23 +560,13 @@ function findAndLogProfessors() {
   );
   console.log(`🧹 Found ${existingRatings.length} existing rating elements`);
   
-  // Only remove existing ratings if we're on a different page or have new content
-  if (existingRatings.length > 0) {
-    const firstRating = existingRatings[0];
-    const currentPageContent = document.body.innerText.substring(0, 200);
-    
-    // Simple check to see if we're on a different page
-    if (window.lastPageContent !== currentPageContent) {
-      console.log("📄 New page detected, cleaning up old ratings");
-      existingRatings.forEach((rating) => rating.remove());
-      window.lastPageContent = currentPageContent;
-    } else {
-      console.log("📄 Same page, keeping existing ratings but processing new sections");
-    }
-  } else {
-    // No existing ratings, track current page
-    window.lastPageContent = document.body.innerText.substring(0, 200);
+  // Only clear ratings if we're on a completely different page
+  const currentPageContent = document.body.innerText.substring(0, 200);
+  if (window.lastPageContent && window.lastPageContent !== currentPageContent) {
+    console.log("📄 New page detected, cleaning up old ratings");
+    existingRatings.forEach((rating) => rating.remove());
   }
+  window.lastPageContent = currentPageContent;
 
   // Also clean up any corrupted text content in instructor elements
   const instructorElements = document.querySelectorAll('[role="cell"]');
@@ -626,13 +616,24 @@ function findAndLogProfessors() {
             `👨‍🏫 Processing professor ${profIndex + 1}: ${professorName}`
           );
 
-          // Check if this professor already has a rating in this element
+          // Check if this specific professor already has a rating in this specific element
           const existingProfRating = nextElement.querySelector(
             `[data-professor="${professorName}"]`
           );
           
           if (existingProfRating) {
-            console.log(`⏭️ Professor ${professorName} already has rating, skipping`);
+            console.log(`⏭️ Professor ${professorName} already has rating in this element, skipping`);
+            return;
+          }
+
+          // Also check if there's already a rating element for this professor name in the parent container
+          const parentContainer = nextElement.closest('.cx-MuiExpansionPanelSummary-root') || nextElement.parentElement;
+          const existingInParent = parentContainer ? parentContainer.querySelector(
+            `[data-professor="${professorName}"]`
+          ) : null;
+          
+          if (existingInParent && existingInParent !== existingProfRating) {
+            console.log(`⏭️ Professor ${professorName} already has rating in parent container, skipping`);
             return;
           }
 
@@ -750,13 +751,24 @@ function findAndLogProfessors() {
                 if (professorName && professorName.length > 0) {
                   console.log("✅ Professor name validation passed");
 
-                  // Check if this professor already has a rating
+                  // Check if this professor already has a rating in this specific element
                   const existingRating = professorNameElement.querySelector(
                     ".polyratings-rating-element, .pr-rating-container"
                   );
                   
                   if (existingRating) {
-                    console.log(`⏭️ Professor ${professorName} already has rating, skipping`);
+                    console.log(`⏭️ Professor ${professorName} already has rating in this element, skipping`);
+                    return;
+                  }
+
+                  // Also check parent containers to avoid duplicates
+                  const parentContainer = professorNameElement.closest('.cx-MuiExpansionPanelSummary-root');
+                  const existingInParent = parentContainer ? parentContainer.querySelector(
+                    `[data-professor="${professorName}"]`
+                  ) : null;
+                  
+                  if (existingInParent) {
+                    console.log(`⏭️ Professor ${professorName} already has rating in parent container, skipping`);
                     return;
                   }
 
@@ -1352,7 +1364,7 @@ function setupMutationObserver() {
       debounceTimeout = setTimeout(() => {
         findAndLogProfessors();
         isProcessing = false;
-      }, 300); // Slightly longer delay to ensure content is fully loaded
+      }, 100); // Reduced delay for faster response
     } else {
       console.log(
         "⏭️ No relevant changes detected in iframe, skipping professor search"
