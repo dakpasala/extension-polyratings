@@ -7,14 +7,15 @@ clearInterval(clearRatingsIfUrlChanged);
 
 // OR make it smarter:
 function clearRatingsIfUrlChanged() {
-  const newUrl = window.location.href.split('#')[0]; // ignore hash changes
+  const newUrl = window.location.href.split("#")[0]; // ignore hash changes
   if (newUrl !== currentUrl) {
     console.log("🔄 Major URL changed, clearing existing ratings");
-    document.querySelectorAll(".polyratings-rating-element").forEach(r => r.remove());
+    document
+      .querySelectorAll(".polyratings-rating-element")
+      .forEach((r) => r.remove());
     currentUrl = newUrl;
   }
 }
-
 
 // Monitor URL changes
 setInterval(clearRatingsIfUrlChanged, 1000);
@@ -353,9 +354,9 @@ function createRatingElement(professor) {
 
   // Simple star calculation - just show one representative star
   const rating = parseFloat(professor.rating);
-  
+
   let starsHtml = "";
-  
+
   // Just show one star that represents the rating
   starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
 
@@ -446,7 +447,9 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
   );
   existingRatings.forEach((rating) => rating.remove());
 
-  console.log(`🎨 Injecting mobile rating UI for: ${professorName} at index ${profIndex}`);
+  console.log(
+    `🎨 Injecting mobile rating UI for: ${professorName} at index ${profIndex}`
+  );
 
   // Create the rating element
   const ratingElement = createRatingElement(professor);
@@ -642,9 +645,9 @@ function findAndLogProfessors() {
     console.log("⏭️ Already processing professors, skipping...");
     return;
   }
-  
+
   window.processingProfessors = true;
-  
+
   // Set a timeout to reset the processing flag
   setTimeout(() => {
     window.processingProfessors = false;
@@ -706,14 +709,16 @@ function findAndLogProfessors() {
           // Create a unique identifier for this professor in this specific element
           const elementId = getElementPath(nextElement);
           const professorKey = `${professorName}-${elementId}-${profIndex}`;
-          
+
           // Check if this specific professor already has a rating in this specific element
           const existingProfRating = nextElement.querySelector(
             `[data-professor="${professorName}"][data-index="${profIndex}"]`
           );
-          
+
           if (existingProfRating) {
-            console.log(`⏭️ Professor ${professorName} already has rating in this element at index ${profIndex}, skipping`);
+            console.log(
+              `⏭️ Professor ${professorName} already has rating in this element at index ${profIndex}, skipping`
+            );
             return;
           }
 
@@ -728,18 +733,18 @@ function findAndLogProfessors() {
                 injectRatingUI(nextElement, response.professor, profIndex);
               } else if (response.status === "not_found") {
                 console.log("❌ Professor not found in database");
-                
+
                 // Inject the "not found" badge using the same function as ratings for consistent spacing
                 const notFoundBadge = createNotFoundBadge(professorName);
                 notFoundBadge.className = "polyratings-rating-element";
                 notFoundBadge.setAttribute("data-professor", professorName);
                 notFoundBadge.setAttribute("data-index", profIndex.toString());
-                
+
                 // Use the same injection method as ratings for consistent spacing
                 const lineBreak = document.createElement("br");
                 nextElement.appendChild(lineBreak);
                 nextElement.appendChild(notFoundBadge);
-                
+
                 // Apply same margin logic as ratings
                 if (profIndex > 0) {
                   notFoundBadge.style.marginLeft = "12px";
@@ -840,14 +845,16 @@ function findAndLogProfessors() {
 
                   // Create a unique identifier for this professor in this specific element
                   const elementId = getElementPath(professorNameElement);
-                  
+
                   // Check if this professor already has a rating in this specific element
                   const existingRating = professorNameElement.querySelector(
                     ".polyratings-rating-element, .pr-rating-container"
                   );
-                  
+
                   if (existingRating) {
-                    console.log(`⏭️ Professor ${professorName} already has rating in this element, skipping`);
+                    console.log(
+                      `⏭️ Professor ${professorName} already has rating in this element, skipping`
+                    );
                     return;
                   }
 
@@ -920,7 +927,7 @@ function findAndLogProfessors() {
   console.log(
     `🎯 Professor search complete. Found ${professorCount} professors.`
   );
-  
+
   // Reset processing flag
   window.processingProfessors = false;
 
@@ -1076,13 +1083,37 @@ function openAgentPopup(button) {
       addUserMessage(messagesArea, message);
       input.value = "";
 
-      // Add bot response
-      setTimeout(() => {
-        addBotMessage(
-          messagesArea,
-          "🚧 Building in progress... This feature is coming soon!"
-        );
-      }, 500);
+      // Show typing indicator
+      const typingId = addTypingMessage(messagesArea);
+
+      // Send message to background script
+      chrome.runtime.sendMessage(
+        { type: "chatbotQuery", query: message },
+        (response) => {
+          // Remove typing indicator
+          const typingElement = document.getElementById(typingId);
+          if (typingElement) {
+            typingElement.remove();
+          }
+
+          if (response && response.status === "success") {
+            // Professor found with analysis
+            addBotMessage(messagesArea, response.professor.analysis);
+          } else if (response && response.status === "ai_analysis") {
+            // Professor not found but got AI analysis
+            addBotMessage(messagesArea, response.professor.analysis);
+          } else if (response && response.status === "general_response") {
+            // General response
+            addBotMessage(messagesArea, response.message);
+          } else {
+            // Error case
+            addBotMessage(
+              messagesArea,
+              "❌ Sorry, I couldn't process your request. Please try again."
+            );
+          }
+        }
+      );
     }
   });
 
@@ -1217,6 +1248,52 @@ function addBotMessage(container, message) {
   messageDiv.textContent = message;
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
+}
+
+// Function to add typing indicator
+function addTypingMessage(container) {
+  const typingId = "typing-" + Date.now();
+  const messageDiv = document.createElement("div");
+  messageDiv.id = typingId;
+  messageDiv.style.cssText = `
+    background: white;
+    color: #666;
+    padding: 12px 16px;
+    border-radius: 18px 18px 18px 4px;
+    margin-bottom: 12px;
+    margin-right: 40px;
+    font-size: 14px;
+    font-style: italic;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  `;
+
+  messageDiv.innerHTML = `
+    <span>🤖 Agent is typing</span>
+    <div class="typing-dots" style="display: flex; gap: 2px;">
+      <div style="width: 4px; height: 4px; background: #666; border-radius: 50%; animation: typing 1.4s infinite ease-in-out;"></div>
+      <div style="width: 4px; height: 4px; background: #666; border-radius: 50%; animation: typing 1.4s infinite ease-in-out 0.2s;"></div>
+      <div style="width: 4px; height: 4px; background: #666; border-radius: 50%; animation: typing 1.4s infinite ease-in-out 0.4s;"></div>
+    </div>
+  `;
+
+  // Add CSS animation if not already added
+  if (!document.querySelector("#typing-animation-styles")) {
+    const style = document.createElement("style");
+    style.id = "typing-animation-styles";
+    style.textContent = `
+      @keyframes typing {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+        30% { transform: translateY(-10px); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  container.appendChild(messageDiv);
+  container.scrollTop = container.scrollHeight;
+  return typingId;
 }
 
 // Function to inject the Ask Agent button
@@ -1403,7 +1480,7 @@ function setupMutationObserver() {
             console.log(`🎯 Found desktop grid container directly added`);
             return true;
           }
-          
+
           // Check for any professor-related content
           if (node.textContent && node.textContent.includes("Instructor")) {
             console.log(`🎯 Found instructor-related content`);
