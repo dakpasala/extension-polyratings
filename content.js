@@ -2,19 +2,19 @@
 console.log("PolyRatings Enhancer content script loaded!");
 
 // Track current URL for page change detection
-let currentUrl = window.location.href;
+// Disable the aggressive clearing (optional)
+clearInterval(clearRatingsIfUrlChanged);
 
-// Function to clear ratings when URL changes
+// OR make it smarter:
 function clearRatingsIfUrlChanged() {
-  const newUrl = window.location.href;
+  const newUrl = window.location.href.split('#')[0]; // ignore hash changes
   if (newUrl !== currentUrl) {
-    console.log("🔄 URL changed, clearing existing ratings");
-    // Remove all existing rating elements
-    const existingRatings = document.querySelectorAll(".polyratings-rating-element");
-    existingRatings.forEach((rating) => rating.remove());
+    console.log("🔄 Major URL changed, clearing existing ratings");
+    document.querySelectorAll(".polyratings-rating-element").forEach(r => r.remove());
     currentUrl = newUrl;
   }
 }
+
 
 // Monitor URL changes
 setInterval(clearRatingsIfUrlChanged, 1000);
