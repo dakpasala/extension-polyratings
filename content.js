@@ -2,11 +2,15 @@
 console.log("PolyRatings Enhancer content script loaded!");
 
 // Track current URL for page change detection
-// Disable the aggressive clearing (optional)
-clearInterval(clearRatingsIfUrlChanged);
+let currentUrl = window.location.href.split("#")[0]; // Initialize currentUrl
 
 // OR make it smarter:
 function clearRatingsIfUrlChanged() {
+  // Ensure currentUrl is defined (defensive programming)
+  if (typeof currentUrl === "undefined") {
+    currentUrl = window.location.href.split("#")[0];
+  }
+
   const newUrl = window.location.href.split("#")[0]; // ignore hash changes
   if (newUrl !== currentUrl) {
     console.log("🔄 Major URL changed, clearing existing ratings");
@@ -1232,6 +1236,11 @@ function addUserMessage(container, message) {
 
 // Function to convert links in text to clickable HTML
 function convertLinksToHTML(text) {
+  // Return early if no text
+  if (!text || typeof text !== "string") {
+    return text;
+  }
+
   // First escape any existing HTML to prevent XSS
   const escapedText = text
     .replace(/&/g, "&amp;")

@@ -574,7 +574,8 @@ Respond with a helpful message that:
 2. Suggests they check the official Cal Poly directory or ask other students
 3. Offers to help them add the professor to PolyRatings
 
-Always end your response with: "Add to PolyRatings: https://polyratings.dev/new-professor?name=${encodeURIComponent(
+Give some separation between the summary and then the next prompt. So it doesn't look congested.
+Always end your response with: "https://polyratings.dev/new-professor?name=${encodeURIComponent(
         profName
       )}"
 
@@ -781,7 +782,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const data = await fetchProfessorData();
           const professor = findProfessor(professorName);
 
-          if (professor) {
+          if (
+            professor &&
+            (professor.rating > 0 ||
+              professor.numEvals > 0 ||
+              (professor.comments && professor.comments.length > 0))
+          ) {
+            // Professor found with meaningful data
             const analysis = await callGeminiAnalysis(professorName, professor);
             sendResponse({
               status: "success",
@@ -791,6 +798,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               },
             });
           } else {
+            // Professor not found OR found but has no meaningful data (0 ratings, no comments)
             const analysis = await callGeminiAnalysis(professorName);
             sendResponse({
               status: "ai_analysis",
