@@ -1,22 +1,23 @@
 // PolyRatings Enhancer - Content Script (Complete Fixed Version)
 console.log("PolyRatings Enhancer content script loaded!");
 
-// Set to track processed professors to prevent duplicates
-const processedProfessors = new Set();
+// Track current URL for page change detection
 let currentUrl = window.location.href;
 
-// Function to clear cache when URL changes
-function clearCacheIfUrlChanged() {
+// Function to clear ratings when URL changes
+function clearRatingsIfUrlChanged() {
   const newUrl = window.location.href;
   if (newUrl !== currentUrl) {
-    console.log("🔄 URL changed, clearing professor cache");
-    processedProfessors.clear();
+    console.log("🔄 URL changed, clearing existing ratings");
+    // Remove all existing rating elements
+    const existingRatings = document.querySelectorAll(".polyratings-rating-element");
+    existingRatings.forEach((rating) => rating.remove());
     currentUrl = newUrl;
   }
 }
 
 // Monitor URL changes
-setInterval(clearCacheIfUrlChanged, 1000);
+setInterval(clearRatingsIfUrlChanged, 1000);
 
 function prInjectStyles() {
   if (document.getElementById("pr-style")) return;
@@ -390,6 +391,7 @@ function createNotFoundBadge(professorName) {
         max-width: calc(100% - 4px);
         overflow: hidden;
         width: fit-content;
+        margin-top: 4px;
     `;
 
   // Create simple text that will shrink with ellipses
@@ -428,6 +430,9 @@ function createNotFoundBadge(professorName) {
 
   notFoundContainer.title = `Add ${professorName} to PolyRatings`;
 
+  // Add fade-in animation to match rating elements
+  notFoundContainer.classList.add("fade-in");
+
   return notFoundContainer;
 }
 
@@ -435,17 +440,18 @@ function createNotFoundBadge(professorName) {
 function injectRatingUI(professorElement, professor, profIndex = 0) {
   const professorName = professor.name;
 
-  // First, remove any existing rating elements for this professor to prevent duplicates
+  // First, remove any existing rating elements for this professor at this index to prevent duplicates
   const existingRatings = professorElement.querySelectorAll(
-    `.polyratings-rating-element[data-professor="${professorName}"]`
+    `[data-professor="${professorName}"][data-index="${profIndex}"]`
   );
   existingRatings.forEach((rating) => rating.remove());
 
-  console.log(`🎨 Injecting mobile rating UI for: ${professorName}`);
+  console.log(`🎨 Injecting mobile rating UI for: ${professorName} at index ${profIndex}`);
 
   // Create the rating element
   const ratingElement = createRatingElement(professor);
   ratingElement.setAttribute("data-professor", professorName);
+  ratingElement.setAttribute("data-index", profIndex.toString());
 
   // Add extra margin for multiple professors (except the first one)
   if (profIndex > 0) {
@@ -460,7 +466,7 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
   professorElement.appendChild(ratingElement);
 
   console.log(
-    `✅ Successfully injected mobile rating UI for: ${professorName}`
+    `✅ Successfully injected mobile rating UI for: ${professorName} at index ${profIndex}`
   );
 }
 
@@ -627,7 +633,7 @@ function getElementPath(element) {
   return path.join(" > ");
 }
 
-// Core function to find and process professors (FIXED to prevent duplicates)
+// Core function to find and process professors (IMPROVED to handle duplicates better)
 function findAndLogProfessors() {
   console.log("🔍 Starting professor search in iframe...");
 
@@ -642,24 +648,12 @@ function findAndLogProfessors() {
   // Set a timeout to reset the processing flag
   setTimeout(() => {
     window.processingProfessors = false;
-  }, 2000);
+  }, 1000); // Reduced timeout for faster reprocessing
 
-  // Don't skip processing on new pages - allow reprocessing for new content
   console.log("🚀 Processing professors for current page...");
 
-  // Clean up existing ratings to prevent duplicates, but allow reprocessing
-  const existingRatings = document.querySelectorAll(
-    ".polyratings-rating-element"
-  );
-  console.log(`🧹 Found ${existingRatings.length} existing rating elements`);
-  
-  // Only clear ratings if we're on a completely different page
-  const currentPageContent = document.body.innerText.substring(0, 200);
-  if (window.lastPageContent && window.lastPageContent !== currentPageContent) {
-    console.log("📄 New page detected, cleaning up old ratings");
-    existingRatings.forEach((rating) => rating.remove());
-  }
-  window.lastPageContent = currentPageContent;
+  // Don't aggressively clear ratings - let individual functions handle duplicates
+  console.log("🧹 Letting individual functions handle duplicate prevention");
 
   // Also clean up any corrupted text content in instructor elements
   const instructorElements = document.querySelectorAll('[role="cell"]');
@@ -709,24 +703,17 @@ function findAndLogProfessors() {
             `👨‍🏫 Processing professor ${profIndex + 1}: ${professorName}`
           );
 
+          // Create a unique identifier for this professor in this specific element
+          const elementId = getElementPath(nextElement);
+          const professorKey = `${professorName}-${elementId}-${profIndex}`;
+          
           // Check if this specific professor already has a rating in this specific element
           const existingProfRating = nextElement.querySelector(
-            `[data-professor="${professorName}"]`
+            `[data-professor="${professorName}"][data-index="${profIndex}"]`
           );
           
           if (existingProfRating) {
-            console.log(`⏭️ Professor ${professorName} already has rating in this element, skipping`);
-            return;
-          }
-
-          // Also check if there's already a rating element for this professor name in the parent container
-          const parentContainer = nextElement.closest('.cx-MuiExpansionPanelSummary-root') || nextElement.parentElement;
-          const existingInParent = parentContainer ? parentContainer.querySelector(
-            `[data-professor="${professorName}"]`
-          ) : null;
-          
-          if (existingInParent && existingInParent !== existingProfRating) {
-            console.log(`⏭️ Professor ${professorName} already has rating in parent container, skipping`);
+            console.log(`⏭️ Professor ${professorName} already has rating in this element at index ${profIndex}, skipping`);
             return;
           }
 
@@ -742,14 +729,21 @@ function findAndLogProfessors() {
               } else if (response.status === "not_found") {
                 console.log("❌ Professor not found in database");
                 
-                // Inject the "not found" badge
+                // Inject the "not found" badge using the same function as ratings for consistent spacing
                 const notFoundBadge = createNotFoundBadge(professorName);
                 notFoundBadge.className = "polyratings-rating-element";
                 notFoundBadge.setAttribute("data-professor", professorName);
+                notFoundBadge.setAttribute("data-index", profIndex.toString());
+                
+                // Use the same injection method as ratings for consistent spacing
+                const lineBreak = document.createElement("br");
+                nextElement.appendChild(lineBreak);
+                nextElement.appendChild(notFoundBadge);
+                
+                // Apply same margin logic as ratings
                 if (profIndex > 0) {
                   notFoundBadge.style.marginLeft = "12px";
                 }
-                nextElement.appendChild(notFoundBadge);
               } else {
                 console.log(
                   "❌ Error getting professor data:",
@@ -844,6 +838,9 @@ function findAndLogProfessors() {
                 if (professorName && professorName.length > 0) {
                   console.log("✅ Professor name validation passed");
 
+                  // Create a unique identifier for this professor in this specific element
+                  const elementId = getElementPath(professorNameElement);
+                  
                   // Check if this professor already has a rating in this specific element
                   const existingRating = professorNameElement.querySelector(
                     ".polyratings-rating-element, .pr-rating-container"
@@ -851,17 +848,6 @@ function findAndLogProfessors() {
                   
                   if (existingRating) {
                     console.log(`⏭️ Professor ${professorName} already has rating in this element, skipping`);
-                    return;
-                  }
-
-                  // Also check parent containers to avoid duplicates
-                  const parentContainer = professorNameElement.closest('.cx-MuiExpansionPanelSummary-root');
-                  const existingInParent = parentContainer ? parentContainer.querySelector(
-                    `[data-professor="${professorName}"]`
-                  ) : null;
-                  
-                  if (existingInParent) {
-                    console.log(`⏭️ Professor ${professorName} already has rating in parent container, skipping`);
                     return;
                   }
 
