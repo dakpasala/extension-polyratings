@@ -212,7 +212,7 @@ function prInjectStyles() {
           transform: translateY(0);
         }
       }
-
+      
       /* ==========================================================
          === CENTER ALIGN FIRST 5 COLUMNS (header + body) ===
          ========================================================== */
@@ -1032,7 +1032,7 @@ function openAgentPopup(button) {
     <div style="color: #666; font-size: 14px; line-height: 1.4;">
       I can help you analyze professor ratings, compare courses, and answer questions about your schedule. 
       <br><br>
-      <strong>🚧 Building in progress...</strong> More features coming soon!
+      <strong>🎓 I'll be able to select courses for you super soon!</strong> Stay tuned for this exciting feature!
     </div>
   `;
   messagesArea.appendChild(welcomeMessage);
@@ -1230,6 +1230,47 @@ function addUserMessage(container, message) {
   container.scrollTop = container.scrollHeight;
 }
 
+// Function to convert links in text to clickable HTML
+function convertLinksToHTML(text) {
+  // First escape any existing HTML to prevent XSS
+  const escapedText = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+
+  // Convert URLs to clickable links
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return escapedText.replace(urlRegex, (url) => {
+    // Create a more user-friendly display text
+    let displayText = url;
+    if (url.includes("polyratings.dev/professor/")) {
+      displayText = "View full profile →";
+    } else if (url.includes("polyratings.dev/new-professor")) {
+      displayText = "Add to PolyRatings →";
+    } else if (url.length > 50) {
+      displayText = url.substring(0, 47) + "...";
+    }
+
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="
+      color: #1976d2; 
+      text-decoration: none; 
+      font-weight: 600; 
+      background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #1976d2;
+      display: inline-block;
+      margin: 2px 0;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 3px rgba(25, 118, 210, 0.2);
+    " onmouseover="this.style.background='linear-gradient(135deg, #1976d2, #7b1fa2); this.style.color='white'; this.style.transform='translateY(-1px)'; this.style.boxShadow='0 2px 6px rgba(25, 118, 210, 0.4)';" onmouseout="this.style.background='linear-gradient(135deg, #e3f2fd, #f3e5f5)'; this.style.color='#1976d2'; this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px rgba(25, 118, 210, 0.2)';">
+      ${displayText}
+    </a>`;
+  });
+}
+
 // Function to add bot message
 function addBotMessage(container, message) {
   const messageDiv = document.createElement("div");
@@ -1244,8 +1285,11 @@ function addBotMessage(container, message) {
     word-wrap: break-word;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     animation: slideInLeft 0.3s ease-out;
+    line-height: 1.5;
   `;
-  messageDiv.textContent = message;
+
+  // Convert links to clickable HTML
+  messageDiv.innerHTML = convertLinksToHTML(message);
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
 }

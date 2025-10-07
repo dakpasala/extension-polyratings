@@ -561,6 +561,9 @@ Provide a 2-3 sentence summary that helps students understand:
 3. Any notable characteristics from student feedback
 4. How different grade levels (freshman, sophomore, etc.) typically perform
 
+After the summary, give a white blank line before you give the link Gemini.
+Always end your response with: "${professorData.link}"
+
 Be honest, helpful, and student-friendly. Focus on practical advice for course selection. If you notice patterns in the grade level distribution or grade distribution, mention them to help students understand what to expect.`;
     } else {
       // Fallback for professors not in database
@@ -570,6 +573,10 @@ Respond with a helpful message that:
 1. Acknowledges the professor isn't in the database
 2. Suggests they check the official Cal Poly directory or ask other students
 3. Offers to help them add the professor to PolyRatings
+
+Always end your response with: "Add to PolyRatings: https://polyratings.dev/new-professor?name=${encodeURIComponent(
+        profName
+      )}"
 
 Keep it friendly and under 2 sentences.`;
     }
