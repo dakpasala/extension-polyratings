@@ -648,7 +648,7 @@ function findAndLogProfessors() {
   // Set a timeout to reset the processing flag
   setTimeout(() => {
     window.processingProfessors = false;
-  }, 1000); // Reduced timeout for faster reprocessing
+  }, 200); // Reduced timeout for faster reprocessing
 
   console.log("🚀 Processing professors for current page...");
 
