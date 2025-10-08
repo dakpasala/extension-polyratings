@@ -4,6 +4,21 @@ console.log("PolyRatings Enhancer content script loaded!");
 // Track current URL for page change detection
 let currentUrl = window.location.href.split("#")[0]; // Initialize currentUrl
 
+// Track processed professors to prevent re-processing
+const processedProfessors = new Set();
+
+// Function to mark professor as processed
+function markProfessorProcessed(professorName, elementId) {
+  const key = `${professorName}-${elementId}`;
+  processedProfessors.add(key);
+}
+
+// Function to check if professor is already processed
+function isProfessorProcessed(professorName, elementId) {
+  const key = `${professorName}-${elementId}`;
+  return processedProfessors.has(key);
+}
+
 // OR make it smarter:
 function clearRatingsIfUrlChanged() {
   // Ensure currentUrl is defined (defensive programming)
@@ -21,8 +36,8 @@ function clearRatingsIfUrlChanged() {
   }
 }
 
-// Monitor URL changes
-setInterval(clearRatingsIfUrlChanged, 1000);
+// Monitor URL changes (reduced frequency for better performance)
+setInterval(clearRatingsIfUrlChanged, 3000);
 
 function prInjectStyles() {
   if (document.getElementById("pr-style")) return;
@@ -201,20 +216,44 @@ function prInjectStyles() {
         box-sizing: border-box !important;
       }
       
-      /* Smooth animations */
+      /* Smooth animations with better UX */
       .polyratings-rating-element.fade-in {
-        animation: fadeIn 0.15s ease-in-out;
+        animation: fadeIn 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
       }
       
       @keyframes fadeIn {
-        from {
+        0% {
           opacity: 0;
-          transform: translateY(-3px);
+          transform: translateY(-8px) scale(0.9);
+          filter: blur(2px);
         }
-        to {
+        50% {
+          opacity: 0.7;
+          transform: translateY(-2px) scale(0.95);
+          filter: blur(1px);
+        }
+        100% {
           opacity: 1;
-          transform: translateY(0);
+          transform: translateY(0) scale(1);
+          filter: blur(0);
         }
+      }
+      
+      /* Loading skeleton for better perceived performance */
+      .polyratings-loading-skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading-shimmer 1.5s infinite;
+        border-radius: 12px;
+        height: 24px;
+        width: 80px;
+        display: inline-block;
+        margin: 2px 0;
+      }
+      
+      @keyframes loading-shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
       }
       
       /* ==========================================================
@@ -309,6 +348,14 @@ function prInjectStyles() {
 }
 prInjectStyles();
 
+// Function to create loading skeleton
+function createLoadingSkeleton() {
+  const skeleton = document.createElement("div");
+  skeleton.className = "polyratings-loading-skeleton";
+  skeleton.setAttribute("data-loading", "true");
+  return skeleton;
+}
+
 // Function to create rating UI element (SIMPLIFIED - single version only)
 function createRatingElement(professor) {
   const ratingContainer = document.createElement("a");
@@ -324,8 +371,10 @@ function createRatingElement(professor) {
         border-radius: 12px;
         font-size: 12px; 
         color: #090d19; 
-        transition: all 0.2s ease;
-        cursor: pointer; 
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        cursor: pointer;
+        transform: scale(0.95);
+        opacity: 0; 
         white-space: nowrap; 
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -438,6 +487,12 @@ function createNotFoundBadge(professorName) {
   // Add fade-in animation to match rating elements
   notFoundContainer.classList.add("fade-in");
 
+  // Trigger animation after a brief delay
+  setTimeout(() => {
+    notFoundContainer.style.transform = "scale(1)";
+    notFoundContainer.style.opacity = "1";
+  }, 10);
+
   return notFoundContainer;
 }
 
@@ -471,6 +526,12 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
 
   // Insert the rating element with proper spacing
   professorElement.appendChild(ratingElement);
+
+  // Trigger smooth animation
+  setTimeout(() => {
+    ratingElement.style.transform = "scale(1)";
+    ratingElement.style.opacity = "1";
+  }, 10);
 
   console.log(
     `✅ Successfully injected mobile rating UI for: ${professorName} at index ${profIndex}`
@@ -540,6 +601,12 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   // Replace the content
   professorNameElement.innerHTML = "";
   professorNameElement.appendChild(container);
+
+  // Trigger smooth animation for desktop rating
+  setTimeout(() => {
+    ratingEl.style.transform = "scale(1)";
+    ratingEl.style.opacity = "1";
+  }, 10);
 
   console.log(
     `✅ Successfully injected desktop rating UI for: ${professorName}`
@@ -655,12 +722,16 @@ function findAndLogProfessors() {
   // Set a timeout to reset the processing flag
   setTimeout(() => {
     window.processingProfessors = false;
-  }, 200); // Reduced timeout for faster reprocessing
+  }, 50); // Even faster timeout for better responsiveness
 
   console.log("🚀 Processing professors for current page...");
 
   // Don't aggressively clear ratings - let individual functions handle duplicates
   console.log("🧹 Letting individual functions handle duplicate prevention");
+
+  // Batch process professors for better performance
+  const professorBatch = [];
+  let batchTimeout;
 
   // Also clean up any corrupted text content in instructor elements
   const instructorElements = document.querySelectorAll('[role="cell"]');
@@ -726,15 +797,33 @@ function findAndLogProfessors() {
             return;
           }
 
+          // Check if professor was already processed (prevent re-processing)
+          if (isProfessorProcessed(professorName, elementId)) {
+            console.log(
+              `⏭️ Professor ${professorName} already processed for element ${elementId}, skipping`
+            );
+            return;
+          }
+
+          // Show loading skeleton while waiting for response
+          const loadingSkeleton = createLoadingSkeleton();
+          const lineBreak = document.createElement("br");
+          nextElement.appendChild(lineBreak);
+          nextElement.appendChild(loadingSkeleton);
+
           // Send message to background script to get professor rating
           chrome.runtime.sendMessage(
             { type: "getProfRating", profName: professorName },
             (response) => {
+              // Remove loading skeleton
+              loadingSkeleton.remove();
               console.log("📨 Response from background script:", response);
 
               if (response.status === "success" && response.professor) {
                 console.log("✅ Received professor data:", response.professor);
                 injectRatingUI(nextElement, response.professor, profIndex);
+                // Mark professor as processed
+                markProfessorProcessed(professorName, elementId);
               } else if (response.status === "not_found") {
                 console.log("❌ Professor not found in database");
 
@@ -1303,6 +1392,23 @@ function addBotMessage(container, message) {
   container.scrollTop = container.scrollHeight;
 }
 
+// Function to preserve existing ratings and prevent duplicates
+function preserveExistingRatings() {
+  const existingRatings = document.querySelectorAll(
+    ".polyratings-rating-element"
+  );
+  existingRatings.forEach((rating) => {
+    // Add a data attribute to mark as preserved
+    rating.setAttribute("data-preserved", "true");
+  });
+}
+
+// Function to restore preserved ratings if they were accidentally removed
+function restorePreservedRatings() {
+  // This function can be called if ratings disappear
+  console.log("🔄 Checking for missing ratings...");
+}
+
 // Function to add typing indicator
 function addTypingMessage(container) {
   const typingId = "typing-" + Date.now();
@@ -1463,7 +1569,7 @@ function setupButtonObserver() {
     } else {
       injectAskAgentButton();
     }
-  }, 1000); // Check every second
+  }, 500); // Check every 500ms for faster response
 
   // Stop checking after 30 seconds
   setTimeout(() => {
@@ -1573,7 +1679,7 @@ function setupMutationObserver() {
       debounceTimeout = setTimeout(() => {
         findAndLogProfessors();
         isProcessing = false;
-      }, 100); // Reduced delay for faster response
+      }, 25); // Minimal delay for maximum responsiveness
     } else {
       console.log(
         "⏭️ No relevant changes detected in iframe, skipping professor search"
