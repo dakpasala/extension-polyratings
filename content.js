@@ -247,13 +247,38 @@ function prInjectStyles() {
         border-radius: 12px;
         height: 24px;
         width: 80px;
-        display: inline-block;
+    display: inline-block;
         margin: 2px 0;
       }
       
       @keyframes loading-shimmer {
         0% { background-position: -200% 0; }
         100% { background-position: 200% 0; }
+      }
+      
+      /* Gradient-coded stars based on rating */
+      .rating-stars-excellent {
+        fill: #FFD700 !important; /* Original solid gold color for 3.0+ */
+        stroke: #B8860B !important;
+        filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.4));
+      }
+      
+      .rating-stars-high {
+        fill: url(#yellowOrangeGradient) !important;
+        stroke: #CC6600 !important;
+        filter: drop-shadow(0 0 2px rgba(255, 165, 0, 0.3));
+      }
+      
+      .rating-stars-medium {
+        fill: url(#orangeGradient) !important;
+        stroke: #CC4400 !important;
+        filter: drop-shadow(0 0 2px rgba(255, 140, 0, 0.3));
+      }
+      
+      .rating-stars-low {
+        fill: url(#redGradient) !important;
+        stroke: #CC0000 !important;
+        filter: drop-shadow(0 0 2px rgba(255, 107, 0, 0.3));
       }
       
       /* ==========================================================
@@ -356,6 +381,177 @@ function createLoadingSkeleton() {
   return skeleton;
 }
 
+// Function to get rating class based on professor rating
+function getRatingClass(rating) {
+  const numRating = parseFloat(rating);
+
+  if (numRating >= 3.0) {
+    return "rating-stars-excellent"; // Gold gradient for 3.0+ (original color)
+  } else if (numRating >= 2.0) {
+    return "rating-stars-high"; // Yellow-orange gradient for 2.0-2.9
+  } else if (numRating >= 1.0) {
+    return "rating-stars-medium"; // Orange gradient for 1.0-1.9
+  } else {
+    return "rating-stars-low"; // Red gradient for <1.0
+  }
+}
+
+// Function to ensure SVG gradients are available
+function ensureSVGGradients() {
+  if (document.getElementById("polyratings-gradients")) return;
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.style.position = "absolute";
+  svg.style.width = "0";
+  svg.style.height = "0";
+  svg.id = "polyratings-gradients";
+
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+
+  // Gold gradient (3.0+) - original color
+  const goldGradient = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "linearGradient"
+  );
+  goldGradient.id = "goldGradient";
+  goldGradient.setAttribute("x1", "0%");
+  goldGradient.setAttribute("y1", "0%");
+  goldGradient.setAttribute("x2", "100%");
+  goldGradient.setAttribute("y2", "100%");
+
+  const goldStop1 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  goldStop1.setAttribute("offset", "0%");
+  goldStop1.setAttribute("stop-color", "#FFD700");
+  const goldStop2 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  goldStop2.setAttribute("offset", "50%");
+  goldStop2.setAttribute("stop-color", "#FFA500");
+  const goldStop3 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  goldStop3.setAttribute("offset", "100%");
+  goldStop3.setAttribute("stop-color", "#FF8C00");
+
+  goldGradient.appendChild(goldStop1);
+  goldGradient.appendChild(goldStop2);
+  goldGradient.appendChild(goldStop3);
+
+  // Yellow-orange gradient (2.0-2.9)
+  const yellowOrangeGradient = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "linearGradient"
+  );
+  yellowOrangeGradient.id = "yellowOrangeGradient";
+  yellowOrangeGradient.setAttribute("x1", "0%");
+  yellowOrangeGradient.setAttribute("y1", "0%");
+  yellowOrangeGradient.setAttribute("x2", "100%");
+  yellowOrangeGradient.setAttribute("y2", "100%");
+
+  const yellowStop1 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  yellowStop1.setAttribute("offset", "0%");
+  yellowStop1.setAttribute("stop-color", "#FFA500");
+  const yellowStop2 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  yellowStop2.setAttribute("offset", "50%");
+  yellowStop2.setAttribute("stop-color", "#FF8C00");
+  const yellowStop3 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  yellowStop3.setAttribute("offset", "100%");
+  yellowStop3.setAttribute("stop-color", "#FF7F00");
+
+  yellowOrangeGradient.appendChild(yellowStop1);
+  yellowOrangeGradient.appendChild(yellowStop2);
+  yellowOrangeGradient.appendChild(yellowStop3);
+
+  // Orange gradient (1.0-1.9)
+  const orangeGradient = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "linearGradient"
+  );
+  orangeGradient.id = "orangeGradient";
+  orangeGradient.setAttribute("x1", "0%");
+  orangeGradient.setAttribute("y1", "0%");
+  orangeGradient.setAttribute("x2", "100%");
+  orangeGradient.setAttribute("y2", "100%");
+
+  const orangeStop1 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  orangeStop1.setAttribute("offset", "0%");
+  orangeStop1.setAttribute("stop-color", "#FF8C00");
+  const orangeStop2 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  orangeStop2.setAttribute("offset", "50%");
+  orangeStop2.setAttribute("stop-color", "#FF7F00");
+  const orangeStop3 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  orangeStop3.setAttribute("offset", "100%");
+  orangeStop3.setAttribute("stop-color", "#FF6B00");
+
+  orangeGradient.appendChild(orangeStop1);
+  orangeGradient.appendChild(orangeStop2);
+  orangeGradient.appendChild(orangeStop3);
+
+  // Red gradient (<1.0)
+  const redGradient = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "linearGradient"
+  );
+  redGradient.id = "redGradient";
+  redGradient.setAttribute("x1", "0%");
+  redGradient.setAttribute("y1", "0%");
+  redGradient.setAttribute("x2", "100%");
+  redGradient.setAttribute("y2", "100%");
+
+  const redStop1 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  redStop1.setAttribute("offset", "0%");
+  redStop1.setAttribute("stop-color", "#FF6B00");
+  const redStop2 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  redStop2.setAttribute("offset", "50%");
+  redStop2.setAttribute("stop-color", "#FF4500");
+  const redStop3 = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "stop"
+  );
+  redStop3.setAttribute("offset", "100%");
+  redStop3.setAttribute("stop-color", "#FF0000");
+
+  redGradient.appendChild(redStop1);
+  redGradient.appendChild(redStop2);
+  redGradient.appendChild(redStop3);
+
+  defs.appendChild(goldGradient);
+  defs.appendChild(yellowOrangeGradient);
+  defs.appendChild(orangeGradient);
+  defs.appendChild(redGradient);
+  svg.appendChild(defs);
+  document.body.appendChild(svg);
+}
+
 // Function to create rating UI element (SIMPLIFIED - single version only)
 function createRatingElement(professor) {
   const ratingContainer = document.createElement("a");
@@ -372,7 +568,7 @@ function createRatingElement(professor) {
         font-size: 12px; 
         color: #090d19; 
         transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        cursor: pointer;
+        cursor: pointer; 
         transform: scale(0.95);
         opacity: 0; 
         white-space: nowrap; 
@@ -410,8 +606,14 @@ function createRatingElement(professor) {
 
   let starsHtml = "";
 
-  // Just show one star that represents the rating
-  starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" fill="#FFD700" stroke="#B8860B" stroke-width="2"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+  // Ensure SVG gradients are available
+  ensureSVGGradients();
+
+  // Get the appropriate gradient class for this rating
+  const ratingClass = getRatingClass(professor.rating);
+
+  // Create star with gradient class
+  starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" stroke-width="2" class="${ratingClass}"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
 
   stars.innerHTML = starsHtml;
 
