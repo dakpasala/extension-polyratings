@@ -217,27 +217,6 @@ function prInjectStyles() {
       }
       
       /* Smooth animations with better UX */
-      .polyratings-rating-element.fade-in {
-        animation: fadeIn 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      }
-      
-      @keyframes fadeIn {
-        0% {
-          opacity: 0;
-          transform: translateY(-8px) scale(0.9);
-          filter: blur(2px);
-        }
-        50% {
-          opacity: 0.7;
-          transform: translateY(-2px) scale(0.95);
-          filter: blur(1px);
-        }
-        100% {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-          filter: blur(0);
-        }
-      }
       
       /* Loading skeleton for better perceived performance */
       .polyratings-loading-skeleton {
@@ -567,10 +546,10 @@ function createRatingElement(professor) {
         border-radius: 12px;
         font-size: 12px; 
         color: #090d19; 
-        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        cursor: pointer; 
-        transform: scale(0.95);
-        opacity: 0; 
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        cursor: pointer;
+        transform: translateY(8px) scale(0.95);
+        opacity: 0;
         white-space: nowrap; 
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -592,7 +571,12 @@ function createRatingElement(professor) {
   });
 
   const ratingText = document.createElement("span");
-  ratingText.textContent = `${professor.rating}/4`;
+  // If rating is 0, show "Add Prof" instead of "0/4"
+  if (professor.rating === 0) {
+    ratingText.textContent = "Add Prof";
+  } else {
+    ratingText.textContent = `${professor.rating}/4`;
+  }
   ratingText.style.marginRight = "3px";
 
   // Create star rating based on professor rating (simplified version)
@@ -606,14 +590,17 @@ function createRatingElement(professor) {
 
   let starsHtml = "";
 
-  // Ensure SVG gradients are available
-  ensureSVGGradients();
+  // Only show star if rating is greater than 0
+  if (professor.rating > 0) {
+    // Ensure SVG gradients are available
+    ensureSVGGradients();
 
-  // Get the appropriate gradient class for this rating
-  const ratingClass = getRatingClass(professor.rating);
+    // Get the appropriate gradient class for this rating
+    const ratingClass = getRatingClass(professor.rating);
 
-  // Create star with gradient class
-  starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" stroke-width="2" class="${ratingClass}"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+    // Create star with gradient class
+    starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" stroke-width="2" class="${ratingClass}"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+  }
 
   stars.innerHTML = starsHtml;
 
@@ -686,12 +673,9 @@ function createNotFoundBadge(professorName) {
 
   notFoundContainer.title = `Add ${professorName} to PolyRatings`;
 
-  // Add fade-in animation to match rating elements
-  notFoundContainer.classList.add("fade-in");
-
-  // Trigger animation after a brief delay
+  // Smooth entrance animation
   setTimeout(() => {
-    notFoundContainer.style.transform = "scale(1)";
+    notFoundContainer.style.transform = "translateY(0) scale(1)";
     notFoundContainer.style.opacity = "1";
   }, 10);
 
@@ -729,9 +713,9 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
   // Insert the rating element with proper spacing
   professorElement.appendChild(ratingElement);
 
-  // Trigger smooth animation
+  // Smooth entrance animation
   setTimeout(() => {
-    ratingElement.style.transform = "scale(1)";
+    ratingElement.style.transform = "translateY(0) scale(1)";
     ratingElement.style.opacity = "1";
   }, 10);
 
@@ -804,9 +788,9 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   professorNameElement.innerHTML = "";
   professorNameElement.appendChild(container);
 
-  // Trigger smooth animation for desktop rating
+  // Smooth entrance animation
   setTimeout(() => {
-    ratingEl.style.transform = "scale(1)";
+    ratingEl.style.transform = "translateY(0) scale(1)";
     ratingEl.style.opacity = "1";
   }, 10);
 
