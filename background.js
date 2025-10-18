@@ -197,10 +197,26 @@ async function fetchAISummaries() {
 // Tooltip (no link)
 async function callGeminiTooltipAnalysis(profName) {
   const summaries = await fetchAISummaries();
+  const professor = findProfessor(profName);
   const key = Object.keys(summaries).find(
     (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
   );
-  const summary = key ? summaries[key] : "No summary just yet.";
+
+  let summary;
+  if (key) {
+    summary = summaries[key];
+    if (summary.includes("\n\nProfessor")) {
+      summary = summary.split("\n\nProfessor")[1];
+      summary = "Professor" + summary;
+    }
+  } else {
+    // professor exists in PolyRatings but not in summaries JSON
+    if (professor) summary = "No summary yet.";
+    else
+      summary =
+        "No PolyRatings found. Try asking classmates or other professors for insights before enrolling.";
+  }
+
   console.log(`💬 Tooltip summary for ${profName}:`, summary);
   return summary;
 }
@@ -208,16 +224,31 @@ async function callGeminiTooltipAnalysis(profName) {
 // Chatbot / popup (with link)
 async function callGeminiAnalysis(profName, professorData = null) {
   const summaries = await fetchAISummaries();
+  const professor = findProfessor(profName);
   const key = Object.keys(summaries).find(
     (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
   );
+
+  let summary;
   if (key) {
-    const summary = summaries[key];
+    summary = summaries[key];
+    if (summary.includes("\n\nProfessor")) {
+      summary = summary.split("\n\nProfessor")[1];
+      summary = "Professor" + summary;
+    }
     console.log(`🧠 Found AI summary for ${profName}`);
     return `${summary}\n\n${professorData?.link || ""}`;
   }
-  console.log(`⚠️ No AI summary found for ${profName}`);
-  return `No summary just yet.\n\n${
+
+  // Professor exists but no summary yet
+  if (professor) {
+    console.log(`⚠️ Professor ${profName} found but no summary in JSON`);
+    return `No summary yet.\n\n${professorData?.link || ""}`;
+  }
+
+  // Professor doesn't exist at all
+  console.log(`🚫 ${profName} not found in PolyRatings`);
+  return `No PolyRatings found. Try asking classmates or other professors for insights before enrolling.\n\n${
     professorData?.link ||
     `https://polyratings.dev/new-professor?name=${encodeURIComponent(
       profName
