@@ -492,6 +492,115 @@ function findProfessor(profName) {
 // 🔑 If you keep the key embedded, consider rotating it later.
 const GEMINI_API_KEY = "AIzaSyCmwRwQpxuZFifAH9tOTUOGcx7hasCspK8";
 
+// Function for tooltip-specific analysis (no links, cleaner format)
+async function callGeminiTooltipAnalysis(profName, professorData = null) {
+  try {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    let prompt;
+
+    if (professorData) {
+      // Use real professor data for detailed analysis
+      const {
+        rating,
+        numEvals,
+        clarity,
+        helpfulness,
+        easiness,
+        hotness,
+        comments,
+        department,
+        courses,
+        gradeLevelDistribution,
+        gradeDistribution,
+      } = professorData;
+
+      // Format grade level distribution
+      const gradeLevelInfo =
+        Object.keys(gradeLevelDistribution).length > 0
+          ? `Grade Level Distribution: ${Object.entries(gradeLevelDistribution)
+              .map(([level, count]) => `${level} (${count})`)
+              .join(", ")}`
+          : "Grade Level Distribution: Not available";
+
+      // Format grade distribution
+      const gradeInfo =
+        Object.keys(gradeDistribution).length > 0
+          ? `Grade Distribution: ${Object.entries(gradeDistribution)
+              .map(([grade, count]) => `${grade} (${count})`)
+              .join(", ")}`
+          : "Grade Distribution: Not available";
+
+      prompt = `You are a helpful Cal Poly student assistant. Analyze this professor's data and provide a concise, helpful summary for students considering their class.
+
+Professor: "${profName}"
+Overall Rating: ${rating}/4.0 (${numEvals} evaluations)
+Material Clear: ${clarity}/4.0
+Student Difficulties: ${helpfulness}/4.0
+Department: ${department}
+Courses: ${courses}
+
+${gradeLevelInfo}
+${gradeInfo}
+
+Student Comments: "${comments.substring(0, 2000)}${
+        comments.length > 2000 ? "..." : ""
+      }"
+
+Provide a 2-3 sentence summary that helps students understand:
+1. What this professor is known for (teaching style, strengths), include the rating they have in the beginning, like John Smith (4/4) is known...
+2. What to expect (workload, difficulty, helpfulness)
+3. Any notable characteristics from student feedback
+4. How different grade levels (freshman, sophomore, etc.) typically perform
+
+Be honest, helpful, and student-friendly. Focus on practical advice for course selection. If you notice patterns in the grade level distribution or grade distribution, mention them to help students understand what to expect.
+
+DO NOT include any links or URLs in your response.`;
+    } else {
+      // Fallback for professors not in database
+      prompt = `You are a helpful Cal Poly student assistant. A student is asking about professor "${profName}" who is not found in the PolyRatings database.
+
+Respond with a helpful message that:
+1. Acknowledges the professor isn't in the database
+2. Suggests they check the official Cal Poly directory or ask other students
+3. Offers to help them add the professor to PolyRatings
+
+Keep it friendly and under 2 sentences.
+
+DO NOT include any links or URLs in your response.`;
+    }
+
+    const body = {
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt,
+            },
+          ],
+        },
+      ],
+    };
+
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`Gemini API error ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return text || "AI analysis unavailable.";
+  } catch (e) {
+    console.log("❌ Gemini tooltip call failed:", e);
+    return "AI analysis unavailable.";
+  }
+}
+
 async function callGeminiAnalysis(profName, professorData = null) {
   try {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
@@ -874,6 +983,60 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({
           status: "error",
           message: "Failed to get Gemini analysis",
+        });
+      }
+    })();
+
+    return true;
+  }
+
+  // New message type for tooltip-specific analysis (no links)
+  if (message.type === "getGeminiTooltipAnalysis") {
+    console.log(
+      "💬 Getting Gemini tooltip analysis for professor:",
+      message.profName
+    );
+
+    // Create async function to handle the tooltip analysis request
+    (async () => {
+      try {
+        // Ensure we have the professor data
+        const data = await fetchProfessorData();
+        const professor = findProfessor(message.profName);
+
+        if (professor) {
+          console.log("✅ Found professor data, calling Gemini tooltip...");
+          const analysis = await callGeminiTooltipAnalysis(
+            message.profName,
+            professor
+          );
+          sendResponse({
+            status: "success",
+            analysis: analysis,
+            professor: professor,
+          });
+        } else {
+          console.log(
+            "❌ Professor not found, calling Gemini tooltip anyway..."
+          );
+          const analysis = await callGeminiTooltipAnalysis(message.profName);
+          sendResponse({
+            status: "ai_analysis",
+            analysis: analysis,
+            professor: {
+              name: message.profName,
+              rating: "N/A",
+              link: `https://polyratings.dev/new-professor?name=${encodeURIComponent(
+                message.profName
+              )}`,
+            },
+          });
+        }
+      } catch (error) {
+        console.log("❌ Error getting Gemini tooltip analysis:", error);
+        sendResponse({
+          status: "error",
+          message: "Failed to get Gemini tooltip analysis",
         });
       }
     })();

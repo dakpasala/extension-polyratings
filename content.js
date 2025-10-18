@@ -570,6 +570,9 @@ function createRatingElement(professor) {
     ratingContainer.style.borderColor = "#7F8A9E";
   });
 
+  // Add hover tooltip functionality
+  addHoverTooltip(ratingContainer, professor);
+
   const ratingText = document.createElement("span");
   // If rating is 0, show "Add Prof" instead of "0/4"
   if (professor.rating === 0) {
@@ -611,6 +614,173 @@ function createRatingElement(professor) {
   ratingContainer.classList.add("fade-in");
 
   return ratingContainer;
+}
+
+// Function to add hover tooltip functionality
+function addHoverTooltip(element, professor) {
+  let hoverTimeout;
+  let hideTimeout;
+  let tooltip = null;
+
+  element.addEventListener("mouseenter", () => {
+    // Clear any existing timeouts
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+    }
+    if (hideTimeout) {
+      clearTimeout(hideTimeout);
+    }
+
+    // Set 0.5-second delay before showing tooltip (faster response)
+    hoverTimeout = setTimeout(() => {
+      showProfessorTooltip(element, professor);
+    }, 500);
+  });
+
+  element.addEventListener("mouseleave", () => {
+    // Clear timeout if mouse leaves before 2 seconds
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+    }
+
+    // Hide tooltip immediately when mouse leaves
+    hideProfessorTooltip();
+  });
+}
+
+// Function to show professor tooltip
+function showProfessorTooltip(element, professor) {
+  // Remove any existing tooltip
+  hideProfessorTooltip();
+
+  // Create tooltip element
+  const tooltip = document.createElement("div");
+  tooltip.className = "professor-tooltip";
+  tooltip.style.cssText = `
+    position: absolute;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    font-size: 14px;
+    font-weight: 500;
+    max-width: 300px;
+    z-index: 10000;
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  `;
+
+  // Get professor data and AI analysis for tooltip
+  chrome.runtime.sendMessage(
+    { type: "getGeminiTooltipAnalysis", profName: professor.name },
+    (response) => {
+      if (response.status === "success" && response.professor) {
+        const prof = response.professor;
+        const analysis = response.analysis;
+
+        tooltip.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 8px; font-size: 16px;">
+            ${prof.name}
+          </div>
+          <div style="margin-bottom: 8px;">
+            <span style="background: rgba(0,0,0,0.1); padding: 4px 8px; border-radius: 6px; font-size: 12px;">
+              ⭐ ${prof.rating}/4.0
+            </span>
+          </div>
+          <div style="line-height: 1.4; font-size: 13px;">
+            ${analysis}
+          </div>
+        `;
+      } else if (response.status === "ai_analysis") {
+        // Professor not found but got AI analysis
+        const analysis = response.analysis;
+
+        tooltip.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 8px; font-size: 16px;">
+            ${professor.name}
+          </div>
+          <div style="margin-bottom: 8px;">
+            <span style="background: rgba(0,0,0,0.1); padding: 4px 8px; border-radius: 6px; font-size: 12px;">
+              📝 Not Rated
+            </span>
+          </div>
+          <div style="line-height: 1.4; font-size: 13px;">
+            ${analysis}
+          </div>
+        `;
+      } else {
+        // Error case - fallback to simple message
+        tooltip.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 8px; font-size: 16px;">
+            ${professor.name}
+          </div>
+          <div style="margin-bottom: 8px;">
+            <span style="background: rgba(0,0,0,0.1); padding: 4px 8px; border-radius: 6px; font-size: 12px;">
+              📝 Not Rated
+            </span>
+          </div>
+          <div style="line-height: 1.4; font-size: 13px; color: #666;">
+            This professor hasn't been rated yet. Click to add them to PolyRatings!
+          </div>
+        `;
+      }
+
+      // Position tooltip
+      positionTooltip(tooltip, element);
+
+      // Add to document
+      document.body.appendChild(tooltip);
+
+      // Animate in
+      setTimeout(() => {
+        tooltip.style.opacity = "1";
+        tooltip.style.transform = "scale(1) translateY(0)";
+      }, 10);
+    }
+  );
+}
+
+// Function to position tooltip
+function positionTooltip(tooltip, element) {
+  const rect = element.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+
+  // Position above the element by default
+  let top = rect.top - tooltipRect.height - 10;
+  let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+
+  // Adjust if tooltip would go off screen
+  if (left < 10) {
+    left = 10;
+  } else if (left + tooltipRect.width > window.innerWidth - 10) {
+    left = window.innerWidth - tooltipRect.width - 10;
+  }
+
+  if (top < 10) {
+    // Position below if no room above
+    top = rect.bottom + 10;
+  }
+
+  tooltip.style.top = `${top}px`;
+  tooltip.style.left = `${left}px`;
+}
+
+// Function to hide professor tooltip
+function hideProfessorTooltip() {
+  const existingTooltip = document.querySelector(".professor-tooltip");
+  if (existingTooltip) {
+    existingTooltip.style.opacity = "0";
+    existingTooltip.style.transform = "scale(0.8) translateY(10px)";
+    setTimeout(() => {
+      if (existingTooltip.parentNode) {
+        existingTooltip.parentNode.removeChild(existingTooltip);
+      }
+    }, 300);
+  }
 }
 
 // Function to create "not found" badge
@@ -673,6 +843,9 @@ function createNotFoundBadge(professorName) {
 
   notFoundContainer.title = `Add ${professorName} to PolyRatings`;
 
+  // Add hover tooltip functionality for not found professors
+  addHoverTooltip(notFoundContainer, { name: professorName, rating: 0 });
+
   // Smooth entrance animation
   setTimeout(() => {
     notFoundContainer.style.transform = "translateY(0) scale(1)";
@@ -700,6 +873,7 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
   const ratingElement = createRatingElement(professor);
   ratingElement.setAttribute("data-professor", professorName);
   ratingElement.setAttribute("data-index", profIndex.toString());
+  ratingElement.setAttribute("data-polyratings", "true"); // Mark as PolyRatings element
 
   // Add extra margin for multiple professors (except the first one)
   if (profIndex > 0) {
@@ -718,6 +892,25 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
     ratingElement.style.transform = "translateY(0) scale(1)";
     ratingElement.style.opacity = "1";
   }, 10);
+
+  // Add periodic check to re-inject if element disappears
+  const checkInterval = setInterval(() => {
+    if (!document.contains(ratingElement)) {
+      console.log(
+        `🔄 Rating element disappeared for ${professorName}, re-injecting...`
+      );
+      clearInterval(checkInterval);
+      // Re-inject the rating
+      setTimeout(() => {
+        injectRatingUI(professorElement, professor, profIndex);
+      }, 100);
+    }
+  }, 1000);
+
+  // Stop checking after 30 seconds
+  setTimeout(() => {
+    clearInterval(checkInterval);
+  }, 30000);
 
   console.log(
     `✅ Successfully injected mobile rating UI for: ${professorName} at index ${profIndex}`
@@ -788,11 +981,36 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   professorNameElement.innerHTML = "";
   professorNameElement.appendChild(container);
 
+  // Add hover tooltip to the professor name element
+  addHoverTooltip(professorNameElement, professor);
+
+  // Mark the container as PolyRatings element
+  container.setAttribute("data-polyratings", "true");
+
   // Smooth entrance animation
   setTimeout(() => {
     ratingEl.style.transform = "translateY(0) scale(1)";
     ratingEl.style.opacity = "1";
   }, 10);
+
+  // Add periodic check to re-inject if element disappears
+  const checkInterval = setInterval(() => {
+    if (!document.contains(container)) {
+      console.log(
+        `🔄 Desktop rating container disappeared for ${professorName}, re-injecting...`
+      );
+      clearInterval(checkInterval);
+      // Re-inject the rating
+      setTimeout(() => {
+        injectDesktopRatingUI(professorNameElement, professor);
+      }, 100);
+    }
+  }, 1000);
+
+  // Stop checking after 30 seconds
+  setTimeout(() => {
+    clearInterval(checkInterval);
+  }, 30000);
 
   console.log(
     `✅ Successfully injected desktop rating UI for: ${professorName}`
@@ -860,6 +1078,31 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
   // Replace the content
   professorNameElement.innerHTML = "";
   professorNameElement.appendChild(container);
+
+  // Add hover tooltip to the professor name element
+  addHoverTooltip(professorNameElement, { name: professorName, rating: 0 });
+
+  // Mark the container as PolyRatings element
+  container.setAttribute("data-polyratings", "true");
+
+  // Add periodic check to re-inject if element disappears
+  const checkInterval = setInterval(() => {
+    if (!document.contains(container)) {
+      console.log(
+        `🔄 Desktop not found container disappeared for ${professorName}, re-injecting...`
+      );
+      clearInterval(checkInterval);
+      // Re-inject the not found UI
+      setTimeout(() => {
+        injectDesktopNotFoundUI(professorNameElement, professorName);
+      }, 100);
+    }
+  }, 1000);
+
+  // Stop checking after 30 seconds
+  setTimeout(() => {
+    clearInterval(checkInterval);
+  }, 30000);
 
   console.log(
     `✅ Successfully injected desktop not found UI for: ${professorName}`
