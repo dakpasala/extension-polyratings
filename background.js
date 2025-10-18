@@ -209,6 +209,9 @@ async function callGeminiTooltipAnalysis(profName) {
       summary = summary.split("\n\nProfessor")[1];
       summary = "Professor" + summary;
     }
+    // Remove any existing links from the summary for tooltip
+    summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
+    summary = summary.replace(/https?:\/\/[^\s]+/g, "");
   } else {
     // professor exists in PolyRatings but not in summaries JSON
     if (professor) summary = "No summary yet.";
@@ -236,6 +239,9 @@ async function callGeminiAnalysis(profName, professorData = null) {
       summary = summary.split("\n\nProfessor")[1];
       summary = "Professor" + summary;
     }
+    // Remove any existing links from the summary, we'll add our own
+    summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
+    summary = summary.replace(/https?:\/\/[^\s]+/g, "");
     console.log(`🧠 Found AI summary for ${profName}`);
     return `${summary}\n\n${professorData?.link || ""}`;
   }
@@ -250,9 +256,7 @@ async function callGeminiAnalysis(profName, professorData = null) {
   console.log(`🚫 ${profName} not found in PolyRatings`);
   return `No PolyRatings found. Try asking classmates or other professors for insights before enrolling.\n\n${
     professorData?.link ||
-    `https://polyratings.dev/new-professor?name=${encodeURIComponent(
-      profName
-    )}`
+    `https://polyratings.dev/new-professor?name=${encodeURIComponent(profName)}`
   }`;
 }
 
@@ -329,7 +333,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
         } else {
           const generalResponse = await generateGeneralResponse(query);
-          sendResponse({ status: "general_response", message: generalResponse });
+          sendResponse({
+            status: "general_response",
+            message: generalResponse,
+          });
         }
       } catch (error) {
         sendResponse({
