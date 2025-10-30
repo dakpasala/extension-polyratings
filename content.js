@@ -7,6 +7,79 @@ let currentUrl = window.location.href.split("#")[0]; // Initialize currentUrl
 // Track processed professors to prevent re-processing
 const processedProfessors = new Set();
 
+// Throttle rendering while scrolling to avoid flicker in virtualized lists
+if (!window.prScrollState) {
+  window.prScrollState = { busy: false, t: null };
+  const onScroll = () => {
+    window.prScrollState.busy = true;
+    if (window.prScrollState.t) clearTimeout(window.prScrollState.t);
+    window.prScrollState.t = setTimeout(() => {
+      window.prScrollState.busy = false;
+      window.prScrollState.t = null;
+    }, 150);
+  };
+  document.addEventListener("scroll", onScroll, {
+    capture: true,
+    passive: true,
+  });
+}
+
+// Check if an element is mostly visible in the viewport
+function isElementMostlyVisible(el) {
+  try {
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const vw = window.innerWidth || document.documentElement.clientWidth;
+    if (rect.width === 0 || rect.height === 0) return false;
+    const vertVisible = Math.min(rect.bottom, vh) - Math.max(rect.top, 0);
+    const horizVisible = Math.min(rect.right, vw) - Math.max(rect.left, 0);
+    const visibleArea = Math.max(0, vertVisible) * Math.max(0, horizVisible);
+    const totalArea = rect.width * rect.height;
+    return totalArea > 0 && visibleArea / totalArea >= 0.4; // at least 40% visible
+  } catch (_) {
+    return true;
+  }
+}
+
+// Promise wrapper for chrome.runtime.sendMessage
+function prMessage(type, payload) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ type, ...payload }, (response) => {
+        resolve(response || { status: "error", message: "no_response" });
+      });
+    } catch (e) {
+      resolve({ status: "error", message: e?.message || "send_failed" });
+    }
+  });
+}
+
+// Schedule a stable render when element is visible and not actively scrolling
+function scheduleStableRender(hostElement, renderFn, attempts = 10) {
+  const tryRender = () => {
+    if (window.prScrollState?.busy) {
+      if (attempts <= 0) return;
+      setTimeout(
+        () => scheduleStableRender(hostElement, renderFn, attempts - 1),
+        80
+      );
+      return;
+    }
+    if (!isElementMostlyVisible(hostElement)) {
+      if (attempts <= 0) return;
+      setTimeout(
+        () => scheduleStableRender(hostElement, renderFn, attempts - 1),
+        120
+      );
+      return;
+    }
+    try {
+      renderFn();
+    } catch (_) {}
+  };
+  tryRender();
+}
+
 // Determine if extension should be disabled based on class notes content
 function shouldDisableForClassNotes(rootDoc) {
   try {
@@ -741,33 +814,59 @@ function createRatingElement(professor, options = { animate: false }) {
 
 // Function to add hover tooltip functionality
 function addHoverTooltip(element, professor) {
-  let hoverTimeout;
-  let hideTimeout;
-  let tooltip = null;
+  // Shared tooltip state to prevent duplicates and stickiness
+  if (!window.PRTooltipState) {
+    window.PRTooltipState = {
+      owner: null,
+      showTimeout: null,
+      hideTimeout: null,
+    };
+    // Hide on any document scroll to avoid sticky tooltips
+    const hideOnScroll = () => hideProfessorTooltip(null, true);
+    document.addEventListener("scroll", hideOnScroll, { capture: true });
+    window.addEventListener("blur", () => hideProfessorTooltip(null, true));
+  }
 
   element.addEventListener("mouseenter", () => {
-    // Clear any existing timeouts
-    if (hoverTimeout) {
-      clearTimeout(hoverTimeout);
+    // Clear pending hides and shows
+    if (window.PRTooltipState.hideTimeout) {
+      clearTimeout(window.PRTooltipState.hideTimeout);
+      window.PRTooltipState.hideTimeout = null;
     }
-    if (hideTimeout) {
-      clearTimeout(hideTimeout);
+    if (window.PRTooltipState.showTimeout) {
+      clearTimeout(window.PRTooltipState.showTimeout);
+      window.PRTooltipState.showTimeout = null;
     }
 
-    // Set 0.5-second delay before showing tooltip (faster response)
-    hoverTimeout = setTimeout(() => {
+    // If another owner has a tooltip, hide it immediately
+    if (
+      window.PRTooltipState.owner &&
+      window.PRTooltipState.owner !== element
+    ) {
+      hideProfessorTooltip(window.PRTooltipState.owner, true);
+    }
+
+    window.PRTooltipState.owner = element;
+
+    // Show after a short delay to avoid accidental hovers
+    window.PRTooltipState.showTimeout = setTimeout(() => {
       showProfessorTooltip(element, professor);
-    }, 500);
+      window.PRTooltipState.showTimeout = null;
+    }, 300);
   });
 
   element.addEventListener("mouseleave", () => {
-    // Clear timeout if mouse leaves before 2 seconds
-    if (hoverTimeout) {
-      clearTimeout(hoverTimeout);
+    // Cancel a pending show if we left early
+    if (window.PRTooltipState.showTimeout) {
+      clearTimeout(window.PRTooltipState.showTimeout);
+      window.PRTooltipState.showTimeout = null;
     }
 
-    // Hide tooltip immediately when mouse leaves
-    hideProfessorTooltip();
+    // Hide with a tiny delay to allow moving into tooltip, but ensure cleanup
+    window.PRTooltipState.hideTimeout = setTimeout(() => {
+      hideProfessorTooltip(element, false);
+      window.PRTooltipState.hideTimeout = null;
+    }, 50);
   });
 }
 
@@ -796,6 +895,7 @@ function showProfessorTooltip(element, professor) {
     pointer-events: none;
     border: 2px solid rgba(255, 255, 255, 0.3);
   `;
+  tooltip.setAttribute("data-polyratings", "true");
 
   // Get professor data and AI analysis for tooltip
   chrome.runtime.sendMessage(
@@ -893,16 +993,30 @@ function positionTooltip(tooltip, element) {
 }
 
 // Function to hide professor tooltip
-function hideProfessorTooltip() {
+function hideProfessorTooltip(owner = null, immediate = false) {
   const existingTooltip = document.querySelector(".professor-tooltip");
   if (existingTooltip) {
-    existingTooltip.style.opacity = "0";
-    existingTooltip.style.transform = "scale(0.8) translateY(10px)";
-    setTimeout(() => {
-      if (existingTooltip.parentNode) {
-        existingTooltip.parentNode.removeChild(existingTooltip);
+    // Only hide if called by current owner, or no owner specified
+    if (!owner || window.PRTooltipState?.owner === owner) {
+      const removeNow = () => {
+        if (existingTooltip && existingTooltip.parentNode) {
+          existingTooltip.parentNode.removeChild(existingTooltip);
+        }
+        if (
+          window.PRTooltipState &&
+          (!owner || window.PRTooltipState.owner === owner)
+        ) {
+          window.PRTooltipState.owner = null;
+        }
+      };
+      if (immediate) {
+        removeNow();
+      } else {
+        existingTooltip.style.opacity = "0";
+        existingTooltip.style.transform = "scale(0.8) translateY(10px)";
+        setTimeout(removeNow, 200);
       }
-    }, 300);
+    }
   }
 }
 
@@ -1026,18 +1140,28 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
       )}"][data-index="${profIndex}"]`
     );
     if (!exists) {
-      console.log(
-        `🔄 Rating element removed for ${professorName}, re-injecting (observer)...`
-      );
-      const reInjected = createRatingElement(professor, { animate: false });
-      reInjected.setAttribute("data-professor", professorName);
-      reInjected.setAttribute("data-index", profIndex.toString());
-      reInjected.setAttribute("data-polyratings", "true");
-      reInjected.setAttribute("data-pr-initialized", "true");
-      const br = document.createElement("br");
-      br.setAttribute("data-polyratings", "true");
-      professorElement.appendChild(br);
-      professorElement.appendChild(reInjected);
+      // Debounce reinjection to play nicer with virtualization at the bottom
+      setTimeout(() => {
+        const existsNow = professorElement.querySelector(
+          `[data-professor="${CSS.escape(
+            professorName
+          )}"][data-index="${profIndex}"]`
+        );
+        if (existsNow) return;
+        if (!isElementMostlyVisible(professorElement)) return;
+        console.log(
+          `🔄 Rating element removed for ${professorName}, re-injecting (debounced)...`
+        );
+        const reInjected = createRatingElement(professor, { animate: false });
+        reInjected.setAttribute("data-professor", professorName);
+        reInjected.setAttribute("data-index", profIndex.toString());
+        reInjected.setAttribute("data-polyratings", "true");
+        reInjected.setAttribute("data-pr-initialized", "true");
+        const br = document.createElement("br");
+        br.setAttribute("data-polyratings", "true");
+        professorElement.appendChild(br);
+        professorElement.appendChild(reInjected);
+      }, 200);
     }
   });
   try {
@@ -1130,13 +1254,16 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   // Observe the host element to re-inject if it is replaced/cleared
   const desktopObserver = new MutationObserver(() => {
     if (!document.contains(container)) {
-      console.log(
-        `🔄 Desktop rating container removed for ${professorName}, re-injecting (observer)...`
-      );
-      desktopObserver.disconnect();
+      // Debounce and check visibility before re-injecting
       setTimeout(() => {
+        if (document.contains(container)) return;
+        if (!isElementMostlyVisible(professorNameElement)) return;
+        console.log(
+          `🔄 Desktop rating container removed for ${professorName}, re-injecting (debounced)...`
+        );
+        desktopObserver.disconnect();
         injectDesktopRatingUI(professorNameElement, professor);
-      }, 50);
+      }, 200);
     }
   });
   try {
@@ -1290,9 +1417,9 @@ function findAndLogProfessors() {
   // Don't aggressively clear ratings - let individual functions handle duplicates
   console.log("🧹 Letting individual functions handle duplicate prevention");
 
-  // Batch process professors for better performance
-  const professorBatch = [];
-  let batchTimeout;
+  // Batch process professors for better performance (debounced render)
+  const mobileBatch = [];
+  let mobileBatchTimeout;
 
   // Also clean up any corrupted text content in instructor elements
   const instructorElements = document.querySelectorAll('[role="cell"]');
@@ -1336,7 +1463,7 @@ function findAndLogProfessors() {
           .filter((name) => name.length > 0);
         console.log(`📋 Parsed professor names:`, professorNames);
 
-        // Process each professor individually
+        // Collect each professor into a batch for parallel fetch and single render
         professorNames.forEach((professorName, profIndex) => {
           console.log(
             `👨‍🏫 Processing professor ${profIndex + 1}: ${professorName}`
@@ -1366,53 +1493,14 @@ function findAndLogProfessors() {
             return;
           }
 
-          // Show loading skeleton while waiting for response
-          const loadingSkeleton = createLoadingSkeleton();
-          const lineBreak = document.createElement("br");
-          nextElement.appendChild(lineBreak);
-          nextElement.appendChild(loadingSkeleton);
-
-          // Send message to background script to get professor rating
-          chrome.runtime.sendMessage(
-            { type: "getProfRating", profName: professorName },
-            (response) => {
-              // Remove loading skeleton
-              loadingSkeleton.remove();
-              console.log("📨 Response from background script:", response);
-
-              if (response.status === "success" && response.professor) {
-                console.log("✅ Received professor data:", response.professor);
-                injectRatingUI(nextElement, response.professor, profIndex);
-                // Mark professor as processed
-                markProfessorProcessed(professorName, elementId);
-              } else if (response.status === "not_found") {
-                console.log("❌ Professor not found in database");
-
-                // Inject the "not found" badge using the same function as ratings for consistent spacing
-                const notFoundBadge = createNotFoundBadge(professorName);
-                notFoundBadge.className = "polyratings-rating-element";
-                notFoundBadge.setAttribute("data-professor", professorName);
-                notFoundBadge.setAttribute("data-index", profIndex.toString());
-
-                // Use the same injection method as ratings for consistent spacing
-                const lineBreak = document.createElement("br");
-                nextElement.appendChild(lineBreak);
-                nextElement.appendChild(notFoundBadge);
-
-                // Apply same margin logic as ratings
-                if (profIndex > 0) {
-                  notFoundBadge.style.marginLeft = "12px";
-                }
-                // Mark as processed to avoid repeated toggling
-                markProfessorProcessed(professorName, elementId);
-              } else {
-                console.log(
-                  "❌ Error getting professor data:",
-                  response.message
-                );
-              }
-            }
-          );
+          // Add lightweight skeleton marker (single for the block)
+          mobileBatch.push({
+            element: nextElement,
+            professorName,
+            profIndex,
+            elementId,
+            promise: prMessage("getProfRating", { profName: professorName }),
+          });
 
           professorCount++;
         });
@@ -1423,6 +1511,72 @@ function findAndLogProfessors() {
       }
     }
   });
+
+  // Render mobile batch after a short debounce window to avoid flicker
+  if (mobileBatch.length > 0) {
+    // Add a single skeleton per container to reduce layout thrash
+    const containerToSkeleton = new Map();
+    for (const item of mobileBatch) {
+      if (!containerToSkeleton.has(item.element)) {
+        const sk = createLoadingSkeleton();
+        sk.setAttribute("data-polyratings", "true");
+        item.element.appendChild(sk);
+        containerToSkeleton.set(item.element, sk);
+      }
+    }
+
+    clearTimeout(mobileBatchTimeout);
+    mobileBatchTimeout = setTimeout(async () => {
+      try {
+        const results = await Promise.all(
+          mobileBatch.map((b) => b.promise.then((res) => ({ res, b })))
+        );
+        // Remove skeletons in one pass
+        for (const sk of containerToSkeleton.values()) {
+          if (sk && sk.parentNode) sk.parentNode.removeChild(sk);
+        }
+
+        // Inject results in a single pass per batch (only when visible/stable)
+        for (const { res, b } of results) {
+          const { element, professorName, profIndex, elementId } = b;
+          if (!element || !document.contains(element)) continue;
+
+          scheduleStableRender(element, () => {
+            // Skip if element already has our node
+            const exists = element.querySelector(
+              `[data-professor="${CSS.escape(
+                professorName
+              )}"][data-index="${profIndex}"]`
+            );
+            if (exists) return;
+
+            if (res.status === "success" && res.professor) {
+              injectRatingUI(element, res.professor, profIndex);
+              markProfessorProcessed(professorName, elementId);
+            } else if (res.status === "not_found") {
+              const notFoundBadge = createNotFoundBadge(professorName);
+              notFoundBadge.className = "polyratings-rating-element";
+              notFoundBadge.setAttribute("data-professor", professorName);
+              notFoundBadge.setAttribute("data-index", profIndex.toString());
+              const br = document.createElement("br");
+              br.setAttribute("data-polyratings", "true");
+              element.appendChild(br);
+              element.appendChild(notFoundBadge);
+              if (profIndex > 0) notFoundBadge.style.marginLeft = "12px";
+              markProfessorProcessed(professorName, elementId);
+            } else {
+              // Silent fail; do not thrash DOM
+            }
+          });
+        }
+      } catch (_) {
+        // On error, remove any skeletons to avoid stickiness
+        for (const sk of containerToSkeleton.values()) {
+          if (sk && sk.parentNode) sk.parentNode.removeChild(sk);
+        }
+      }
+    }, 500);
+  }
 
   // Step 2: Only try desktop approach if mobile approach didn't find anything
   if (!mobileApproachFound) {
