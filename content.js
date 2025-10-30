@@ -7,6 +7,61 @@ let currentUrl = window.location.href.split("#")[0]; // Initialize currentUrl
 // Track processed professors to prevent re-processing
 const processedProfessors = new Set();
 
+// Determine if extension should be disabled based on class notes content
+function shouldDisableForClassNotes(rootDoc) {
+  try {
+    const doc = rootDoc || document;
+
+    // Structured scan: find explicit Class Notes headers and read nearby text
+    const headers = Array.from(
+      doc.querySelectorAll("p.cx-MuiTypography-h4, .cx-MuiTypography-h4")
+    ).filter(
+      (el) => (el.textContent || "").trim().toLowerCase() === "class notes"
+    );
+
+    const disablingPhrases = [
+      "additional time",
+      "continuous enroll",
+      "continuous enrollment",
+    ];
+
+    for (const header of headers) {
+      // Notes text is often in a following sibling <p> or within the same container
+      let notesContainer = header.parentElement;
+      let notesText = "";
+
+      // Try immediate nextElementSibling first
+      if (header.nextElementSibling) {
+        notesText = header.nextElementSibling.textContent || "";
+      }
+
+      // Fallback: search the parent block for any body text element
+      if (!notesText && notesContainer) {
+        const bodyNode = notesContainer.querySelector(
+          ".cx-MuiTypography-body1, .cx-MuiTypography-body2, p"
+        );
+        if (bodyNode) notesText = bodyNode.textContent || "";
+      }
+
+      notesText = notesText.toLowerCase();
+      if (disablingPhrases.some((p) => notesText.includes(p))) return true;
+    }
+
+    // Fallback to whole-document text scan in case structure changes
+    const bodyText = (
+      doc.body && doc.body.innerText
+        ? doc.body.innerText
+        : doc.documentElement.textContent || ""
+    ).toLowerCase();
+    if (!bodyText.includes("class notes")) return false;
+    return disablingPhrases.some((phrase) => bodyText.includes(phrase));
+  } catch (e) {
+    return false;
+  }
+}
+
+const PR_DISABLE_FOR_NOTES = shouldDisableForClassNotes();
+
 // Function to mark professor as processed
 function markProfessorProcessed(professorName, elementId) {
   const key = `${professorName}-${elementId}`;
@@ -538,7 +593,7 @@ function ensureSVGGradients() {
 }
 
 // Function to create rating UI element (SIMPLIFIED - single version only)
-function createRatingElement(professor) {
+function createRatingElement(professor, options = { animate: false }) {
   const ratingContainer = document.createElement("a");
   ratingContainer.href = professor.link;
   ratingContainer.target = "_blank";
@@ -554,8 +609,8 @@ function createRatingElement(professor) {
         color: #090d19; 
         transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         cursor: pointer;
-        transform: translateY(8px) scale(0.95);
-        opacity: 0;
+        ${options.animate ? "transform: translateY(8px) scale(0.95);" : ""}
+        ${options.animate ? "opacity: 0;" : "opacity: 1;"}
         white-space: nowrap; 
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -658,8 +713,10 @@ function createRatingElement(professor) {
   ratingContainer.appendChild(ratingText);
   ratingContainer.appendChild(stars);
 
-  // Add fade-in animation
-  ratingContainer.classList.add("fade-in");
+  // Add fade-in animation only on first-time injection
+  if (options.animate) {
+    ratingContainer.classList.add("fade-in");
+  }
 
   return ratingContainer;
 }
@@ -918,10 +975,11 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
   );
 
   // Create the rating element
-  const ratingElement = createRatingElement(professor);
+  const ratingElement = createRatingElement(professor, { animate: true });
   ratingElement.setAttribute("data-professor", professorName);
   ratingElement.setAttribute("data-index", profIndex.toString());
   ratingElement.setAttribute("data-polyratings", "true"); // Mark as PolyRatings element
+  ratingElement.setAttribute("data-pr-initialized", "true");
 
   // Add extra margin for multiple professors (except the first one)
   if (profIndex > 0) {
@@ -930,6 +988,7 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
 
   // Add a small line break and spacing before the rating
   const lineBreak = document.createElement("br");
+  lineBreak.setAttribute("data-polyratings", "true");
   professorElement.appendChild(lineBreak);
 
   // Insert the rating element with proper spacing
@@ -941,24 +1000,33 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
     ratingElement.style.opacity = "1";
   }, 10);
 
-  // Add periodic check to re-inject if element disappears
-  const checkInterval = setInterval(() => {
-    if (!document.contains(ratingElement)) {
+  // Observe the professor element for removals and re-inject without animation
+  const localObserver = new MutationObserver(() => {
+    const exists = professorElement.querySelector(
+      `[data-professor="${CSS.escape(
+        professorName
+      )}"][data-index="${profIndex}"]`
+    );
+    if (!exists) {
       console.log(
-        `🔄 Rating element disappeared for ${professorName}, re-injecting...`
+        `🔄 Rating element removed for ${professorName}, re-injecting (observer)...`
       );
-      clearInterval(checkInterval);
-      // Re-inject the rating
-      setTimeout(() => {
-        injectRatingUI(professorElement, professor, profIndex);
-      }, 100);
+      const reInjected = createRatingElement(professor, { animate: false });
+      reInjected.setAttribute("data-professor", professorName);
+      reInjected.setAttribute("data-index", profIndex.toString());
+      reInjected.setAttribute("data-polyratings", "true");
+      reInjected.setAttribute("data-pr-initialized", "true");
+      const br = document.createElement("br");
+      br.setAttribute("data-polyratings", "true");
+      professorElement.appendChild(br);
+      professorElement.appendChild(reInjected);
     }
-  }, 1000);
-
-  // Stop checking after 30 seconds
-  setTimeout(() => {
-    clearInterval(checkInterval);
-  }, 30000);
+  });
+  try {
+    localObserver.observe(professorElement, { childList: true });
+    // Stop observing after 30s to avoid long-lived observers
+    setTimeout(() => localObserver.disconnect(), 30000);
+  } catch (_) {}
 
   console.log(
     `✅ Successfully injected mobile rating UI for: ${professorName} at index ${profIndex}`
@@ -988,7 +1056,7 @@ function injectDesktopRatingUI(professorNameElement, professor) {
 
   prInjectStyles();
 
-  const ratingEl = createRatingElement(professor);
+  const ratingEl = createRatingElement(professor, { animate: true });
 
   // Simple vertical layout - just add professor name and rating
   const originalText = professorNameElement.textContent.trim();
@@ -1041,24 +1109,22 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     ratingEl.style.opacity = "1";
   }, 10);
 
-  // Add periodic check to re-inject if element disappears
-  const checkInterval = setInterval(() => {
+  // Observe the host element to re-inject if it is replaced/cleared
+  const desktopObserver = new MutationObserver(() => {
     if (!document.contains(container)) {
       console.log(
-        `🔄 Desktop rating container disappeared for ${professorName}, re-injecting...`
+        `🔄 Desktop rating container removed for ${professorName}, re-injecting (observer)...`
       );
-      clearInterval(checkInterval);
-      // Re-inject the rating
+      desktopObserver.disconnect();
       setTimeout(() => {
         injectDesktopRatingUI(professorNameElement, professor);
-      }, 100);
+      }, 50);
     }
-  }, 1000);
-
-  // Stop checking after 30 seconds
-  setTimeout(() => {
-    clearInterval(checkInterval);
-  }, 30000);
+  });
+  try {
+    desktopObserver.observe(professorNameElement, { childList: true });
+    setTimeout(() => desktopObserver.disconnect(), 30000);
+  } catch (_) {}
 
   console.log(
     `✅ Successfully injected desktop rating UI for: ${professorName}`
@@ -1319,6 +1385,8 @@ function findAndLogProfessors() {
                 if (profIndex > 0) {
                   notFoundBadge.style.marginLeft = "12px";
                 }
+                // Mark as processed to avoid repeated toggling
+                markProfessorProcessed(professorName, elementId);
               } else {
                 console.log(
                   "❌ Error getting professor data:",
@@ -1936,6 +2004,14 @@ function addTypingMessage(container) {
 function injectAskAgentButton() {
   console.log("🤖 Looking for Cancel/Ok buttons to add Ask Agent button...");
 
+  // Respect class notes disablement at runtime
+  if (shouldDisableForClassNotes(document)) {
+    console.log(
+      "🛑 Skipping Ask Agent button injection due to class notes keywords"
+    );
+    return;
+  }
+
   // Look for common button patterns in Material-UI
   const buttonSelectors = [
     'button[type="button"]',
@@ -2064,6 +2140,51 @@ function setupMutationObserver() {
   let isProcessing = false;
 
   const observer = new MutationObserver((mutations) => {
+    // Ignore mutations caused by our own injected elements
+    const isOurNode = (node) => {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+      const el = node;
+      if (el.getAttribute && el.getAttribute("data-polyratings") === "true")
+        return true;
+      const cls = el.classList || { contains: () => false };
+      if (
+        cls.contains("polyratings-rating-element") ||
+        cls.contains("professor-tooltip") ||
+        cls.contains("ask-agent-button")
+      )
+        return true;
+      if (el.id === "polyratings-gradients" || el.id === "pr-style")
+        return true;
+      // Check descendants
+      return (
+        el.querySelector &&
+        (el.querySelector('[data-polyratings="true"]') ||
+          el.querySelector(".polyratings-rating-element") ||
+          el.querySelector(".professor-tooltip") ||
+          el.querySelector(".ask-agent-button"))
+      );
+    };
+
+    const onlyOurChanges = mutations.every((mutation) => {
+      const nodes = [
+        ...Array.from(mutation.addedNodes || []),
+        ...Array.from(mutation.removedNodes || []),
+      ];
+      return nodes.length > 0 && nodes.every((n) => isOurNode(n));
+    });
+
+    if (onlyOurChanges) {
+      // Skip processing when only our UI changed
+      return;
+    }
+    // Abort entirely if class notes indicate we should disable now
+    if (shouldDisableForClassNotes(document)) {
+      console.log(
+        "🛑 Disabling PolyRatings due to class notes detected after load; disconnecting observer"
+      );
+      observer.disconnect();
+      return;
+    }
     // Skip if we're already processing
     if (isProcessing) {
       console.log("⏭️ Already processing, skipping mutation");
@@ -2173,6 +2294,12 @@ function setupMutationObserver() {
   };
 
   console.log("🚀 Starting MutationObserver in iframe with config:", config);
+  if (shouldDisableForClassNotes(document)) {
+    console.log(
+      "🛑 Skipping observer start; class notes keywords present on initial check"
+    );
+    return;
+  }
   observer.observe(document.body, config);
   console.log(
     "✅ MutationObserver is now active in iframe and watching for changes"
@@ -2180,14 +2307,24 @@ function setupMutationObserver() {
 
   // Run once on initial load
   console.log("🚀 Running initial professor search in iframe...");
-  findAndLogProfessors();
+  if (!shouldDisableForClassNotes(document)) {
+    findAndLogProfessors();
+  } else {
+    console.log(
+      "🛑 Skipping initial professor search due to class notes keywords"
+    );
+  }
 }
 
 // Main execution
 console.log("🚀 Starting PolyRatings Enhancer...");
 
-// Check if we're in the main document or already in an iframe
-if (window.top === window) {
+// Respect disable flag based on class notes keywords
+if (PR_DISABLE_FOR_NOTES) {
+  console.log(
+    "🛑 PolyRatings disabled on this page due to class notes keywords (e.g., Additional time / Continuous Enroll)"
+  );
+} else if (window.top === window) {
   console.log("📄 We're in the main document");
 
   // Pre-load professor data when Schedule Builder page loads
@@ -2203,7 +2340,17 @@ if (window.top === window) {
 
     // Wait for iframe to load
     iframe.addEventListener("load", () => {
-      console.log("📥 Iframe loaded, setting up observer...");
+      console.log("📥 Iframe loaded, checking class notes before setup...");
+      try {
+        const iframeDoc =
+          iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc && shouldDisableForClassNotes(iframeDoc)) {
+          console.log(
+            "🛑 PolyRatings disabled inside iframe due to class notes keywords"
+          );
+          return;
+        }
+      } catch (e) {}
       setupMutationObserver();
       setupButtonObserver();
     });
@@ -2213,11 +2360,16 @@ if (window.top === window) {
       iframe.contentDocument &&
       iframe.contentDocument.readyState === "complete"
     ) {
-      console.log(
-        "📥 Iframe already loaded, setting up observer immediately..."
-      );
-      setupMutationObserver();
-      setupButtonObserver();
+      console.log("📥 Iframe already loaded, checking class notes...");
+      const iframeDoc = iframe.contentDocument;
+      if (shouldDisableForClassNotes(iframeDoc)) {
+        console.log(
+          "🛑 PolyRatings disabled inside iframe (already loaded) due to class notes keywords"
+        );
+      } else {
+        setupMutationObserver();
+        setupButtonObserver();
+      }
     }
   } else {
     console.log(
