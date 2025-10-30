@@ -383,6 +383,7 @@ function ensureSVGGradients() {
   svg.style.position = "absolute";
   svg.style.width = "0";
   svg.style.height = "0";
+  svg.style.visibility = "hidden";
   svg.id = "polyratings-gradients";
 
   const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
@@ -529,6 +530,11 @@ function ensureSVGGradients() {
   defs.appendChild(redGradient);
   svg.appendChild(defs);
   document.body.appendChild(svg);
+
+  // Wait a bit to ensure gradients are fully loaded
+  setTimeout(() => {
+    console.log("✅ SVG gradients loaded and ready");
+  }, 50);
 }
 
 // Function to create rating UI element (SIMPLIFIED - single version only)
@@ -601,11 +607,53 @@ function createRatingElement(professor) {
     // Get the appropriate gradient class for this rating
     const ratingClass = getRatingClass(professor.rating);
 
-    // Create star with gradient class
+    // Create star with gradient class and add retry mechanism
     starsHtml += `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" stroke-width="2" class="${ratingClass}"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
   }
 
   stars.innerHTML = starsHtml;
+
+  // Add retry mechanism for star rendering
+  if (professor.rating > 0) {
+    // Check if star rendered properly after a short delay
+    setTimeout(() => {
+      const svgElement = stars.querySelector("svg");
+      if (!svgElement || !svgElement.querySelector("path")) {
+        console.log(`🔄 Retrying star render for ${professor.name}`);
+        // Re-render the star
+        const ratingClass = getRatingClass(professor.rating);
+        stars.innerHTML = `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" stroke-width="2" class="${ratingClass}"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+      }
+    }, 100);
+
+    // Additional check after longer delay
+    setTimeout(() => {
+      const svgElement = stars.querySelector("svg");
+      if (!svgElement || !svgElement.querySelector("path")) {
+        console.log(`🔄 Second retry for star render for ${professor.name}`);
+        // Force re-render with fallback styling
+        const ratingClass = getRatingClass(professor.rating);
+        stars.innerHTML = `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" stroke-width="2" class="${ratingClass}"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+      }
+    }, 500);
+
+    // Final fallback with solid colors if gradients still don't work
+    setTimeout(() => {
+      const svgElement = stars.querySelector("svg");
+      if (!svgElement || !svgElement.querySelector("path")) {
+        console.log(`🔄 Final fallback for star render for ${professor.name}`);
+        // Use solid color fallback
+        const rating = parseFloat(professor.rating);
+        let fallbackColor = "#FFD700"; // Gold default
+        if (rating >= 3.0) fallbackColor = "#FFD700";
+        else if (rating >= 2.0) fallbackColor = "#FFA500";
+        else if (rating >= 1.0) fallbackColor = "#FF8C00";
+        else fallbackColor = "#FF6B00";
+
+        stars.innerHTML = `<svg viewBox="0 0 51 48" style="width:0.9em; height:0.9em; align-self: flex-start; margin-top: -2px;" stroke-width="2" fill="${fallbackColor}" stroke="#B8860B"><path d="m25,1 6,17h18l-14,11 5,17-15-10-15,10 5-17-14-11h18z"></path></svg>`;
+      }
+    }, 1000);
+  }
 
   ratingContainer.appendChild(ratingText);
   ratingContainer.appendChild(stars);

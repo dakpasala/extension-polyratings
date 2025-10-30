@@ -117,8 +117,25 @@ function convertCSVToProfessorData(ratingsData, commentsData) {
 // Fetch professor data from CSVs
 async function fetchProfessorData() {
   console.log("🚀 fetchProfessorData() called!");
-  if (isFetching) return;
-  if (professorCache) return professorCache;
+  if (professorCache) {
+    console.log("✅ Using cached professor data");
+    return professorCache;
+  }
+
+  // If already fetching, wait and retry a few times
+  if (isFetching) {
+    console.log("⏳ Already fetching, waiting for completion...");
+    for (let i = 0; i < 50; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (professorCache) {
+        console.log("✅ Cache populated, returning cached data");
+        return professorCache;
+      }
+      if (!isFetching) break; // Fetch completed (success or failure)
+    }
+    // If still not cached after waiting, something went wrong - continue anyway
+    if (professorCache) return professorCache;
+  }
 
   isFetching = true;
   try {
@@ -156,15 +173,59 @@ function preloadProfessorData() {
 
 // Find professor in cache
 function findProfessor(profName) {
-  if (!professorCache) return null;
+  if (!professorCache) {
+    console.log(
+      `❌ No professor cache available when searching for: ${profName}`
+    );
+    return null;
+  }
   const normalized = profName.toLowerCase().trim();
-  return (
-    professorCache.find(
-      (p) =>
-        p.name.toLowerCase().trim() === normalized ||
-        p.name.toLowerCase().includes(normalized)
-    ) || null
+  console.log(
+    `🔍 Searching for professor: "${profName}" (normalized: "${normalized}")`
   );
+
+  // Try exact match first
+  const exactMatch = professorCache.find(
+    (p) => p.name.toLowerCase().trim() === normalized
+  );
+  if (exactMatch) {
+    console.log(`✅ Exact match found: ${exactMatch.name}`);
+    return exactMatch;
+  }
+
+  // Try partial match
+  const partialMatch = professorCache.find(
+    (p) =>
+      p.name.toLowerCase().includes(normalized) ||
+      normalized.includes(p.name.toLowerCase().trim())
+  );
+  if (partialMatch) {
+    console.log(
+      `✅ Partial match found: ${partialMatch.name} (searched for: ${profName})`
+    );
+    return partialMatch;
+  }
+
+  // Debug: show similar names
+  const similarNames = professorCache
+    .filter((p) => {
+      const name = p.name.toLowerCase().trim();
+      const searchWords = normalized.split(" ");
+      return (
+        searchWords.some((word) => name.includes(word)) ||
+        name.split(" ").some((word) => normalized.includes(word))
+      );
+    })
+    .slice(0, 5)
+    .map((p) => p.name);
+
+  if (similarNames.length > 0) {
+    console.log(`💡 Similar names found: ${similarNames.join(", ")}`);
+  } else {
+    console.log(`❌ No match found for: ${profName}`);
+  }
+
+  return null;
 }
 
 /* -------------------- STATIC AI SUMMARIES (JSON-BASED) -------------------- */
@@ -196,6 +257,9 @@ async function fetchAISummaries() {
 
 // Tooltip (no link)
 async function callGeminiTooltipAnalysis(profName) {
+  // Ensure professor data is loaded before checking
+  await fetchProfessorData();
+
   const summaries = await fetchAISummaries();
   const professor = findProfessor(profName);
   const key = Object.keys(summaries).find(
@@ -214,10 +278,16 @@ async function callGeminiTooltipAnalysis(profName) {
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
   } else {
     // professor exists in PolyRatings but not in summaries JSON
-    if (professor) summary = "No summary yet.";
-    else
+    if (professor) {
+      summary = "No summary yet.";
+      console.log(
+        `💬 Professor ${profName} found in cache but no summary in JSON`
+      );
+    } else {
       summary =
         "No PolyRatings found. Try asking classmates or other professors for insights before enrolling.";
+      console.log(`💬 Professor ${profName} not found in cache`);
+    }
   }
 
   console.log(`💬 Tooltip summary for ${profName}:`, summary);
@@ -372,11 +442,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getGeminiTooltipAnalysis") {
     (async () => {
       try {
+        // Ensure professor data is fetched before checking
+        const data = await fetchProfessorData();
+        const professor = findProfessor(message.profName);
         const analysis = await callGeminiTooltipAnalysis(message.profName);
         sendResponse({
           status: "success",
           analysis,
-          professor: { name: message.profName },
+          professor: professor || { name: message.profName },
         });
       } catch (error) {
         sendResponse({
