@@ -62,6 +62,24 @@ function shouldDisableForClassNotes(rootDoc) {
 
 const PR_DISABLE_FOR_NOTES = shouldDisableForClassNotes();
 
+// Determine if Agent button should be enabled (Cal Poly domains + Select Sections)
+function shouldEnableAgent(rootDoc) {
+  const doc = rootDoc || document;
+  const host = (location && location.hostname) || "";
+  const isCalPoly =
+    /(?:^|\.)calpoly\.edu$/i.test(host) || /calpoly\.edu$/i.test(host);
+  if (!isCalPoly) return false;
+  try {
+    const text = (
+      doc.body?.innerText ||
+      doc.documentElement?.textContent ||
+      ""
+    ).toLowerCase();
+    if (text.includes("select sections")) return true;
+  } catch (_) {}
+  return false;
+}
+
 // Function to mark professor as processed
 function markProfessorProcessed(professorName, elementId) {
   const key = `${professorName}-${elementId}`;
@@ -2012,6 +2030,12 @@ function injectAskAgentButton() {
     return;
   }
 
+  // Only on Cal Poly schedule pages that show Select Sections
+  if (!shouldEnableAgent(document)) {
+    console.log("⏭️ Skipping Ask Agent button: not on eligible Cal Poly page");
+    return;
+  }
+
   // Look for common button patterns in Material-UI
   const buttonSelectors = [
     'button[type="button"]',
@@ -2110,6 +2134,11 @@ function injectAskAgentButton() {
 // Function to set up button observer (runs more frequently)
 function setupButtonObserver() {
   console.log("🔘 Setting up button observer...");
+
+  if (!shouldEnableAgent(document)) {
+    console.log("⏭️ Not an eligible Cal Poly page; button observer disabled");
+    return;
+  }
 
   // Try to inject button immediately
   injectAskAgentButton();
@@ -2352,7 +2381,9 @@ if (PR_DISABLE_FOR_NOTES) {
         }
       } catch (e) {}
       setupMutationObserver();
-      setupButtonObserver();
+      if (shouldEnableAgent(iframe.contentDocument)) {
+        setupButtonObserver();
+      }
     });
 
     // If iframe is already loaded, set up observer immediately
@@ -2376,10 +2407,14 @@ if (PR_DISABLE_FOR_NOTES) {
       "❌ Schedule Builder iframe not found, setting up observer anyway..."
     );
     setupMutationObserver();
-    setupButtonObserver();
+    if (shouldEnableAgent(document)) {
+      setupButtonObserver();
+    }
   }
 } else {
   console.log("📄 We're already in an iframe");
   setupMutationObserver();
-  setupButtonObserver();
+  if (shouldEnableAgent(document)) {
+    setupButtonObserver();
+  }
 }
