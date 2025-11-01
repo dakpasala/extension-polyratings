@@ -49,6 +49,10 @@ function hasRelevantChanges(mutations) {
 }
 
 function setupMutationObserver() {
+  // Prevent multiple observers from being set up
+  if (window.prObserverActive) return;
+  window.prObserverActive = true;
+  
   let debounceTimeout;
   let isProcessing = false;
 
@@ -63,21 +67,17 @@ function setupMutationObserver() {
 
     if (onlyOurChanges) return;
     
-    // Check if we should disable on this specific page
-    if (shouldDisableForClassNotes(document)) {
-      // Don't disconnect - just skip processing so we can re-enable on navigation
-      return;
-    }
-    
     if (isProcessing) return;
 
     if (hasRelevantChanges(mutations)) {
       clearTimeout(debounceTimeout);
       isProcessing = true;
       debounceTimeout = setTimeout(() => {
+        // findAndLogProfessors now handles the disabled check internally
+        // so agent button still works on disabled pages
         findAndLogProfessors();
         isProcessing = false;
-      }, 25);
+      }, 150);
     }
   });
 
@@ -89,8 +89,7 @@ function setupMutationObserver() {
     characterData: true,
   });
   
-  // Only process initially if not on a disabled page
-  if (!shouldDisableForClassNotes(document)) {
-    findAndLogProfessors();
-  }
+  // Always call findAndLogProfessors - it handles disabled pages internally
+  // This ensures the agent button is injected even on disabled pages
+  findAndLogProfessors();
 }

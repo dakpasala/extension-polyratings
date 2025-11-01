@@ -1,5 +1,7 @@
 // ==================== STYLES ====================
 function injectStyles() {
+  // Double-check: never inject on disabled pages
+  if (shouldDisableForClassNotes(document)) return;
   if (document.getElementById("pr-style")) return;
   const style = document.createElement("style");
   style.id = "pr-style";
@@ -236,4 +238,44 @@ function injectStyles() {
   document.documentElement.appendChild(style);
 }
 
-injectStyles();
+// Conditionally inject styles based on page type
+function manageStyles() {
+  const styleElement = document.getElementById("pr-style");
+  const isDisabled = shouldDisableForClassNotes(document);
+  
+  if (isDisabled) {
+    // Remove styles on disabled pages
+    if (styleElement) {
+      styleElement.remove();
+    }
+  } else if (!isDisabled && !styleElement) {
+    // Add styles on enabled pages
+    injectStyles();
+  }
+}
+
+// Immediate check - before anything else
+if (shouldDisableForClassNotes(document)) {
+  // If we're on a disabled page from the start, don't inject anything
+  const existingStyle = document.getElementById("pr-style");
+  if (existingStyle) existingStyle.remove();
+} else {
+  // Initial check for enabled pages
+  manageStyles();
+}
+
+// Store last URL to detect actual changes
+let lastCheckedUrl = window.location.href;
+let lastDisabledState = shouldDisableForClassNotes(document);
+
+// Re-check when URL changes OR when disabled state might change
+setInterval(() => {
+  const currentUrl = window.location.href;
+  const currentDisabledState = shouldDisableForClassNotes(document);
+  
+  if (currentUrl !== lastCheckedUrl || currentDisabledState !== lastDisabledState) {
+    lastCheckedUrl = currentUrl;
+    lastDisabledState = currentDisabledState;
+    manageStyles();
+  }
+}, 500);

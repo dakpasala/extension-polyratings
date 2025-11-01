@@ -9,26 +9,18 @@ if (window.top === window) {
   const iframe = document.querySelector('iframe[name="TargetContent"]');
   if (iframe) {
     iframe.addEventListener("load", () => {
-      try {
-        const iframeDoc =
-          iframe.contentDocument || iframe.contentWindow?.document;
-        if (iframeDoc && shouldDisableForClassNotes(iframeDoc)) return;
-      } catch {}
       setupMutationObserver();
-      if (shouldEnableAgent(iframe.contentDocument)) setupButtonObserver();
+      setupButtonObserver();
     });
     if (iframe.contentDocument?.readyState === "complete") {
-      const iframeDoc = iframe.contentDocument;
-      if (!shouldDisableForClassNotes(iframeDoc)) {
-        setupMutationObserver();
-        setupButtonObserver();
-      }
+      setupMutationObserver();
+      setupButtonObserver();
     }
   } else {
     setupMutationObserver();
-    if (shouldEnableAgent(document)) setupButtonObserver();
+    setupButtonObserver();
   }
 } else {
   setupMutationObserver();
-  if (shouldEnableAgent(document)) setupButtonObserver();
+  setupButtonObserver();
 }

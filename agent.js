@@ -245,8 +245,8 @@ function addTypingMessage(container) {
 }
 
 function injectAskAgentButton() {
-  if (shouldDisableForClassNotes(document) || !shouldEnableAgent(document))
-    return;
+  // Always allow agent button, just check if it should be enabled
+  if (!shouldEnableAgent(document)) return;
   if (document.querySelector(`.${CSS_CLASSES.ASK_AGENT_BTN}`)) return;
 
   const buttonSelectors = [

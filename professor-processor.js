@@ -147,10 +147,36 @@ function findAndLogProfessors() {
     window.processingProfessors = false;
   }, 50);
 
-  cleanupCorruptedText(
-    document.querySelector('[role="cell"]') || document.body
-  );
-  const mobileFound = processMobileProfessors();
-  if (!mobileFound) processDesktopProfessors();
+  // Check if we should skip rating injection but keep agent button
+  const isDisabledPage = shouldDisableForClassNotes(document);
+  
+  if (isDisabledPage) {
+    // Remove any existing ratings and related elements on disabled pages
+    document.querySelectorAll(`.${CSS_CLASSES.RATING_ELEMENT}`).forEach((el) => {
+      el.remove();
+    });
+    // Remove any professor tooltips
+    document.querySelectorAll(`.${CSS_CLASSES.PROFESSOR_TOOLTIP}`).forEach((el) => {
+      el.remove();
+    });
+    // Remove loading skeletons
+    document.querySelectorAll(`.${CSS_CLASSES.LOADING_SKELETON}`).forEach((el) => {
+      el.remove();
+    });
+    // Remove any line breaks we added (but not the agent button)
+    document.querySelectorAll(`[${CSS_CLASSES.DATA_ATTR}="true"]`).forEach((el) => {
+      if (!el.classList.contains(CSS_CLASSES.ASK_AGENT_BTN)) {
+        el.remove();
+      }
+    });
+  } else {
+    cleanupCorruptedText(
+      document.querySelector('[role="cell"]') || document.body
+    );
+    const mobileFound = processMobileProfessors();
+    if (!mobileFound) processDesktopProfessors();
+  }
+  
+  // Always inject the agent button, even on disabled pages
   injectAskAgentButton();
 }

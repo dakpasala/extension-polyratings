@@ -186,6 +186,9 @@ function cleanupCorruptedText(element) {
 }
 
 function injectRatingUI(professorElement, professor, profIndex = 0) {
+  // Safety check: don't inject on disabled pages
+  if (shouldDisableForClassNotes(document)) return;
+  
   const professorName = professor.name;
   const existingRatings = professorElement.querySelectorAll(
     `[data-professor="${professorName}"][data-index="${profIndex}"]`
@@ -245,6 +248,9 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
 }
 
 function injectDesktopRatingUI(professorNameElement, professor) {
+  // Safety check: don't inject on disabled pages
+  if (shouldDisableForClassNotes(document)) return;
+  
   cleanupCorruptedText(professorNameElement);
   const existingRatings = professorNameElement.querySelectorAll(
     `.${CSS_CLASSES.RATING_ELEMENT}, .pr-rating-container`
@@ -297,6 +303,9 @@ function injectDesktopRatingUI(professorNameElement, professor) {
 }
 
 function injectDesktopNotFoundUI(professorNameElement, professorName) {
+  // Safety check: don't inject on disabled pages
+  if (shouldDisableForClassNotes(document)) return;
+  
   cleanupCorruptedText(professorNameElement);
   const existingRatings = professorNameElement.querySelectorAll(
     `.${CSS_CLASSES.RATING_ELEMENT}, .pr-rating-container`
