@@ -1,5 +1,78 @@
 // ==================== STATE ====================
-let currentUrl = window.location.href.split("#")[0];
+// Robust active URL getter that prefers the Schedule Builder iframe when present
+const getActiveUrl = () => {
+  try {
+    // If we're already in the iframe context, just use our own location
+    if (window.self !== window.top) {
+      return window.location.href;
+    }
+    // If we're in the top frame, try to get the iframe's URL
+    const iframe = document.querySelector('iframe[name="TargetContent"]');
+    return iframe?.contentWindow?.location?.href || window.location.href;
+  } catch {
+    return window.location.href;
+  }
+};
+
+// Initialize with a safe default that won't throw
+let currentUrl = window.location.href;
+
+// Safely initialize after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    try {
+      currentUrl = getActiveUrl();
+    } catch (e) {
+      console.debug("PR: Initial URL setup failed:", e.message);
+    }
+  });
+} else {
+  try {
+    currentUrl = getActiveUrl();
+  } catch (e) {
+    console.debug("PR: Initial URL setup failed:", e.message);
+  }
+}
+
+window.addEventListener("hashchange", () => {
+  try {
+    currentUrl = getActiveUrl();
+  } catch (e) {
+    console.debug("PR: URL update on hashchange failed:", e.message);
+  }
+});
+window.addEventListener("popstate", () => {
+  try {
+    currentUrl = getActiveUrl();
+  } catch (e) {
+    console.debug("PR: URL update on popstate failed:", e.message);
+  }
+});
+
+// Update when the TargetContent iframe navigates
+const setupIframeListener = () => {
+  try {
+    const _prIframe = document.querySelector('iframe[name="TargetContent"]');
+    if (_prIframe) {
+      _prIframe.addEventListener("load", () => {
+        try {
+          currentUrl = getActiveUrl();
+        } catch (e) {
+          console.debug("PR: URL update on iframe load failed:", e.message);
+        }
+      });
+    }
+  } catch (e) {
+    console.debug("PR: Iframe listener setup failed:", e.message);
+  }
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupIframeListener);
+} else {
+  setupIframeListener();
+}
+
 const processedProfessors = new Set();
 
 // ==================== UTILITY FUNCTIONS ====================
@@ -136,15 +209,20 @@ function getElementPath(element) {
 }
 
 function clearRatingsIfUrlChanged() {
-  if (typeof currentUrl === "undefined") {
-    currentUrl = window.location.href.split("#")[0];
-  }
-  const newUrl = window.location.href.split("#")[0];
-  if (newUrl !== currentUrl) {
-    document
-      .querySelectorAll(`.${CSS_CLASSES.RATING_ELEMENT}`)
-      .forEach((r) => r.remove());
-    currentUrl = newUrl;
+  try {
+    if (typeof currentUrl === "undefined") {
+      currentUrl = getActiveUrl();
+    }
+    const newUrl = getActiveUrl();
+    if (newUrl !== currentUrl) {
+      document
+        .querySelectorAll(`.${CSS_CLASSES.RATING_ELEMENT}`)
+        .forEach((r) => r.remove());
+      currentUrl = newUrl;
+    }
+  } catch (e) {
+    // Silently handle any errors (e.g., iframe access issues on certain pages)
+    console.debug("PR: URL check skipped:", e.message);
   }
 }
 

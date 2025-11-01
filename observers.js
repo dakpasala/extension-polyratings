@@ -62,10 +62,13 @@ function setupMutationObserver() {
     });
 
     if (onlyOurChanges) return;
+    
+    // Check if we should disable on this specific page
     if (shouldDisableForClassNotes(document)) {
-      observer.disconnect();
+      // Don't disconnect - just skip processing so we can re-enable on navigation
       return;
     }
+    
     if (isProcessing) return;
 
     if (hasRelevantChanges(mutations)) {
@@ -78,12 +81,16 @@ function setupMutationObserver() {
     }
   });
 
-  if (shouldDisableForClassNotes(document)) return;
+  // Always set up the observer so it can re-enable on navigation
   observer.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: true,
     characterData: true,
   });
-  if (!shouldDisableForClassNotes(document)) findAndLogProfessors();
+  
+  // Only process initially if not on a disabled page
+  if (!shouldDisableForClassNotes(document)) {
+    findAndLogProfessors();
+  }
 }
