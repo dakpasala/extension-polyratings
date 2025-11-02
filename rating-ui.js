@@ -73,8 +73,8 @@ function createRatingElement(professor, options = { animate: false }) {
     max-width: calc(100% - 4px); overflow: hidden; width: fit-content;
     ${
       options.animate
-        ? "transform: translateY(8px) scale(0.95); opacity: 0;"
-        : "opacity: 1;"
+        ? "opacity: 0; transform: translateY(8px) scale(0.95);"
+        : "opacity: 1; transform: translateY(0) scale(1);"
     }
   `;
   ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
@@ -207,10 +207,11 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
   professorElement.appendChild(lineBreak);
   professorElement.appendChild(ratingElement);
 
-  setTimeout(() => {
-    ratingElement.style.transform = "translateY(0) scale(1)";
+  // Trigger animation smoothly
+  requestAnimationFrame(() => {
     ratingElement.style.opacity = "1";
-  }, 10);
+    ratingElement.style.transform = "translateY(0) scale(1)";
+  });
 
   const localObserver = new MutationObserver(() => {
     const exists = professorElement.querySelector(
@@ -281,10 +282,11 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   addHoverTooltip(professorNameElement, professor);
   container.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
 
-  setTimeout(() => {
-    ratingEl.style.transform = "translateY(0) scale(1)";
+  // Trigger animation smoothly
+  requestAnimationFrame(() => {
     ratingEl.style.opacity = "1";
-  }, 10);
+    ratingEl.style.transform = "translateY(0) scale(1)";
+  });
 
   const desktopObserver = new MutationObserver(() => {
     if (!document.contains(container)) {

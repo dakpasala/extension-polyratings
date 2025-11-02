@@ -2,7 +2,7 @@
 const SCROLL_THROTTLE_MS = 150;
 const URL_CHECK_INTERVAL = 3000;
 const VISIBILITY_THRESHOLD = 0.4;
-const DEBOUNCE_DELAY = 500;
+const DEBOUNCE_DELAY = 200; // Reduced from 500ms for faster initial load
 const OBSERVER_TIMEOUT = 30000;
 
 const DISABLING_PHRASES = [

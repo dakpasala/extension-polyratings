@@ -2,7 +2,6 @@
 function processMobileProfessors() {
   const dtElements = document.querySelectorAll(SELECTORS.MOBILE_INSTRUCTOR);
   const mobileBatch = [];
-  let mobileBatchTimeout;
 
   dtElements.forEach((dt) => {
     if (dt.textContent.trim() === "Instructor:") {
@@ -24,6 +23,9 @@ function processMobileProfessors() {
           )
             return;
 
+          // Mark as processing immediately to prevent duplicate attempts
+          markProfessorProcessed(professorName, elementId);
+
           mobileBatch.push({
             element: nextElement,
             professorName,
@@ -37,6 +39,7 @@ function processMobileProfessors() {
   });
 
   if (mobileBatch.length > 0) {
+    // Add skeletons immediately without delay
     const containerToSkeleton = new Map();
     mobileBatch.forEach((item) => {
       if (!containerToSkeleton.has(item.element)) {
@@ -47,51 +50,47 @@ function processMobileProfessors() {
       }
     });
 
-    clearTimeout(mobileBatchTimeout);
-    mobileBatchTimeout = setTimeout(async () => {
-      try {
-        const results = await Promise.all(
-          mobileBatch.map((b) => b.promise.then((res) => ({ res, b })))
+    // Process immediately without debounce delay
+    Promise.all(
+      mobileBatch.map((b) => b.promise.then((res) => ({ res, b })))
+    ).then((results) => {
+      // Remove all skeletons
+      containerToSkeleton.forEach((sk) => {
+        if (sk?.parentNode) sk.parentNode.removeChild(sk);
+      });
+
+      // Inject ratings immediately
+      results.forEach(({ res, b }) => {
+        const { element, professorName, profIndex } = b;
+        if (!element || !document.contains(element)) return;
+
+        const exists = element.querySelector(
+          `[data-professor="${CSS.escape(
+            professorName
+          )}"][data-index="${profIndex}"]`
         );
-        containerToSkeleton.forEach((sk) => {
-          if (sk?.parentNode) sk.parentNode.removeChild(sk);
-        });
+        if (exists) return;
 
-        results.forEach(({ res, b }) => {
-          const { element, professorName, profIndex, elementId } = b;
-          if (!element || !document.contains(element)) return;
-
-          scheduleStableRender(element, () => {
-            const exists = element.querySelector(
-              `[data-professor="${CSS.escape(
-                professorName
-              )}"][data-index="${profIndex}"]`
-            );
-            if (exists) return;
-
-            if (res.status === "success" && res.professor) {
-              injectRatingUI(element, res.professor, profIndex);
-              markProfessorProcessed(professorName, elementId);
-            } else if (res.status === "not_found") {
-              const notFoundBadge = createNotFoundBadge(professorName);
-              notFoundBadge.className = CSS_CLASSES.RATING_ELEMENT;
-              notFoundBadge.setAttribute("data-professor", professorName);
-              notFoundBadge.setAttribute("data-index", profIndex.toString());
-              const br = document.createElement("br");
-              br.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
-              element.appendChild(br);
-              element.appendChild(notFoundBadge);
-              if (profIndex > 0) notFoundBadge.style.marginLeft = "12px";
-              markProfessorProcessed(professorName, elementId);
-            }
-          });
-        });
-      } catch {
-        containerToSkeleton.forEach((sk) => {
-          if (sk?.parentNode) sk.parentNode.removeChild(sk);
-        });
-      }
-    }, DEBOUNCE_DELAY);
+        if (res.status === "success" && res.professor) {
+          injectRatingUI(element, res.professor, profIndex);
+        } else if (res.status === "not_found") {
+          const notFoundBadge = createNotFoundBadge(professorName);
+          notFoundBadge.className = CSS_CLASSES.RATING_ELEMENT;
+          notFoundBadge.setAttribute("data-professor", professorName);
+          notFoundBadge.setAttribute("data-index", profIndex.toString());
+          const br = document.createElement("br");
+          br.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
+          element.appendChild(br);
+          element.appendChild(notFoundBadge);
+          if (profIndex > 0) notFoundBadge.style.marginLeft = "12px";
+        }
+      });
+    }).catch(() => {
+      // Remove skeletons on error
+      containerToSkeleton.forEach((sk) => {
+        if (sk?.parentNode) sk.parentNode.removeChild(sk);
+      });
+    });
   }
 
   return mobileBatch.length > 0;

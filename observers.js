@@ -73,11 +73,9 @@ function setupMutationObserver() {
       clearTimeout(debounceTimeout);
       isProcessing = true;
       debounceTimeout = setTimeout(() => {
-        // findAndLogProfessors now handles the disabled check internally
-        // so agent button still works on disabled pages
         findAndLogProfessors();
         isProcessing = false;
-      }, 150);
+      }, 100); // Reduced from 150ms to 100ms for faster response
     }
   });
 
@@ -89,7 +87,6 @@ function setupMutationObserver() {
     characterData: true,
   });
   
-  // Always call findAndLogProfessors - it handles disabled pages internally
-  // This ensures the agent button is injected even on disabled pages
+  // Initial load: process immediately without debounce
   findAndLogProfessors();
 }

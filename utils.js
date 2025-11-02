@@ -105,28 +105,13 @@ function prMessage(type, payload) {
 }
 
 function scheduleStableRender(hostElement, renderFn, attempts = 10) {
-  const tryRender = () => {
-    if (window.prScrollState?.busy) {
-      if (attempts <= 0) return;
-      setTimeout(
-        () => scheduleStableRender(hostElement, renderFn, attempts - 1),
-        80
-      );
-      return;
-    }
-    if (!isElementMostlyVisible(hostElement)) {
-      if (attempts <= 0) return;
-      setTimeout(
-        () => scheduleStableRender(hostElement, renderFn, attempts - 1),
-        120
-      );
-      return;
-    }
-    try {
-      renderFn();
-    } catch {}
-  };
-  tryRender();
+  // Simplified: just render immediately
+  // Visibility checks were causing flickering on initial load
+  try {
+    renderFn();
+  } catch (e) {
+    console.debug("PR: Render failed:", e.message);
+  }
 }
 
 function shouldDisableForClassNotes(rootDoc) {
