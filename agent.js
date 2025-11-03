@@ -246,9 +246,73 @@ function addTypingMessage(container) {
 
 function injectAskAgentButton() {
   // Always allow agent button, just check if it should be enabled
-  if (!shouldEnableAgent(document)) return;
-  if (document.querySelector(`.${CSS_CLASSES.ASK_AGENT_BTN}`)) return;
+  if (!shouldEnableAgent(document)) {
+    console.log("🚫 Agent button not enabled on this page");
+    return;
+  }
+  if (document.querySelector(`.${CSS_CLASSES.ASK_AGENT_BTN}`)) {
+    console.log("✅ Agent button already exists");
+    return;
+  }
 
+  console.log("🔍 Attempting to inject Ask Agent button...");
+
+  // First, try to find "Delete Selected" button on course selection page
+  let deleteButton = null;
+  let allButtons = document.querySelectorAll("button");
+  console.log(`📋 Found ${allButtons.length} buttons on page`);
+  
+  allButtons.forEach((button) => {
+    const text = button.textContent.trim();
+    console.log(`   Button text: "${text}"`);
+    if (text === "Delete Selected" || text.includes("Delete") || text.toLowerCase().includes("delete selected")) {
+      deleteButton = button;
+      console.log(`✅ Found matching button: "${text}"`);
+    }
+  });
+
+  if (deleteButton) {
+    // Found Delete Selected button - inject to its left
+    const buttonContainer = deleteButton.parentElement;
+    if (buttonContainer) {
+      const askAgentButton = document.createElement("button");
+      askAgentButton.className = CSS_CLASSES.ASK_AGENT_BTN;
+      askAgentButton.textContent = "Ask Agent";
+      askAgentButton.style.cssText = `
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000; border: none; border-radius: 4px;
+        padding: 8px 16px; font-size: 14px; font-weight: 600;
+        cursor: pointer; margin-right: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.2s ease; display: inline-flex;
+        align-items: center; gap: 6px;
+      `;
+      askAgentButton.addEventListener("mouseenter", () => {
+        askAgentButton.style.transform = "translateY(-1px)";
+        askAgentButton.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
+      });
+      askAgentButton.addEventListener("mouseleave", () => {
+        askAgentButton.style.transform = "translateY(0)";
+        askAgentButton.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
+      });
+      askAgentButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (document.querySelector(`.${CSS_CLASSES.AGENT_POPUP}`)) {
+          closeAgentPopup();
+        } else {
+          openAgentPopup(askAgentButton);
+        }
+      });
+      buttonContainer.insertBefore(askAgentButton, deleteButton);
+      console.log("✅ Agent button injected next to Delete Selected");
+      return;
+    }
+  }
+
+  console.log("⚠️ Delete Selected button not found, trying fallback...");
+
+  // Fallback: Look for dialog buttons (Cancel, OK, Submit)
   const buttonSelectors = [
     'button[type="button"]',
     ".MuiButton-root",

@@ -161,7 +161,10 @@ function shouldEnableAgent(rootDoc) {
       doc.documentElement?.textContent ||
       ""
     ).toLowerCase();
-    return text.includes("select sections");
+    // Enable on section selection page OR course builder page
+    return text.includes("select sections") || 
+           text.includes("delete selected") || 
+           text.includes("build schedule");
   } catch {
     return false;
   }
