@@ -51,46 +51,46 @@ function processMobileProfessors() {
     });
 
     // Process immediately without debounce delay
-    Promise.all(
-      mobileBatch.map((b) => b.promise.then((res) => ({ res, b })))
-    ).then((results) => {
-      // Remove all skeletons
-      containerToSkeleton.forEach((sk) => {
-        if (sk?.parentNode) sk.parentNode.removeChild(sk);
-      });
+    Promise.all(mobileBatch.map((b) => b.promise.then((res) => ({ res, b }))))
+      .then((results) => {
+        // Remove all skeletons
+        containerToSkeleton.forEach((sk) => {
+          if (sk?.parentNode) sk.parentNode.removeChild(sk);
+        });
 
-      // Inject ratings immediately
-      results.forEach(({ res, b }) => {
-        const { element, professorName, profIndex } = b;
-        if (!element || !document.contains(element)) return;
+        // Inject ratings immediately
+        results.forEach(({ res, b }) => {
+          const { element, professorName, profIndex } = b;
+          if (!element || !document.contains(element)) return;
 
-        const exists = element.querySelector(
-          `[data-professor="${CSS.escape(
-            professorName
-          )}"][data-index="${profIndex}"]`
-        );
-        if (exists) return;
+          const exists = element.querySelector(
+            `[data-professor="${CSS.escape(
+              professorName
+            )}"][data-index="${profIndex}"]`
+          );
+          if (exists) return;
 
-        if (res.status === "success" && res.professor) {
-          injectRatingUI(element, res.professor, profIndex);
-        } else if (res.status === "not_found") {
-          const notFoundBadge = createNotFoundBadge(professorName);
-          notFoundBadge.className = CSS_CLASSES.RATING_ELEMENT;
-          notFoundBadge.setAttribute("data-professor", professorName);
-          notFoundBadge.setAttribute("data-index", profIndex.toString());
-          const br = document.createElement("br");
-          br.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
-          element.appendChild(br);
-          element.appendChild(notFoundBadge);
-          if (profIndex > 0) notFoundBadge.style.marginLeft = "12px";
-        }
+          if (res.status === "success" && res.professor) {
+            injectRatingUI(element, res.professor, profIndex);
+          } else if (res.status === "not_found") {
+            const notFoundBadge = createNotFoundBadge(professorName);
+            notFoundBadge.className = CSS_CLASSES.RATING_ELEMENT;
+            notFoundBadge.setAttribute("data-professor", professorName);
+            notFoundBadge.setAttribute("data-index", profIndex.toString());
+            const br = document.createElement("br");
+            br.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
+            element.appendChild(br);
+            element.appendChild(notFoundBadge);
+            if (profIndex > 0) notFoundBadge.style.marginLeft = "12px";
+          }
+        });
+      })
+      .catch(() => {
+        // Remove skeletons on error
+        containerToSkeleton.forEach((sk) => {
+          if (sk?.parentNode) sk.parentNode.removeChild(sk);
+        });
       });
-    }).catch(() => {
-      // Remove skeletons on error
-      containerToSkeleton.forEach((sk) => {
-        if (sk?.parentNode) sk.parentNode.removeChild(sk);
-      });
-    });
   }
 
   return mobileBatch.length > 0;
@@ -148,26 +148,34 @@ function findAndLogProfessors() {
 
   // Check if we should skip rating injection but keep agent button
   const isDisabledPage = shouldDisableForClassNotes(document);
-  
+
   if (isDisabledPage) {
     // Remove any existing ratings and related elements on disabled pages
-    document.querySelectorAll(`.${CSS_CLASSES.RATING_ELEMENT}`).forEach((el) => {
-      el.remove();
-    });
-    // Remove any professor tooltips
-    document.querySelectorAll(`.${CSS_CLASSES.PROFESSOR_TOOLTIP}`).forEach((el) => {
-      el.remove();
-    });
-    // Remove loading skeletons
-    document.querySelectorAll(`.${CSS_CLASSES.LOADING_SKELETON}`).forEach((el) => {
-      el.remove();
-    });
-    // Remove any line breaks we added (but not the agent button)
-    document.querySelectorAll(`[${CSS_CLASSES.DATA_ATTR}="true"]`).forEach((el) => {
-      if (!el.classList.contains(CSS_CLASSES.ASK_AGENT_BTN)) {
+    document
+      .querySelectorAll(`.${CSS_CLASSES.RATING_ELEMENT}`)
+      .forEach((el) => {
         el.remove();
-      }
-    });
+      });
+    // Remove any professor tooltips
+    document
+      .querySelectorAll(`.${CSS_CLASSES.PROFESSOR_TOOLTIP}`)
+      .forEach((el) => {
+        el.remove();
+      });
+    // Remove loading skeletons
+    document
+      .querySelectorAll(`.${CSS_CLASSES.LOADING_SKELETON}`)
+      .forEach((el) => {
+        el.remove();
+      });
+    // Remove any line breaks we added (but not the agent button)
+    document
+      .querySelectorAll(`[${CSS_CLASSES.DATA_ATTR}="true"]`)
+      .forEach((el) => {
+        if (!el.classList.contains(CSS_CLASSES.ASK_AGENT_BTN)) {
+          el.remove();
+        }
+      });
   } else {
     cleanupCorruptedText(
       document.querySelector('[role="cell"]') || document.body
@@ -175,7 +183,7 @@ function findAndLogProfessors() {
     const mobileFound = processMobileProfessors();
     if (!mobileFound) processDesktopProfessors();
   }
-  
+
   // Always inject the agent button, even on disabled pages
   injectAskAgentButton();
 }

@@ -72,7 +72,11 @@ function createRatingElement(professor, options = { animate: false }) {
     cursor: pointer; white-space: nowrap; background: rgba(255, 255, 255, 0.9);
     box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-left: 0px;
     max-width: calc(100% - 4px); overflow: hidden; width: fit-content;
-    ${options.animate ? 'opacity: 0; transform: translateY(8px) scale(0.95);' : 'opacity: 1; transform: translateY(0) scale(1);'}
+    ${
+      options.animate
+        ? "opacity: 0; transform: translateY(8px) scale(0.95);"
+        : "opacity: 1; transform: translateY(0) scale(1);"
+    }
   `;
   ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
   ratingContainer.addEventListener("click", (e) => e.stopPropagation());
@@ -125,7 +129,7 @@ function createRatingElement(professor, options = { animate: false }) {
 
   ratingContainer.appendChild(ratingText);
   ratingContainer.appendChild(stars);
-  
+
   // Trigger animation if needed
   if (options.animate) {
     setTimeout(() => {
@@ -133,7 +137,7 @@ function createRatingElement(professor, options = { animate: false }) {
       ratingContainer.style.transform = "translateY(0) scale(1)";
     }, 10);
   }
-  
+
   return ratingContainer;
 }
 
@@ -244,7 +248,7 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
 function injectDesktopRatingUI(professorNameElement, professor) {
   // Safety check: don't inject on disabled pages
   if (shouldDisableForClassNotes(document)) return;
-  
+
   cleanupCorruptedText(professorNameElement);
   const existingRatings = professorNameElement.querySelectorAll(
     `.${CSS_CLASSES.RATING_ELEMENT}, .pr-rating-container`
@@ -294,7 +298,7 @@ function injectDesktopRatingUI(professorNameElement, professor) {
 function injectDesktopNotFoundUI(professorNameElement, professorName) {
   // Safety check: don't inject on disabled pages
   if (shouldDisableForClassNotes(document)) return;
-  
+
   cleanupCorruptedText(professorNameElement);
   const existingRatings = professorNameElement.querySelectorAll(
     `.${CSS_CLASSES.RATING_ELEMENT}, .pr-rating-container`

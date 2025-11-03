@@ -18,8 +18,8 @@ const getActiveUrl = () => {
 let currentUrl = window.location.href;
 
 // Safely initialize after DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
     try {
       currentUrl = getActiveUrl();
     } catch (e) {
@@ -67,8 +67,8 @@ const setupIframeListener = () => {
   }
 };
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupIframeListener);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupIframeListener);
 } else {
   setupIframeListener();
 }

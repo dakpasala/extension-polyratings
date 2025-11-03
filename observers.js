@@ -52,7 +52,7 @@ function setupMutationObserver() {
   // Prevent multiple observers from being set up
   if (window.prObserverActive) return;
   window.prObserverActive = true;
-  
+
   let debounceTimeout;
   let isProcessing = false;
 
@@ -66,7 +66,7 @@ function setupMutationObserver() {
     });
 
     if (onlyOurChanges) return;
-    
+
     if (isProcessing) return;
 
     if (hasRelevantChanges(mutations)) {
@@ -86,7 +86,7 @@ function setupMutationObserver() {
     attributes: true,
     characterData: true,
   });
-  
+
   // Initial load: process immediately without debounce
   findAndLogProfessors();
 }

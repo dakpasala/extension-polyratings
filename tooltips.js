@@ -19,52 +19,54 @@ function initTooltipState() {
 
 function addHoverTooltip(element, professor) {
   initTooltipState();
-  
+
   element.addEventListener("mouseenter", () => {
     window.PRTooltipState.isHovering = true;
-    
+
     if (window.PRTooltipState.hideTimeout) {
       clearTimeout(window.PRTooltipState.hideTimeout);
       window.PRTooltipState.hideTimeout = null;
     }
-    
+
     if (window.PRTooltipState.showTimeout) {
       clearTimeout(window.PRTooltipState.showTimeout);
       window.PRTooltipState.showTimeout = null;
     }
-    
+
     if (
       window.PRTooltipState.owner &&
       window.PRTooltipState.owner !== element
     ) {
       hideProfessorTooltip(window.PRTooltipState.owner, true);
     }
-    
+
     window.PRTooltipState.owner = element;
-    
+
     window.PRTooltipState.showTimeout = setTimeout(() => {
-      if (window.PRTooltipState.isHovering && 
-          window.PRTooltipState.owner === element &&
-          document.contains(element)) {
+      if (
+        window.PRTooltipState.isHovering &&
+        window.PRTooltipState.owner === element &&
+        document.contains(element)
+      ) {
         showProfessorTooltip(element, professor);
       }
       window.PRTooltipState.showTimeout = null;
     }, 400);
   });
-  
+
   element.addEventListener("mouseleave", () => {
     window.PRTooltipState.isHovering = false;
-    
+
     if (window.PRTooltipState.showTimeout) {
       clearTimeout(window.PRTooltipState.showTimeout);
       window.PRTooltipState.showTimeout = null;
     }
-    
+
     if (window.PRTooltipState.hideTimeout) {
       clearTimeout(window.PRTooltipState.hideTimeout);
       window.PRTooltipState.hideTimeout = null;
     }
-    
+
     window.PRTooltipState.hideTimeout = setTimeout(() => {
       hideProfessorTooltip(element, false);
       window.PRTooltipState.hideTimeout = null;
@@ -75,12 +77,12 @@ function addHoverTooltip(element, professor) {
 function showProfessorTooltip(element, professor) {
   // Clean up any existing tooltip first
   hideProfessorTooltip(null, true);
-  
+
   // Verify element still exists and is in the DOM
   if (!element || !document.contains(element)) {
     return;
   }
-  
+
   const tooltip = document.createElement("div");
   tooltip.className = CSS_CLASSES.PROFESSOR_TOOLTIP;
   tooltip.style.cssText = `
@@ -94,7 +96,7 @@ function showProfessorTooltip(element, professor) {
     visibility: hidden;
   `;
   tooltip.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
-  
+
   // Store reference to current tooltip
   window.PRTooltipState.currentTooltip = tooltip;
 
@@ -103,14 +105,17 @@ function showProfessorTooltip(element, professor) {
     <div style="font-weight: 700; margin-bottom: 8px; font-size: 16px;">${professor.name}</div>
     <div style="line-height: 1.4; font-size: 13px; color: #666;">Loading...</div>
   `;
-  
+
   document.body.appendChild(tooltip);
   positionTooltip(tooltip, element);
-  
+
   // Show immediately without RAF complications
   tooltip.style.visibility = "visible";
   setTimeout(() => {
-    if (tooltip.parentNode && window.PRTooltipState.currentTooltip === tooltip) {
+    if (
+      tooltip.parentNode &&
+      window.PRTooltipState.currentTooltip === tooltip
+    ) {
       tooltip.style.opacity = "1";
       tooltip.style.transform = "scale(1) translateY(0)";
     }
@@ -121,10 +126,13 @@ function showProfessorTooltip(element, professor) {
     { type: "getGeminiTooltipAnalysis", profName: professor.name },
     (response) => {
       // Check if tooltip still exists and is the current one
-      if (!tooltip.parentNode || window.PRTooltipState.currentTooltip !== tooltip) {
+      if (
+        !tooltip.parentNode ||
+        window.PRTooltipState.currentTooltip !== tooltip
+      ) {
         return;
       }
-      
+
       if (response.status === "success" && response.professor) {
         const prof = response.professor;
         tooltip.innerHTML = `
@@ -159,7 +167,7 @@ function showProfessorTooltip(element, professor) {
         </div>
       `;
       }
-      
+
       // Re-position after content update (size may have changed)
       positionTooltip(tooltip, element);
     }
@@ -183,7 +191,7 @@ function hideProfessorTooltip(owner = null, immediate = false) {
   const existingTooltip = document.querySelector(
     `.${CSS_CLASSES.PROFESSOR_TOOLTIP}`
   );
-  
+
   if (existingTooltip) {
     if (!owner || window.PRTooltipState?.owner === owner) {
       const removeNow = () => {
@@ -199,7 +207,7 @@ function hideProfessorTooltip(owner = null, immediate = false) {
           }
         }
       };
-      
+
       if (immediate) {
         removeNow();
       } else {
