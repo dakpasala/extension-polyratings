@@ -261,11 +261,15 @@ function injectAskAgentButton() {
   let deleteButton = null;
   let allButtons = document.querySelectorAll("button");
   console.log(`📋 Found ${allButtons.length} buttons on page`);
-  
+
   allButtons.forEach((button) => {
     const text = button.textContent.trim();
     console.log(`   Button text: "${text}"`);
-    if (text === "Delete Selected" || text.includes("Delete") || text.toLowerCase().includes("delete selected")) {
+    if (
+      text === "Delete Selected" ||
+      text.includes("Delete") ||
+      text.toLowerCase().includes("delete selected")
+    ) {
       deleteButton = button;
       console.log(`✅ Found matching button: "${text}"`);
     }
