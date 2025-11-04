@@ -13,10 +13,10 @@
         "constants.js",
         "utils.js",
         "styles.js",
-        "rating-ui.js",
         "tooltips.js",
-        "professor-processor.js",
+        "rating-ui.js",
         "agent.js",
+        "professor-processor.js",
         "observers.js",
         "content.js"
       ],

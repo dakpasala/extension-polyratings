@@ -63,6 +63,9 @@ function processMobileProfessors() {
           const { element, professorName, profIndex } = b;
           if (!element || !document.contains(element)) return;
 
+          // Skip if already processing or rating exists
+          if (element.hasAttribute("data-pr-processing")) return;
+
           const exists = element.querySelector(
             `[data-professor="${CSS.escape(
               professorName
@@ -98,7 +101,13 @@ function processMobileProfessors() {
 
 function processDesktopProfessors() {
   const mainGridContainers = document.querySelectorAll(SELECTORS.DESKTOP_GRID);
-  if (mainGridContainers.length === 0) return;
+  if (mainGridContainers.length === 0) {
+    console.log("PR: No desktop grid containers found");
+    return false;
+  }
+
+  console.log(`PR: Found ${mainGridContainers.length} desktop grid containers`);
+  let processedCount = 0;
 
   mainGridContainers.forEach((container) => {
     const detailsGridItems = container.querySelectorAll(
@@ -125,65 +134,109 @@ function processDesktopProfessors() {
       );
       if (existingRating) return;
 
+      // Prevent race condition: skip if already processing
+      if (professorNameElement.hasAttribute("data-pr-processing")) {
+        console.log(`PR: Skipping ${professorName} - already processing`);
+        return;
+      }
+
+      // Check if already processed using the tracking system
+      if (isProfessorProcessed(professorName, elementId)) {
+        console.log(`PR: Skipping ${professorName} - already tracked`);
+        return;
+      }
+
+      // Mark as processing immediately
+      markProfessorProcessed(professorName, elementId);
+      processedCount++;
+      console.log(`PR: Processing desktop professor: ${professorName}`);
+
       chrome.runtime.sendMessage(
         { type: "getProfRating", profName: professorName },
         (response) => {
+          if (!document.contains(professorNameElement)) {
+            console.log(`PR: Element removed for ${professorName}`);
+            return;
+          }
+
           if (response.status === "success" && response.professor) {
+            console.log(`PR: Injecting rating for ${professorName}`);
             injectDesktopRatingUI(professorNameElement, response.professor);
           } else if (response.status === "not_found") {
+            console.log(`PR: Professor not found: ${professorName}`);
             injectDesktopNotFoundUI(professorNameElement, professorName);
           }
         }
       );
     });
   });
+
+  console.log(`PR: Processed ${processedCount} desktop professors`);
+  return processedCount > 0;
 }
 
 function findAndLogProfessors() {
-  if (window.processingProfessors) return;
-  window.processingProfessors = true;
-  setTimeout(() => {
-    window.processingProfessors = false;
-  }, 50);
-
-  // Check if we should skip rating injection but keep agent button
-  const isDisabledPage = shouldDisableForClassNotes(document);
-
-  if (isDisabledPage) {
-    // Remove any existing ratings and related elements on disabled pages
-    document
-      .querySelectorAll(`.${CSS_CLASSES.RATING_ELEMENT}`)
-      .forEach((el) => {
-        el.remove();
-      });
-    // Remove any professor tooltips
-    document
-      .querySelectorAll(`.${CSS_CLASSES.PROFESSOR_TOOLTIP}`)
-      .forEach((el) => {
-        el.remove();
-      });
-    // Remove loading skeletons
-    document
-      .querySelectorAll(`.${CSS_CLASSES.LOADING_SKELETON}`)
-      .forEach((el) => {
-        el.remove();
-      });
-    // Remove any line breaks we added (but not the agent button)
-    document
-      .querySelectorAll(`[${CSS_CLASSES.DATA_ATTR}="true"]`)
-      .forEach((el) => {
-        if (!el.classList.contains(CSS_CLASSES.ASK_AGENT_BTN)) {
-          el.remove();
-        }
-      });
-  } else {
-    cleanupCorruptedText(
-      document.querySelector('[role="cell"]') || document.body
-    );
-    const mobileFound = processMobileProfessors();
-    if (!mobileFound) processDesktopProfessors();
+  // Prevent race condition: return if already processing
+  if (window.processingProfessors) {
+    console.log("PR: Skipping - already processing");
+    return;
   }
+  window.processingProfessors = true;
+  console.log("PR: Starting professor processing");
 
-  // Always inject the agent button, even on disabled pages
-  injectAskAgentButton();
+  // Simple timeout-based lock release (not blocking async operations)
+  const releaseLock = () => {
+    setTimeout(() => {
+      window.processingProfessors = false;
+      console.log("PR: Processing lock released");
+    }, 100);
+  };
+
+  try {
+    // Check if we should skip rating injection but keep agent button
+    const isDisabledPage = shouldDisableForClassNotes(document);
+
+    if (isDisabledPage) {
+      // Remove any existing ratings and related elements on disabled pages
+      document
+        .querySelectorAll(`.${CSS_CLASSES.RATING_ELEMENT}`)
+        .forEach((el) => {
+          el.remove();
+        });
+      // Remove any professor tooltips
+      document
+        .querySelectorAll(`.${CSS_CLASSES.PROFESSOR_TOOLTIP}`)
+        .forEach((el) => {
+          el.remove();
+        });
+      // Remove loading skeletons
+      document
+        .querySelectorAll(`.${CSS_CLASSES.LOADING_SKELETON}`)
+        .forEach((el) => {
+          el.remove();
+        });
+      // Remove any line breaks we added (but not the agent button)
+      document
+        .querySelectorAll(`[${CSS_CLASSES.DATA_ATTR}="true"]`)
+        .forEach((el) => {
+          if (!el.classList.contains(CSS_CLASSES.ASK_AGENT_BTN)) {
+            el.remove();
+          }
+        });
+    } else {
+      cleanupCorruptedText(
+        document.querySelector('[role="cell"]') || document.body
+      );
+      const mobileFound = processMobileProfessors();
+      if (!mobileFound) processDesktopProfessors();
+      console.log("PR: Processed professors - mobile:", mobileFound);
+    }
+
+    // Always inject the agent button, even on disabled pages
+    injectAskAgentButton();
+  } catch (error) {
+    console.error("PR: Error processing professors:", error);
+  } finally {
+    releaseLock();
+  }
 }

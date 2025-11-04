@@ -191,7 +191,7 @@ function cleanupCorruptedText(element) {
 function injectRatingUI(professorElement, professor, profIndex = 0) {
   // Safety check: don't inject on disabled pages
   if (shouldDisableForClassNotes(document)) return;
-  
+
   const professorName = professor.name;
   const existingRatings = professorElement.querySelectorAll(
     `[data-professor="${professorName}"][data-index="${profIndex}"]`
@@ -207,42 +207,24 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
 
   const lineBreak = document.createElement("br");
   lineBreak.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
+
+  // Mark professor as being processed to prevent race conditions
+  professorElement.setAttribute("data-pr-processing", "true");
+
   professorElement.appendChild(lineBreak);
   professorElement.appendChild(ratingElement);
 
-  const localObserver = new MutationObserver(() => {
-    const exists = professorElement.querySelector(
-      `[data-professor="${CSS.escape(
-        professorName
-      )}"][data-index="${profIndex}"]`
-    );
-    if (!exists) {
+  // Trigger animation after a frame
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      ratingElement.style.opacity = "1";
+      ratingElement.style.transform = "translateY(0) scale(1)";
+      // Remove processing flag after animation completes
       setTimeout(() => {
-        if (
-          professorElement.querySelector(
-            `[data-professor="${CSS.escape(
-              professorName
-            )}"][data-index="${profIndex}"]`
-          )
-        )
-          return;
-        if (!isElementMostlyVisible(professorElement)) return;
-        const reInjected = createRatingElement(professor, { animate: false });
-        reInjected.setAttribute("data-professor", professorName);
-        reInjected.setAttribute("data-index", profIndex.toString());
-        reInjected.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
-        reInjected.setAttribute("data-pr-initialized", "true");
-        const br = document.createElement("br");
-        br.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
-        professorElement.appendChild(br);
-        professorElement.appendChild(reInjected);
-      }, 200);
-    }
+        professorElement.removeAttribute("data-pr-processing");
+      }, 350);
+    });
   });
-  try {
-    localObserver.observe(professorElement, { childList: true });
-    setTimeout(() => localObserver.disconnect(), OBSERVER_TIMEOUT);
-  } catch {}
 }
 
 function injectDesktopRatingUI(professorNameElement, professor) {
