@@ -257,7 +257,8 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.43; margin-bottom: 2px;";
 
   const ratingContainer = document.createElement("div");
-  ratingContainer.style.cssText = "width: 100%; overflow: hidden; margin-top: 2px;";
+  ratingContainer.style.cssText =
+    "width: 100%; overflow: hidden; margin-top: 2px;";
   ratingContainer.appendChild(ratingEl);
 
   container.appendChild(nameSpan);
@@ -266,10 +267,10 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   professorNameElement.appendChild(container);
   addHoverTooltip(professorNameElement, professor);
   container.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
-  
+
   // Mark as processing to prevent re-injection
   professorNameElement.setAttribute("data-pr-processing", "true");
-  
+
   // Trigger animation after a frame
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
