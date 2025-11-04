@@ -141,15 +141,21 @@ function createRatingElement(professor, options = { animate: false }) {
   return ratingContainer;
 }
 
-function createNotFoundBadge(professorName) {
+function createNotFoundBadge(professorName, options = { animate: false }) {
   const notFoundContainer = document.createElement("span");
   notFoundContainer.style.cssText = `
     display: inline-flex; align-items: center; padding: 3px 8px;
     background: rgba(255, 255, 255, 0.9); border: 1px solid #7F8A9E;
     border-radius: 12px; font-size: 12px; color: #090d19; text-decoration: none;
-    transition: all 0.2s ease; cursor: pointer; white-space: nowrap;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
+    cursor: pointer; white-space: nowrap;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-left: 0px;
     max-width: calc(100% - 4px); overflow: hidden; width: fit-content; margin-top: 4px;
+    ${
+      options.animate
+        ? "opacity: 0; transform: translateY(8px) scale(0.95);"
+        : "opacity: 1; transform: translateY(0) scale(1);"
+    }
   `;
   const notFoundText = document.createElement("span");
   notFoundText.textContent = "Add Prof";
@@ -243,15 +249,15 @@ function injectDesktopRatingUI(professorNameElement, professor) {
 
   const container = document.createElement("div");
   container.style.cssText =
-    "display: flex; flex-direction: column; width: 100%; align-items: flex-start; gap: 2px;";
+    "display: flex; flex-direction: column; width: 100%; align-items: flex-start;";
 
   const nameSpan = document.createElement("div");
   nameSpan.textContent = originalText;
   nameSpan.style.cssText =
-    "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;";
+    "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.43; margin-bottom: 2px;";
 
   const ratingContainer = document.createElement("div");
-  ratingContainer.style.cssText = "width: 100%; overflow: hidden;";
+  ratingContainer.style.cssText = "width: 100%; overflow: hidden; margin-top: 2px;";
   ratingContainer.appendChild(ratingEl);
 
   container.appendChild(nameSpan);
@@ -260,21 +266,21 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   professorNameElement.appendChild(container);
   addHoverTooltip(professorNameElement, professor);
   container.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
-
-  const desktopObserver = new MutationObserver(() => {
-    if (!document.contains(container)) {
+  
+  // Mark as processing to prevent re-injection
+  professorNameElement.setAttribute("data-pr-processing", "true");
+  
+  // Trigger animation after a frame
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      ratingEl.style.opacity = "1";
+      ratingEl.style.transform = "translateY(0) scale(1)";
+      // Remove processing flag after animation completes
       setTimeout(() => {
-        if (document.contains(container)) return;
-        if (!isElementMostlyVisible(professorNameElement)) return;
-        desktopObserver.disconnect();
-        injectDesktopRatingUI(professorNameElement, professor);
-      }, 200);
-    }
+        professorNameElement.removeAttribute("data-pr-processing");
+      }, 350);
+    });
   });
-  try {
-    desktopObserver.observe(professorNameElement, { childList: true });
-    setTimeout(() => desktopObserver.disconnect(), OBSERVER_TIMEOUT);
-  } catch {}
 }
 
 function injectDesktopNotFoundUI(professorNameElement, professorName) {
@@ -288,20 +294,21 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
   existingRatings.forEach((r) => r.remove());
 
   injectStyles();
-  const notFoundEl = createNotFoundBadge(professorName);
+  const notFoundEl = createNotFoundBadge(professorName, { animate: true });
   const originalText = professorNameElement.textContent.trim();
 
   const container = document.createElement("div");
   container.style.cssText =
-    "display: flex; flex-direction: column; width: 100%; align-items: flex-start; gap: 2px;";
+    "display: flex; flex-direction: column; width: 100%; align-items: flex-start;";
 
   const nameSpan = document.createElement("div");
   nameSpan.textContent = originalText;
   nameSpan.style.cssText =
-    "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;";
+    "white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.43; margin-bottom: 2px;";
 
   const badgeContainer = document.createElement("div");
-  badgeContainer.style.cssText = "width: 100%; overflow: hidden;";
+  badgeContainer.style.cssText =
+    "width: 100%; overflow: hidden; margin-top: 2px;";
   badgeContainer.appendChild(notFoundEl);
 
   container.appendChild(nameSpan);
@@ -311,14 +318,18 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
   addHoverTooltip(professorNameElement, { name: professorName, rating: 0 });
   container.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
 
-  const checkInterval = setInterval(() => {
-    if (!document.contains(container)) {
-      clearInterval(checkInterval);
-      setTimeout(
-        () => injectDesktopNotFoundUI(professorNameElement, professorName),
-        100
-      );
-    }
-  }, 1000);
-  setTimeout(() => clearInterval(checkInterval), OBSERVER_TIMEOUT);
+  // Mark as processing to prevent re-injection
+  professorNameElement.setAttribute("data-pr-processing", "true");
+
+  // Trigger animation after a frame
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      notFoundEl.style.opacity = "1";
+      notFoundEl.style.transform = "translateY(0) scale(1)";
+      // Remove processing flag after animation completes
+      setTimeout(() => {
+        professorNameElement.removeAttribute("data-pr-processing");
+      }, 350);
+    });
+  });
 }

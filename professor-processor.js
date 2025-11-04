@@ -76,7 +76,9 @@ function processMobileProfessors() {
           if (res.status === "success" && res.professor) {
             injectRatingUI(element, res.professor, profIndex);
           } else if (res.status === "not_found") {
-            const notFoundBadge = createNotFoundBadge(professorName);
+            const notFoundBadge = createNotFoundBadge(professorName, {
+              animate: true,
+            });
             notFoundBadge.className = CSS_CLASSES.RATING_ELEMENT;
             notFoundBadge.setAttribute("data-professor", professorName);
             notFoundBadge.setAttribute("data-index", profIndex.toString());
@@ -85,6 +87,14 @@ function processMobileProfessors() {
             element.appendChild(br);
             element.appendChild(notFoundBadge);
             if (profIndex > 0) notFoundBadge.style.marginLeft = "12px";
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                notFoundBadge.style.opacity = "1";
+                notFoundBadge.style.transform = "translateY(0) scale(1)";
+              });
+            });
           }
         });
       })
