@@ -1,4 +1,10 @@
 console.log("PolyRatings Enhancer background script is active.");
+console.log("🚀 Background script loaded at:", new Date().toISOString());
+console.log("🚀 Chrome runtime available:", typeof chrome !== "undefined");
+console.log(
+  "🚀 Chrome runtime onMessage available:",
+  typeof chrome.runtime.onMessage !== "undefined"
+);
 
 // Cache for professor data
 let professorCache = null;
@@ -6,318 +12,454 @@ let isFetching = false;
 
 // Sample data for testing (fallback)
 const sampleProfessors = [
-    {
-        "name": "John Smith",
-        "rating": 4.2,
-        "link": "https://polyratings.dev/professor/john-smith"
-    },
-    {
-        "name": "Jane Doe",
-        "rating": 3.8,
-        "link": "https://polyratings.dev/professor/jane-doe"
-    },
-    {
-        "name": "Bob Johnson",
-        "rating": 4.5,
-        "link": "https://polyratings.dev/professor/bob-johnson"
-    }
+  {
+    name: "John Smith",
+    rating: 4.2,
+    link: "https://polyratings.dev/professor/john-smith",
+  },
+  {
+    name: "Jane Doe",
+    rating: 3.8,
+    link: "https://polyratings.dev/professor/jane-doe",
+  },
+  {
+    name: "Bob Johnson",
+    rating: 4.5,
+    link: "https://polyratings.dev/professor/bob-johnson",
+  },
 ];
 
 // Function to parse CSV data
 function parseCSV(csvText) {
-    const lines = csvText.split('\n');
-    const headers = lines[0].split(',');
-    const data = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (line) {
-            const values = line.split(',');
-            const row = {};
-            headers.forEach((header, index) => {
-                row[header] = values[index] || '';
-            });
-            data.push(row);
-        }
+  const lines = csvText.split("\n");
+  const headers = lines[0].split(",");
+  const data = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line) {
+      const values = line.split(",");
+      const row = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || "";
+      });
+      data.push(row);
     }
-    
-    return data;
+  }
+
+  return data;
 }
 
-// Function to convert CSV data to the expected format
-function convertCSVToProfessorData(csvData) {
-    return csvData.map(row => ({
-        name: row.fullName,
-        rating: parseFloat(row.overallRating) || 0,
-        numEvals: parseInt(row.numEvals) || 0,
-        link: `https://polyratings.dev/professor/${row.id}`
-    }));
-}
+// Function to convert CSV data to expected format
+function convertCSVToProfessorData(ratingsData, commentsData) {
+  const professorMap = new Map();
 
-// Function to fetch professor data from GitHub CSV
-async function fetchProfessorData() {
-    if (isFetching) {
-        console.log("⏳ Already fetching professor data, waiting...");
-        return;
-    }
-    
-    if (professorCache) {
-        console.log("✅ Using cached professor data");
-        return professorCache;
-    }
-    
-    console.log("🌐 Fetching professor data from GitHub CSV...");
-    isFetching = true;
-    
-    try {
-        console.log("📡 Making request to GitHub CSV...");
-        const response = await fetch('https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professors_data.csv');
-        
-        console.log("📊 Response status:", response.status);
-        console.log("📊 Response headers:", response.headers);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const csvText = await response.text();
-        console.log("📋 Raw CSV data received, length:", csvText.length);
-        
-        // Parse CSV data
-        const csvData = parseCSV(csvText);
-        console.log("📋 Parsed CSV data:", csvData.slice(0, 3)); // Log first 3 rows
-        
-        // Convert to expected format
-        const data = convertCSVToProfessorData(csvData);
-        console.log("📋 Converted data:", data.slice(0, 3)); // Log first 3 converted rows
-        
-        if (!Array.isArray(data)) {
-            throw new Error("Data is not an array");
-        }
-        
-        professorCache = data;
-        console.log(`✅ Successfully fetched ${data.length} professors from GitHub CSV`);
-        
-        // Also store in chrome.storage for persistence
-        chrome.storage.local.set({ 'professorData': data }, () => {
-            console.log("💾 Professor data saved to chrome.storage");
-        });
-        
-        return data;
-    } catch (error) {
-        console.log("❌ Error fetching professor data from GitHub CSV:", error);
-        console.log("🔄 Trying to load from chrome.storage as fallback...");
-        
-        // Try to load from chrome.storage as fallback
-        try {
-            const result = await chrome.storage.local.get(['professorData']);
-            if (result.professorData && Array.isArray(result.professorData)) {
-                professorCache = result.professorData;
-                console.log(`✅ Loaded ${result.professorData.length} professors from storage`);
-                return result.professorData;
-            }
-        } catch (storageError) {
-            console.log("❌ Error loading from storage:", storageError);
-        }
-        
-        // Use sample data as final fallback
-        console.log("🔄 Using sample data as final fallback...");
-        professorCache = sampleProfessors;
-        console.log(`✅ Using ${sampleProfessors.length} sample professors`);
-        return sampleProfessors;
-    } finally {
-        isFetching = false;
-    }
-}
+  ratingsData.forEach((row) => {
+    const profName = row.fullName;
+    if (!profName) return;
 
-// Function to pre-load professor data when Schedule Builder is accessed
-function preloadProfessorData() {
-    console.log("🚀 Pre-loading professor data for Schedule Builder...");
-    fetchProfessorData();
-}
-
-// Function to search for a professor in the cached data
-function findProfessor(profName) {
-    if (!professorCache) {
-        console.log("❌ No professor cache available");
-        return null;
-    }
-    
-    console.log(`🔍 Searching for professor: "${profName}"`);
-    console.log(`📋 Available professors:`, professorCache.map(p => p.name));
-    
-    // Normalize the professor name for better matching
-    const normalizedSearchName = profName.toLowerCase().trim();
-    
-    // Search through the cached data
-    for (const professor of professorCache) {
-        const normalizedCacheName = professor.name.toLowerCase().trim();
-        
-        console.log(`🔍 Comparing: "${normalizedSearchName}" with "${normalizedCacheName}"`);
-        
-        // 1. Exact match
-        if (normalizedCacheName === normalizedSearchName) {
-            console.log(`✅ Exact match found: ${professor.name}`);
-            return professor;
-        }
-        
-        // 2. Handle format difference: "First Last" vs "Last, First"
-        // Convert "First Last" to "Last, First" format for comparison
-        const nameParts = normalizedSearchName.split(' ');
-        if (nameParts.length >= 2) {
-            const firstName = nameParts[0];
-            const lastName = nameParts.slice(1).join(' '); // Handle multi-word last names
-            const convertedFormat = `${lastName}, ${firstName}`;
-            
-            console.log(`🔄 Converted format: "${normalizedSearchName}" -> "${convertedFormat}"`);
-            
-            if (normalizedCacheName === convertedFormat) {
-                console.log(`✅ Format-converted match found: ${professor.name}`);
-                return professor;
-            }
-        }
-        
-        // 3. Also try converting database format "Last, First" to "First Last" for comparison
-        if (normalizedCacheName.includes(',')) {
-            const dbNameParts = normalizedCacheName.split(',');
-            if (dbNameParts.length >= 2) {
-                const dbLastName = dbNameParts[0].trim();
-                const dbFirstName = dbNameParts[1].trim();
-                const convertedDbFormat = `${dbFirstName} ${dbLastName}`;
-                
-                console.log(`🔄 Converted DB format: "${normalizedCacheName}" -> "${convertedDbFormat}"`);
-                
-                if (normalizedSearchName === convertedDbFormat) {
-                    console.log(`✅ DB-format-converted match found: ${professor.name}`);
-                    return professor;
-                }
-            }
-        }
-        
-        // 4. Try treating last word as last name (for multi-word last names)
-        if (nameParts.length >= 2) {
-            const lastWord = nameParts[nameParts.length - 1];
-            const firstWords = nameParts.slice(0, -1).join(' ');
-            const lastWordAsLastName = `${lastWord}, ${firstWords}`;
-            
-            console.log(`🔄 Last-word-as-lastname: "${normalizedSearchName}" -> "${lastWordAsLastName}"`);
-            
-            if (normalizedCacheName === lastWordAsLastName) {
-                console.log(`✅ Last-word-as-lastname match found: ${professor.name}`);
-                return professor;
-            }
-        }
-        
-        // 5. Try treating first word as first name (reverse of above)
-        if (normalizedCacheName.includes(',')) {
-            const dbNameParts = normalizedCacheName.split(',');
-            if (dbNameParts.length >= 2) {
-                const dbLastName = dbNameParts[0].trim();
-                const dbFirstName = dbNameParts[1].trim();
-                
-                // Try treating the last word of the last name as the actual last name
-                const dbLastNameParts = dbLastName.split(' ');
-                if (dbLastNameParts.length >= 2) {
-                    const actualLastName = dbLastNameParts[dbLastNameParts.length - 1];
-                    const middlePart = dbLastNameParts.slice(0, -1).join(' ');
-                    const reconstructedFormat = `${dbFirstName} ${middlePart} ${actualLastName}`;
-                    
-                    console.log(`🔄 Reconstructed format: "${normalizedCacheName}" -> "${reconstructedFormat}"`);
-                    
-                    if (normalizedSearchName === reconstructedFormat) {
-                        console.log(`✅ Reconstructed format match found: ${professor.name}`);
-                        return professor;
-                    }
-                }
-            }
-        }
-        
-        // 6. Partial match (in case of middle names, titles, etc.)
-        if (normalizedCacheName.includes(normalizedSearchName) || 
-            normalizedSearchName.includes(normalizedCacheName)) {
-            console.log(`✅ Partial match found: ${professor.name}`);
-            return professor;
-        }
-        
-        // 7. Try partial matching with format conversion
-        if (nameParts.length >= 2) {
-            const firstName = nameParts[0];
-            const lastName = nameParts.slice(1).join(' ');
-            const convertedFormat = `${lastName}, ${firstName}`;
-            
-            if (normalizedCacheName.includes(convertedFormat) || 
-                convertedFormat.includes(normalizedCacheName)) {
-                console.log(`✅ Partial format-converted match found: ${professor.name}`);
-                return professor;
-            }
-        }
-    }
-    
-    console.log(`❌ No match found for: "${profName}"`);
-    return null;
-}
-
-// Message listener for communication with content scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log("📨 Received message in background script:", message);
-    
-    if (message.type === "getProfRating") {
-        console.log("👨‍🏫 Processing professor rating request for:", message.profName);
-        
-        // Create async function to handle the request
-        (async () => {
-            try {
-                // Ensure we have the professor data
-                const data = await fetchProfessorData();
-                
-                if (!data) {
-                    console.log("❌ No professor data available");
-                    sendResponse({
-                        status: "error",
-                        message: "No professor data available"
-                    });
-                    return;
-                }
-                
-                // Search for the professor
-                const professor = findProfessor(message.profName);
-                
-                if (professor) {
-                    console.log("✅ Found professor data:", professor);
-                    sendResponse({
-                        status: "success",
-                        professor: professor
-                    });
-                } else {
-                    console.log("❌ Professor not found in database");
-                    sendResponse({
-                        status: "not_found",
-                        message: "Professor not found in database"
-                    });
-                }
-            } catch (error) {
-                console.log("❌ Error processing professor rating request:", error);
-                sendResponse({
-                    status: "error",
-                    message: "Failed to fetch professor rating"
-                });
-            }
-        })();
-        
-        // Return true to indicate we will send a response asynchronously
-        return true;
-    }
-    
-    if (message.type === "preloadData") {
-        console.log("🚀 Pre-loading professor data...");
-        preloadProfessorData();
-        sendResponse({ status: "preloading" });
-        return true;
-    }
-    
-    console.log("❌ Unknown message type:", message.type);
-    sendResponse({
-        status: "error",
-        message: "Unknown message type"
+    professorMap.set(profName, {
+      name: profName,
+      rating: parseFloat(row.overallRating) || 0,
+      numEvals: parseInt(row.numEvals) || 0,
+      link: `https://polyratings.dev/professor/${row.id}`,
+      clarity: parseFloat(row.materialClear) || 0,
+      helpfulness: parseFloat(row.studentDifficulties) || 0,
+      comments: "",
+      department: row.department || "",
+      courses: row.courses || "",
+      allComments: [],
+      gradeLevels: [],
+      grades: [],
     });
-}); 
+  });
+
+  commentsData.forEach((row) => {
+    const profName = row.professor_name;
+    if (!profName) return;
+
+    if (!professorMap.has(profName)) {
+      professorMap.set(profName, {
+        name: profName,
+        rating: 0,
+        numEvals: 0,
+        link: `https://polyratings.dev/professor/${
+          row.professor_id || profName.toLowerCase().replace(/\s+/g, "-")
+        }`,
+        clarity: 0,
+        helpfulness: 0,
+        comments: "",
+        department: row.professor_department || "",
+        courses: row.course_code || "",
+        allComments: [],
+        gradeLevels: [],
+        grades: [],
+      });
+    }
+
+    const prof = professorMap.get(profName);
+    const comment = row.rating_text || "";
+    if (comment.trim()) prof.allComments.push(comment.trim());
+    if (row.grade_level && row.grade_level !== "N/A")
+      prof.gradeLevels.push(row.grade_level);
+    if (row.grade && row.grade !== "N/A") prof.grades.push(row.grade);
+  });
+
+  return Array.from(professorMap.values()).map((prof) => {
+    prof.comments = prof.allComments.join(" | ").substring(0, 2000);
+    delete prof.allComments;
+    delete prof.gradeLevels;
+    delete prof.grades;
+    return prof;
+  });
+}
+
+// Fetch professor data from CSVs
+async function fetchProfessorData() {
+  console.log("🚀 fetchProfessorData() called!");
+  if (professorCache) {
+    console.log("✅ Using cached professor data");
+    return professorCache;
+  }
+
+  // If already fetching, wait and retry a few times
+  if (isFetching) {
+    console.log("⏳ Already fetching, waiting for completion...");
+    for (let i = 0; i < 50; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      if (professorCache) {
+        console.log("✅ Cache populated, returning cached data");
+        return professorCache;
+      }
+      if (!isFetching) break; // Fetch completed (success or failure)
+    }
+    // If still not cached after waiting, something went wrong - continue anyway
+    if (professorCache) return professorCache;
+  }
+
+  isFetching = true;
+  try {
+    const [ratingsResponse, commentsResponse] = await Promise.all([
+      fetch(
+        "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professors_data.csv"
+      ),
+      fetch(
+        "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professor_detailed_reviews.csv"
+      ),
+    ]);
+    const [ratingsCsvText, commentsCsvText] = await Promise.all([
+      ratingsResponse.text(),
+      commentsResponse.text(),
+    ]);
+    const ratingsData = parseCSV(ratingsCsvText);
+    const commentsData = parseCSV(commentsCsvText);
+    const data = convertCSVToProfessorData(ratingsData, commentsData);
+    professorCache = data;
+    chrome.storage.local.set({ professorData: data }, () =>
+      console.log("💾 Professor data saved to chrome.storage")
+    );
+    return data;
+  } catch (err) {
+    console.log("❌ Error fetching professor data:", err);
+    return sampleProfessors;
+  } finally {
+    isFetching = false;
+  }
+}
+
+function preloadProfessorData() {
+  fetchProfessorData();
+}
+
+// Find professor in cache
+function findProfessor(profName) {
+  if (!professorCache) {
+    console.log(
+      `❌ No professor cache available when searching for: ${profName}`
+    );
+    return null;
+  }
+  const normalized = profName.toLowerCase().trim();
+  console.log(
+    `🔍 Searching for professor: "${profName}" (normalized: "${normalized}")`
+  );
+
+  // Try exact match first
+  const exactMatch = professorCache.find(
+    (p) => p.name.toLowerCase().trim() === normalized
+  );
+  if (exactMatch) {
+    console.log(`✅ Exact match found: ${exactMatch.name}`);
+    return exactMatch;
+  }
+
+  // Try partial match
+  const partialMatch = professorCache.find(
+    (p) =>
+      p.name.toLowerCase().includes(normalized) ||
+      normalized.includes(p.name.toLowerCase().trim())
+  );
+  if (partialMatch) {
+    console.log(
+      `✅ Partial match found: ${partialMatch.name} (searched for: ${profName})`
+    );
+    return partialMatch;
+  }
+
+  // Debug: show similar names
+  const similarNames = professorCache
+    .filter((p) => {
+      const name = p.name.toLowerCase().trim();
+      const searchWords = normalized.split(" ");
+      return (
+        searchWords.some((word) => name.includes(word)) ||
+        name.split(" ").some((word) => normalized.includes(word))
+      );
+    })
+    .slice(0, 5)
+    .map((p) => p.name);
+
+  if (similarNames.length > 0) {
+    console.log(`💡 Similar names found: ${similarNames.join(", ")}`);
+  } else {
+    console.log(`❌ No match found for: ${profName}`);
+  }
+
+  return null;
+}
+
+/* -------------------- STATIC AI SUMMARIES (JSON-BASED) -------------------- */
+
+// Hosted JSON file with pre-generated AI summaries
+const AI_SUMMARIES_URL =
+  "https://raw.githubusercontent.com/dakpasala/polyratings-ai-generator/main/summaries/ai_summaries.json";
+
+let aiSummariesCache = null;
+
+// Fetch once & cache
+async function fetchAISummaries() {
+  if (aiSummariesCache) return aiSummariesCache;
+  try {
+    console.log("🌐 Fetching pre-generated AI summaries...");
+    const res = await fetch(AI_SUMMARIES_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    aiSummariesCache = await res.json();
+    console.log(
+      `✅ Loaded ${Object.keys(aiSummariesCache).length} AI summaries`
+    );
+    return aiSummariesCache;
+  } catch (err) {
+    console.error("❌ Failed to fetch AI summaries:", err);
+    aiSummariesCache = {};
+    return {};
+  }
+}
+
+// Tooltip (no link)
+async function callGeminiTooltipAnalysis(profName) {
+  // Ensure professor data is loaded before checking
+  await fetchProfessorData();
+
+  const summaries = await fetchAISummaries();
+  const professor = findProfessor(profName);
+  const key = Object.keys(summaries).find(
+    (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
+  );
+
+  let summary;
+  if (key) {
+    summary = summaries[key];
+    if (summary.includes("\n\nProfessor")) {
+      summary = summary.split("\n\nProfessor")[1];
+      summary = "Professor" + summary;
+    }
+    // Remove any existing links from the summary for tooltip
+    summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
+    summary = summary.replace(/https?:\/\/[^\s]+/g, "");
+  } else {
+    // professor exists in PolyRatings but not in summaries JSON
+    if (professor) {
+      summary = "No summary yet.";
+      console.log(
+        `💬 Professor ${profName} found in cache but no summary in JSON`
+      );
+    } else {
+      summary =
+        "No PolyRatings found. Try asking classmates or other professors for insights before enrolling.";
+      console.log(`💬 Professor ${profName} not found in cache`);
+    }
+  }
+
+  console.log(`💬 Tooltip summary for ${profName}:`, summary);
+  return summary;
+}
+
+// Chatbot / popup (with link)
+async function callGeminiAnalysis(profName, professorData = null) {
+  const summaries = await fetchAISummaries();
+  const professor = findProfessor(profName);
+  const key = Object.keys(summaries).find(
+    (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
+  );
+
+  let summary;
+  if (key) {
+    summary = summaries[key];
+    if (summary.includes("\n\nProfessor")) {
+      summary = summary.split("\n\nProfessor")[1];
+      summary = "Professor" + summary;
+    }
+    // Remove any existing links from the summary, we'll add our own
+    summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
+    summary = summary.replace(/https?:\/\/[^\s]+/g, "");
+    console.log(`🧠 Found AI summary for ${profName}`);
+    return `${summary}\n\n${professorData?.link || ""}`;
+  }
+
+  // Professor exists but no summary yet
+  if (professor) {
+    console.log(`⚠️ Professor ${profName} found but no summary in JSON`);
+    return `No summary yet.\n\n${professorData?.link || ""}`;
+  }
+
+  // Professor doesn't exist at all
+  console.log(`🚫 ${profName} not found in PolyRatings`);
+  return `No PolyRatings found. Try asking classmates or other professors for insights before enrolling.\n\n${
+    professorData?.link ||
+    `https://polyratings.dev/new-professor?name=${encodeURIComponent(profName)}`
+  }`;
+}
+
+/* ------------------ END STATIC AI SUMMARIES ------------------ */
+
+// Extract professor name from query
+function extractProfessorNameFromQuery(query) {
+  const patterns = [
+    /(?:tell me about|what about|how is|rate|rating for|info on|information about)\s+([a-z\s,]+)/i,
+    /(?:professor|prof|dr\.?|dr)\s+([a-z\s,]+)/i,
+    /^([a-z\s,]+)$/i,
+  ];
+  for (const p of patterns) {
+    const m = query.match(p);
+    if (m && m[1]) {
+      let n = m[1]
+        .replace(
+          /\b(professor|prof|dr|dr\.|about|tell|me|how|is|rate|rating|info|information)\b/gi,
+          ""
+        )
+        .trim();
+      if (n.length > 2) return n;
+    }
+  }
+  return null;
+}
+
+// General chatbot fallback
+async function generateGeneralResponse(query) {
+  return "I'm here to help with professor info! Try asking about a specific professor by name.";
+}
+
+/* ------------------ MESSAGING HANDLER ------------------ */
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "getProfRating") {
+    (async () => {
+      try {
+        const data = await fetchProfessorData();
+        const professor = findProfessor(message.profName);
+        if (professor) {
+          sendResponse({ status: "success", professor });
+        } else {
+          sendResponse({
+            status: "not_found",
+            message: "Professor not found in database",
+          });
+        }
+      } catch (e) {
+        sendResponse({ status: "error", message: "Failed to fetch rating" });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "preloadData") {
+    preloadProfessorData();
+    sendResponse({ status: "preloading" });
+    return true;
+  }
+
+  if (message.type === "chatbotQuery") {
+    (async () => {
+      try {
+        const query = message.query.toLowerCase();
+        const professorName = extractProfessorNameFromQuery(query);
+        if (professorName) {
+          const data = await fetchProfessorData();
+          const professor = findProfessor(professorName);
+          const analysis = await callGeminiAnalysis(professorName, professor);
+          sendResponse({
+            status: "success",
+            professor: { ...professor, analysis },
+          });
+        } else {
+          const generalResponse = await generateGeneralResponse(query);
+          sendResponse({
+            status: "general_response",
+            message: generalResponse,
+          });
+        }
+      } catch (error) {
+        sendResponse({
+          status: "error",
+          message: "Sorry, I couldn't process your query.",
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "getGeminiAnalysis") {
+    (async () => {
+      try {
+        const data = await fetchProfessorData();
+        const professor = findProfessor(message.profName);
+        const analysis = await callGeminiAnalysis(message.profName, professor);
+        sendResponse({
+          status: "success",
+          analysis,
+          professor,
+        });
+      } catch (error) {
+        sendResponse({
+          status: "error",
+          message: "Failed to get AI summary",
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "getGeminiTooltipAnalysis") {
+    (async () => {
+      try {
+        // Ensure professor data is fetched before checking
+        const data = await fetchProfessorData();
+        const professor = findProfessor(message.profName);
+        const analysis = await callGeminiTooltipAnalysis(message.profName);
+        sendResponse({
+          status: "success",
+          analysis,
+          professor: professor || { name: message.profName },
+        });
+      } catch (error) {
+        sendResponse({
+          status: "error",
+          message: "Failed to get tooltip summary",
+        });
+      }
+    })();
+    return true;
+  }
+
+  sendResponse({ status: "error", message: "Unknown message type" });
+});

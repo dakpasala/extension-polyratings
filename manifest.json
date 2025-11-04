@@ -8,17 +8,21 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": ["https://cmsweb.pscs.calpoly.edu/*"],
+      "js": [
+        "constants.js",
+        "utils.js",
+        "styles.js",
+        "rating-ui.js",
+        "tooltips.js",
+        "professor-processor.js",
+        "agent.js",
+        "observers.js",
+        "content.js"
+      ],
       "all_frames": true
     }
   ],
-  "permissions": [
-    "storage",
-    "scripting",
-    "activeTab"
-  ],
-  "host_permissions": [
-    "https://cmsweb.pscs.calpoly.edu/*"
-  ]
-} 
+  "permissions": ["storage", "scripting", "activeTab"],
+  "host_permissions": ["https://cmsweb.pscs.calpoly.edu/*"]
+}
