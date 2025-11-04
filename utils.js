@@ -75,6 +75,16 @@ if (document.readyState === "loading") {
 
 const processedProfessors = new Set();
 
+// Clear processed professors on navigation
+function clearProcessedProfessors() {
+  console.log(`PR: Clearing ${processedProfessors.size} processed professors`);
+  processedProfessors.clear();
+}
+
+// Clear on URL changes
+window.addEventListener("hashchange", clearProcessedProfessors);
+window.addEventListener("popstate", clearProcessedProfessors);
+
 // ==================== UTILITY FUNCTIONS ====================
 function isElementMostlyVisible(el) {
   try {

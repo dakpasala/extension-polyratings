@@ -67,15 +67,20 @@ function setupMutationObserver() {
 
     if (onlyOurChanges) return;
 
+    // Prevent race condition: skip if already processing
     if (isProcessing) return;
 
     if (hasRelevantChanges(mutations)) {
       clearTimeout(debounceTimeout);
       isProcessing = true;
       debounceTimeout = setTimeout(() => {
-        findAndLogProfessors();
-        isProcessing = false;
-      }, 100); // Reduced from 150ms to 100ms for faster response
+        try {
+          findAndLogProfessors();
+        } finally {
+          // Always reset processing flag, even if error occurs
+          isProcessing = false;
+        }
+      }, 50); // Reduced to 50ms for faster, smoother response
     }
   });
 
