@@ -38,6 +38,7 @@
     .pr-professor-tooltip.pr-tooltip-visible {
       opacity: 1;
       transform: translateY(0);
+      pointer-events: auto;
     }
 
     .pr-tooltip-inner {
@@ -95,6 +96,14 @@
       -webkit-line-clamp: 4;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      transition: max-height 0.25s ease;
+      max-height: 4lh;
+    }
+
+    .pr-professor-tooltip:hover .pr-tooltip-summary {
+      -webkit-line-clamp: unset;
+      max-height: 400px;
+      overflow: visible;
     }
 
     /* ── Footer ── */
@@ -193,11 +202,11 @@ function addHoverTooltip(element, professor) {
     clearTimeout(window.PRTooltipState.hideTimeout);
     window.PRTooltipState.hideTimeout = null;
 
-    // 150ms grace — prevents flickering on slight mouse movement
+    // 300ms grace — enough time to move mouse from name to tooltip
     window.PRTooltipState.hideTimeout = setTimeout(() => {
       hideProfessorTooltip(element, false);
       window.PRTooltipState.hideTimeout = null;
-    }, 150);
+    }, 300);
   });
 }
 
@@ -262,6 +271,21 @@ function showProfessorTooltip(element, professor) {
       positionTooltip(tooltip, element);
     }
   );
+
+  // Keep tooltip alive when mouse moves onto it
+  tooltip.addEventListener("mouseenter", () => {
+    window.PRTooltipState.isHovering = true;
+    clearTimeout(window.PRTooltipState.hideTimeout);
+    window.PRTooltipState.hideTimeout = null;
+  });
+
+  tooltip.addEventListener("mouseleave", () => {
+    window.PRTooltipState.isHovering = false;
+    window.PRTooltipState.hideTimeout = setTimeout(() => {
+      hideProfessorTooltip(element, false);
+      window.PRTooltipState.hideTimeout = null;
+    }, 300);
+  });
 }
 
 /* ─── Position ───────────────────────────────────────────────────────────── */
@@ -281,10 +305,10 @@ function positionTooltip(tooltip, element) {
 
   // Vertical: prefer above, flip below if not enough room
   let top;
-  if (rect.top - tipH - 10 >= margin) {
-    top = rect.top - tipH - 10;  // above
+  if (rect.top - tipH - 4 >= margin) {
+    top = rect.top - tipH - 4;   // above, only 4px gap
   } else {
-    top = rect.bottom + 10;       // below
+    top = rect.bottom + 4;        // below, only 4px gap
   }
   top = Math.max(margin, Math.min(top, vh - tipH - margin));
 
