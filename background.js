@@ -62,7 +62,9 @@ function convertCSVToProfessorData(ratingsData, commentsData) {
       name: profName,
       rating: parseFloat(row.overallRating) || 0,
       numEvals: parseInt(row.numEvals) || 0,
-      link: `https://polyratings.dev/professor/${row.id}`,
+      link: /^[a-zA-Z0-9\-_]+$/.test(row.id)
+        ? `https://polyratings.dev/professor/${row.id}`
+        : "https://polyratings.dev/new-professor",
       clarity: parseFloat(row.materialClear) || 0,
       helpfulness: parseFloat(row.studentDifficulties) || 0,
       comments: "",
@@ -122,6 +124,10 @@ async function fetchProfessorData() {
     return professorCache;
   }
 
+  // Clear any stale storage cache so bad links get rebuilt fresh
+  chrome.storage.local.remove("professorData");
+  console.log("🧹 Cleared stale professor cache from storage");
+
   // If already fetching, wait and retry a few times
   if (isFetching) {
     console.log("⏳ Already fetching, waiting for completion...");
@@ -131,9 +137,8 @@ async function fetchProfessorData() {
         console.log("✅ Cache populated, returning cached data");
         return professorCache;
       }
-      if (!isFetching) break; // Fetch completed (success or failure)
+      if (!isFetching) break;
     }
-    // If still not cached after waiting, something went wrong - continue anyway
     if (professorCache) return professorCache;
   }
 
@@ -193,12 +198,15 @@ function findProfessor(profName) {
     return exactMatch;
   }
 
-  // Try partial match
-  const partialMatch = professorCache.find(
-    (p) =>
-      p.name.toLowerCase().includes(normalized) ||
-      normalized.includes(p.name.toLowerCase().trim())
-  );
+  // Try partial match — require at least 2 words in common to avoid false positives
+  const partialMatch = professorCache.find((p) => {
+    const name = p.name.toLowerCase().trim();
+    if (name.length < 4) return false;
+    const nameWords = name.split(/\s+/);
+    const searchWords = normalized.split(/\s+/).filter(w => w.length > 1);
+    const commonWords = searchWords.filter(w => nameWords.includes(w));
+    return commonWords.length >= 2;
+  });
   if (partialMatch) {
     console.log(
       `✅ Partial match found: ${partialMatch.name} (searched for: ${profName})`
@@ -230,7 +238,6 @@ function findProfessor(profName) {
 
 /* -------------------- STATIC AI SUMMARIES (JSON-BASED) -------------------- */
 
-// Hosted JSON file with pre-generated AI summaries
 const AI_SUMMARIES_URL =
   "https://raw.githubusercontent.com/dakpasala/polyratings-ai-generator/main/summaries/ai_summaries.json";
 
@@ -255,79 +262,58 @@ async function fetchAISummaries() {
   }
 }
 
-// Tooltip (no link)
+// Shared fallback message for any professor without a summary
+function noRatingsMessage(profName) {
+  return `No PolyRatings found. Try asking classmates or other professors for insights before enrolling.\n\nhttps://polyratings.dev/new-professor`;
+}
+
+// Tooltip (no link shown — link stripped by tooltips.js)
 async function callGeminiTooltipAnalysis(profName) {
-  // Ensure professor data is loaded before checking
   await fetchProfessorData();
 
   const summaries = await fetchAISummaries();
-  const professor = findProfessor(profName);
   const key = Object.keys(summaries).find(
     (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
   );
 
-  let summary;
   if (key) {
-    summary = summaries[key];
+    let summary = summaries[key];
     if (summary.includes("\n\nProfessor")) {
-      summary = summary.split("\n\nProfessor")[1];
-      summary = "Professor" + summary;
+      summary = "Professor" + summary.split("\n\nProfessor")[1];
     }
-    // Remove any existing links from the summary for tooltip
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
-  } else {
-    // professor exists in PolyRatings but not in summaries JSON
-    if (professor) {
-      summary = "No summary yet.";
-      console.log(
-        `💬 Professor ${profName} found in cache but no summary in JSON`
-      );
-    } else {
-      summary =
-        "No PolyRatings found. Try asking classmates or other professors for insights before enrolling.";
-      console.log(`💬 Professor ${profName} not found in cache`);
-    }
+    console.log(`💬 Tooltip summary for ${profName}:`, summary);
+    return summary;
   }
 
-  console.log(`💬 Tooltip summary for ${profName}:`, summary);
-  return summary;
+  // No summary found — same message whether in CSV or not
+  console.log(`💬 No summary for ${profName}, showing fallback`);
+  return "No PolyRatings found. Try asking classmates or other professors for insights before enrolling.";
 }
 
-// Chatbot / popup (with link)
+// Chatbot / popup (with add-professor link)
 async function callGeminiAnalysis(profName, professorData = null) {
   const summaries = await fetchAISummaries();
-  const professor = findProfessor(profName);
   const key = Object.keys(summaries).find(
     (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
   );
 
-  let summary;
   if (key) {
-    summary = summaries[key];
+    let summary = summaries[key];
     if (summary.includes("\n\nProfessor")) {
-      summary = summary.split("\n\nProfessor")[1];
-      summary = "Professor" + summary;
+      summary = "Professor" + summary.split("\n\nProfessor")[1];
     }
-    // Remove any existing links from the summary, we'll add our own
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
     console.log(`🧠 Found AI summary for ${profName}`);
+    // Use the professor's real profile link if available
     return `${summary}\n\n${professorData?.link || ""}`;
   }
 
-  // Professor exists but no summary yet
-  if (professor) {
-    console.log(`⚠️ Professor ${profName} found but no summary in JSON`);
-    return `No summary yet.\n\n${professorData?.link || ""}`;
-  }
-
-  // Professor doesn't exist at all
-  console.log(`🚫 ${profName} not found in PolyRatings`);
-  return `No PolyRatings found. Try asking classmates or other professors for insights before enrolling.\n\n${
-    professorData?.link ||
-    `https://polyratings.dev/new-professor?name=${encodeURIComponent(profName)}`
-  }`;
+  // No summary found — same message whether in CSV or not, always include add link
+  console.log(`🚫 No summary for ${profName}, showing fallback`);
+  return noRatingsMessage(profName);
 }
 
 /* ------------------ END STATIC AI SUMMARIES ------------------ */
@@ -442,7 +428,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getGeminiTooltipAnalysis") {
     (async () => {
       try {
-        // Ensure professor data is fetched before checking
         const data = await fetchProfessorData();
         const professor = findProfessor(message.profName);
         const analysis = await callGeminiTooltipAnalysis(message.profName);
