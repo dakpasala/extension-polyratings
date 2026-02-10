@@ -11,7 +11,7 @@ function processMobileProfessors() {
         const professorNames = instructorText
           .split(",")
           .map((n) => n.trim())
-          .filter((n) => n.length > 0);
+          .filter((n) => n.length > 2 && /[a-zA-Z]{2,}/.test(n));
         professorNames.forEach((professorName, profIndex) => {
           const elementId = getElementPath(nextElement);
           const existingProfRating = nextElement.querySelector(

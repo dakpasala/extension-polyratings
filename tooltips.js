@@ -1,14 +1,4 @@
 // ==================== TOOLTIPS ====================
-// Drop-in replacement — all existing function names preserved.
-//
-// Fixes:
-//   ✅ position: fixed  (was: absolute — caused viewport vs page coord drift)
-//   ✅ Skeleton loader  (was: "Loading..." text flash)
-//   ✅ Smooth fade + slide  (was: bouncy cubic-bezier scale)
-//   ✅ 500ms show delay  (was: 400ms — feels more intentional)
-//   ✅ 150ms hide grace  (was: 100ms — less flicker on mouse movement)
-//   ✅ Styles in a <style> tag  (was: inline cssText soup)
-//   ✅ Clean minimal design  (was: gold gradient)
 
 /* ─── Inject styles once ─────────────────────────────────────────────────── */
 (function injectTooltipStyles() {
@@ -105,6 +95,7 @@
       -webkit-line-clamp: unset;
       max-height: 600px;
       overflow: visible;
+      transition: max-height 0.45s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* ── Footer ── */
@@ -147,6 +138,7 @@ function initTooltipState() {
       owner: null,
       showTimeout: null,
       hideTimeout: null,
+      expandTimeout: null,
       currentTooltip: null,
       isHovering: false,
     };
@@ -182,7 +174,10 @@ function addHoverTooltip(element, professor) {
 
     // Collapse expanded state when returning to the name
     const existing = window.PRTooltipState.currentTooltip;
-    if (existing) existing.classList.remove("pr-tooltip-expanded");
+    if (existing) {
+      clearTimeout(window.PRTooltipState.expandTimeout);
+      existing.classList.remove("pr-tooltip-expanded");
+    }
 
     window.PRTooltipState.owner = element;
 
@@ -196,7 +191,7 @@ function addHoverTooltip(element, professor) {
         showProfessorTooltip(element, professor);
       }
       window.PRTooltipState.showTimeout = null;
-    }, 500);
+    }, 700);
   });
 
   element.addEventListener("mouseleave", () => {
@@ -282,14 +277,16 @@ function showProfessorTooltip(element, professor) {
     window.PRTooltipState.isHovering = true;
     clearTimeout(window.PRTooltipState.hideTimeout);
     window.PRTooltipState.hideTimeout = null;
-    // Lock into expanded state
-    tooltip.classList.add("pr-tooltip-expanded");
+    // Small delay before expanding — feels intentional, not jumpy
+    window.PRTooltipState.expandTimeout = setTimeout(() => {
+      tooltip.classList.add("pr-tooltip-expanded");
+    }, 120);
   });
 
   tooltip.addEventListener("mouseleave", () => {
     window.PRTooltipState.isHovering = false;
-    // Stay expanded — only hide after grace period,
-    // collapsing happens if they re-hover the professor name
+    // Cancel expand if they left before it triggered
+    clearTimeout(window.PRTooltipState.expandTimeout);
     window.PRTooltipState.hideTimeout = setTimeout(() => {
       hideProfessorTooltip(element, false);
       window.PRTooltipState.hideTimeout = null;
