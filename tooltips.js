@@ -96,13 +96,14 @@
       -webkit-line-clamp: 4;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      transition: max-height 0.25s ease;
-      max-height: 4lh;
+      transition: max-height 0.3s ease;
+      max-height: calc(1.55em * 4);
     }
 
-    .pr-professor-tooltip:hover .pr-tooltip-summary {
+    /* Stays expanded until tooltip is dismissed — class toggled via JS */
+    .pr-professor-tooltip.pr-tooltip-expanded .pr-tooltip-summary {
       -webkit-line-clamp: unset;
-      max-height: 400px;
+      max-height: 600px;
       overflow: visible;
     }
 
@@ -178,6 +179,10 @@ function addHoverTooltip(element, professor) {
     ) {
       hideProfessorTooltip(window.PRTooltipState.owner, true);
     }
+
+    // Collapse expanded state when returning to the name
+    const existing = window.PRTooltipState.currentTooltip;
+    if (existing) existing.classList.remove("pr-tooltip-expanded");
 
     window.PRTooltipState.owner = element;
 
@@ -272,15 +277,19 @@ function showProfessorTooltip(element, professor) {
     }
   );
 
-  // Keep tooltip alive when mouse moves onto it
+  // Hovering onto the tooltip — expand and stay open
   tooltip.addEventListener("mouseenter", () => {
     window.PRTooltipState.isHovering = true;
     clearTimeout(window.PRTooltipState.hideTimeout);
     window.PRTooltipState.hideTimeout = null;
+    // Lock into expanded state
+    tooltip.classList.add("pr-tooltip-expanded");
   });
 
   tooltip.addEventListener("mouseleave", () => {
     window.PRTooltipState.isHovering = false;
+    // Stay expanded — only hide after grace period,
+    // collapsing happens if they re-hover the professor name
     window.PRTooltipState.hideTimeout = setTimeout(() => {
       hideProfessorTooltip(element, false);
       window.PRTooltipState.hideTimeout = null;
