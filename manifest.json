@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "PolyRatings Enhancer",
+  "name": "PolyRatings Extension",
   "version": "0.1.0",
   "description": "Integrates PolyRatings.dev scores directly into the Cal Poly Schedule Builder.",
   "icons": {
