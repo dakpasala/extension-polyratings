@@ -28,6 +28,6 @@
       "all_frames": true
     }
   ],
-  "permissions": ["storage", "scripting", "activeTab"],
+  "permissions": ["storage"],
   "host_permissions": ["https://cmsweb.pscs.calpoly.edu/*"]
 }
