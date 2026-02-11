@@ -1,0 +1,14 @@
+PolyRatings Enhancer - Privacy Policy
+Last Updated: February 11, 2026
+Data Collection:
+PolyRatings Enhancer does not collect, store, or transmit any personal user data. The extension operates entirely locally in your browser.
+What the Extension Does:
+
+Fetches publicly available professor ratings from PolyRatings.dev
+Displays these ratings on the Cal Poly schedule builder page
+Caches rating data locally in your browser for performance
+
+No Tracking:
+We do not track your browsing, collect analytics, or share any information with third parties.
+Questions:
+Contact us at dak.pasala@gmail.com or sreshta.talluri@gmail.com or sahilgoel2004@gmail.com
