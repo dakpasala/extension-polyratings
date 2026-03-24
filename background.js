@@ -446,5 +446,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // NEW: Fetch detailed reviews on-demand
+  if (message.type === "getProfessorReviews") {
+    (async () => {
+      try {
+        const profName = message.profName;
+        if (!profName) {
+          sendResponse({ status: "error", reviews: [] });
+          return;
+        }
+
+        // Fetch the detailed reviews CSV
+        const csvUrl = "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professor_detailed_reviews.csv";
+        const response = await fetch(csvUrl);
+        const csvText = await response.text();
+        const rows = parseCSV(csvText);
+
+        // Filter reviews for this specific professor
+        const reviews = rows
+          .filter(row => row.professor_name === profName)
+          .map(row => ({
+            course: row.course_code || "Unknown Course",
+            rating: parseFloat(row.overall_rating) || 0,
+            clarity: parseFloat(row.presents_material_clearly) || 0,
+            helpfulness: parseFloat(row.recognizes_student_difficulties) || 0,
+            text: (row.rating_text || "").trim(),
+            grade: row.grade && row.grade !== "N/A" ? row.grade : null,
+            gradeLevel: row.grade_level && row.grade_level !== "N/A" ? row.grade_level : null,
+            courseType: row.course_type || null,
+            date: row.post_date || null,
+          }))
+          .filter(r => r.text); // Only reviews with text
+
+        sendResponse({ status: "success", reviews });
+      } catch (error) {
+        console.error("Failed to fetch reviews:", error);
+        sendResponse({ status: "error", reviews: [] });
+      }
+    })();
+    return true;
+  }
+
   sendResponse({ status: "error", message: "Unknown message type" });
 });

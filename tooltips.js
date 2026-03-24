@@ -22,6 +22,7 @@
       width: 268px;
       min-width: 200px;
       max-width: 500px;
+      height: auto;
       background: #ffffff;
       border: 1px solid #e8e8e8;
       border-radius: 10px;
@@ -49,19 +50,18 @@
       right: 0;
       width: 16px;
       height: 16px;
-      cursor: nwse-resize;
+      cursor: ew-resize;
       pointer-events: auto;
     }
 
     .pr-tooltip-resize-handle::after {
       content: '';
       position: absolute;
-      bottom: 3px;
+      bottom: 6px;
       right: 3px;
-      width: 10px;
-      height: 10px;
+      width: 8px;
+      height: 8px;
       border-right: 2px solid #ccc;
-      border-bottom: 2px solid #ccc;
     }
 
     .pr-professor-tooltip.pr-tooltip-visible {
@@ -71,10 +71,106 @@
     }
 
     .pr-tooltip-inner {
-      padding: 13px 15px;
-      max-height: 100%;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* Tab navigation */
+    .pr-tooltip-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 8px 8px 0 8px;
+      border-bottom: 1px solid #e8e8e8;
+      overflow-x: auto;
+      flex-shrink: 0;
+      scrollbar-width: thin;
+    }
+
+    .pr-tooltip-tabs::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .pr-tooltip-tabs::-webkit-scrollbar-thumb {
+      background: #ddd;
+      border-radius: 2px;
+    }
+
+    .pr-tooltip-tab {
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #666;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      pointer-events: auto;
+    }
+
+    .pr-tooltip-tab:hover {
+      color: #333;
+      background: #f8f8f8;
+    }
+
+    .pr-tooltip-tab.active {
+      color: #2a7a2a;
+      border-bottom-color: #2a7a2a;
+    }
+
+    .pr-tooltip-content {
+      flex: 1;
       overflow-y: auto;
-      box-sizing: border-box;
+      padding: 13px 15px;
+    }
+
+    .pr-tooltip-section {
+      scroll-margin-top: 10px;
+    }
+
+    .pr-tooltip-section + .pr-tooltip-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .pr-course-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 10px;
+    }
+
+    .pr-review {
+      background: #f8f8f8;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .pr-review-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+      font-size: 10px;
+      color: #666;
+    }
+
+    .pr-review-tag {
+      background: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .pr-review-text {
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: #333;
     }
 
     /* ── Header ── */
@@ -317,7 +413,33 @@ function showProfessorTooltip(element, professor) {
           prof.rating,
           prof.numEvals,
           prof.department,
-          response.analysis
+          response.analysis,
+          [] // Empty reviews initially - we'll fetch separately
+        );
+        
+        // Re-position after real content loads
+        positionTooltip(tooltip, element);
+        // Re-attach drag after content rebuild
+        setupDragListeners(tooltip);
+
+        // NOW fetch reviews separately (async, doesn't block tooltip)
+        chrome.runtime.sendMessage(
+          { type: "getProfessorReviews", profName: prof.name },
+          (reviewsResponse) => {
+            if (reviewsResponse?.status === "success" && reviewsResponse.reviews) {
+              // Rebuild tooltip with reviews added
+              tooltip.innerHTML = buildContent(
+                prof.name,
+                prof.rating,
+                prof.numEvals,
+                prof.department,
+                response.analysis,
+                reviewsResponse.reviews
+              );
+              positionTooltip(tooltip, element);
+              setupDragListeners(tooltip);
+            }
+          }
         );
       } else {
         // Not found or error — show fallback with whatever analysis text exists
@@ -326,14 +448,12 @@ function showProfessorTooltip(element, professor) {
           null,
           null,
           null,
-          response?.analysis || null
+          response?.analysis || null,
+          []
         );
+        positionTooltip(tooltip, element);
+        setupDragListeners(tooltip);
       }
-
-      // Re-position after real content loads (height will have changed)
-      positionTooltip(tooltip, element);
-      // Re-attach drag after content rebuild
-      setupDragListeners(tooltip);
     }
   );
 
@@ -373,8 +493,55 @@ function showProfessorTooltip(element, professor) {
 function setupDragListeners(tooltip) {
   const header = tooltip.querySelector(".pr-tooltip-header");
   const resizeHandle = tooltip.querySelector(".pr-tooltip-resize-handle");
+  const tabs = tooltip.querySelectorAll(".pr-tooltip-tab");
+  const content = tooltip.querySelector(".pr-tooltip-content");
+  const closeBtn = tooltip.querySelector(".pr-tooltip-close");
   
   if (!header) return;
+
+  // Close button
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      tooltip.remove();
+    });
+  }
+
+  // Tab navigation
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      const sectionId = tab.dataset.section;
+      const section = tooltip.querySelector(`[data-section-id="${sectionId}"]`);
+      if (section && content) {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
+
+  // Scroll spy - highlight active tab based on scroll position
+  if (content) {
+    content.addEventListener("scroll", () => {
+      const sections = tooltip.querySelectorAll(".pr-tooltip-section");
+      let currentSection = null;
+
+      sections.forEach(section => {
+        const rect = section.getBoundingClientRect();
+        const contentRect = content.getBoundingClientRect();
+        if (rect.top <= contentRect.top + 50) {
+          currentSection = section.dataset.sectionId;
+        }
+      });
+
+      if (currentSection) {
+        tabs.forEach(tab => {
+          if (tab.dataset.section === currentSection) {
+            tab.classList.add("active");
+          } else {
+            tab.classList.remove("active");
+          }
+        });
+      }
+    });
+  }
 
   // Remove old listeners if any by cloning
   const newHeader = header.cloneNode(true);
@@ -429,37 +596,24 @@ function setupDragListeners(tooltip) {
     document.addEventListener("mouseup", onMouseUp);
   });
 
-      // Resize handle
+  // Resize handle - only resizes width, height auto-fits content
   if (resizeHandle) {
     resizeHandle.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();
 
       const startWidth = tooltip.offsetWidth;
-      const startHeight = tooltip.offsetHeight;
       const startX = e.clientX;
-      const startY = e.clientY;
-
-      // Get actual content height
-      const inner = tooltip.querySelector(".pr-tooltip-inner");
-      const contentHeight = inner ? inner.scrollHeight + 26 : 200; // +26 for padding
 
       const onMouseMove = (moveEvent) => {
         const deltaX = moveEvent.clientX - startX;
-        const deltaY = moveEvent.clientY - startY;
-
         let newWidth = startWidth + deltaX;
-        let newHeight = startHeight + deltaY;
 
         // Clamp width
         newWidth = Math.max(200, Math.min(newWidth, 500));
-        
-        // Clamp height — can't go beyond actual content
-        const maxHeight = Math.min(700, contentHeight);
-        newHeight = Math.max(150, Math.min(newHeight, maxHeight));
 
         tooltip.style.width = `${newWidth}px`;
-        tooltip.style.height = `${newHeight}px`;
+        // Height auto-adjusts to content
       };
 
       const onMouseUp = () => {
@@ -547,7 +701,7 @@ function buildSkeleton() {
   `;
 }
 
-function buildContent(name, rating, numEvals, department, analysis) {
+function buildContent(name, rating, numEvals, department, analysis, reviews = []) {
   const hasRating = rating && parseFloat(rating) > 0;
   const ratingVal = hasRating ? parseFloat(rating) : null;
 
@@ -569,7 +723,7 @@ function buildContent(name, rating, numEvals, department, analysis) {
   const summaryText = analysis
     ? escapeHtml(
         analysis
-          .replace(/https?:\/\/[^\s]+/g, "") // strip raw URLs
+          .replace(/https?:\/\/[^\s]+/g, "")
           .replace(/\n+/g, " ")
           .trim()
       )
@@ -577,15 +731,37 @@ function buildContent(name, rating, numEvals, department, analysis) {
 
   const footerParts = [
     department || "",
-    numEvals   ? `${numEvals} reviews` : "",
+    numEvals ? `${numEvals} reviews` : "",
   ].filter(Boolean);
   const footerText = footerParts.length
     ? escapeHtml(footerParts.join(" · "))
     : "PolyRatings";
 
-  return `
-    <div class="pr-tooltip-inner">
-      <button class="pr-tooltip-close" title="Close" onclick="this.closest('.pr-professor-tooltip').remove()">×</button>
+  // Group reviews by course
+  const reviewsByCourse = {};
+  (reviews || []).forEach(review => {
+    const course = review.course || "Unknown Course";
+    if (!reviewsByCourse[course]) {
+      reviewsByCourse[course] = [];
+    }
+    reviewsByCourse[course].push(review);
+  });
+
+  const courses = Object.keys(reviewsByCourse).sort();
+  
+  // Build tabs
+  const tabs = ['<button class="pr-tooltip-tab active" data-section="overview">AI Overview</button>'];
+  courses.forEach(course => {
+    const count = reviewsByCourse[course].length;
+    tabs.push(`<button class="pr-tooltip-tab" data-section="${escapeHtml(course)}">${escapeHtml(course)} (${count})</button>`);
+  });
+
+  // Build sections
+  const sections = [];
+  
+  // AI Overview section
+  sections.push(`
+    <div class="pr-tooltip-section" data-section-id="overview">
       <div class="pr-tooltip-header">
         <span class="pr-tooltip-name">${escapeHtml(name)}</span>
         <span class="pr-badge ${badgeClass}">${badgeText}</span>
@@ -593,6 +769,49 @@ function buildContent(name, rating, numEvals, department, analysis) {
       <div class="pr-tooltip-divider"></div>
       <div class="pr-tooltip-summary">${summaryText}</div>
       <div class="pr-tooltip-footer">${footerText}</div>
+    </div>
+  `);
+
+  // Course review sections
+  courses.forEach(course => {
+    const courseReviews = reviewsByCourse[course];
+    const reviewsHtml = courseReviews.map(review => {
+      const meta = [];
+      if (review.rating) meta.push(`★ ${review.rating.toFixed(1)}`);
+      if (review.grade) meta.push(`Grade: ${review.grade}`);
+      if (review.gradeLevel) meta.push(review.gradeLevel);
+      if (review.date) {
+        const date = new Date(review.date);
+        meta.push(date.getFullYear());
+      }
+
+      return `
+        <div class="pr-review">
+          <div class="pr-review-meta">
+            ${meta.map(m => `<span class="pr-review-tag">${escapeHtml(m)}</span>`).join('')}
+          </div>
+          <div class="pr-review-text">${escapeHtml(review.text)}</div>
+        </div>
+      `;
+    }).join('');
+
+    sections.push(`
+      <div class="pr-tooltip-section" data-section-id="${escapeHtml(course)}">
+        <div class="pr-course-title">${escapeHtml(course)}</div>
+        ${reviewsHtml}
+      </div>
+    `);
+  });
+
+  return `
+    <div class="pr-tooltip-inner">
+      <button class="pr-tooltip-close" title="Close">×</button>
+      <div class="pr-tooltip-tabs">
+        ${tabs.join('')}
+      </div>
+      <div class="pr-tooltip-content">
+        ${sections.join('')}
+      </div>
     </div>
     <div class="pr-tooltip-resize-handle"></div>
   `;
