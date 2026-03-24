@@ -22,7 +22,7 @@
       width: 268px;
       min-width: 200px;
       max-width: 500px;
-      height: auto;
+      max-height: 500px;
       background: #ffffff;
       border: 1px solid #e8e8e8;
       border-radius: 10px;
@@ -37,6 +37,8 @@
       transform: translateY(6px);
       transition: opacity 0.16s ease, transform 0.16s ease;
       user-select: none;
+      display: flex;
+      flex-direction: column;
     }
     
     .pr-professor-tooltip.pr-dragging {
@@ -75,17 +77,29 @@
       display: flex;
       flex-direction: column;
       height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Fixed header section */
+    .pr-tooltip-header-section {
+      flex-shrink: 0;
+      padding: 13px 15px 0 15px;
+      background: #fff;
+      border-bottom: 1px solid #e8e8e8;
     }
 
     /* Tab navigation */
     .pr-tooltip-tabs {
       display: flex;
       gap: 4px;
-      padding: 8px 8px 0 8px;
-      border-bottom: 1px solid #e8e8e8;
+      padding: 8px 0 0 0;
       overflow-x: auto;
       flex-shrink: 0;
       scrollbar-width: thin;
+      margin: 0 -15px;
+      padding-left: 15px;
+      padding-right: 15px;
     }
 
     .pr-tooltip-tabs::-webkit-scrollbar {
@@ -124,7 +138,9 @@
     .pr-tooltip-content {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 13px 15px;
+      min-height: 0; /* Critical for flex scrolling */
     }
 
     .pr-tooltip-section {
@@ -132,9 +148,7 @@
     }
 
     .pr-tooltip-section + .pr-tooltip-section {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid #f0f0f0;
+      margin-top: 24px;
     }
 
     .pr-course-title {
@@ -191,8 +205,8 @@
 
     .pr-tooltip-close {
       position: absolute;
-      top: -8px;
-      right: -8px;
+      top: 5px;
+      right: 5px;
       width: 20px;
       height: 20px;
       border-radius: 50%;
@@ -207,6 +221,7 @@
       color: #666;
       transition: all 0.15s ease;
       pointer-events: auto;
+      z-index: 10;
     }
 
     .pr-tooltip-close:hover {
@@ -491,6 +506,7 @@ function showProfessorTooltip(element, professor) {
 
 /* ─── Drag setup helper ─────────────────────────────────────────────────── */
 function setupDragListeners(tooltip) {
+  const headerSection = tooltip.querySelector(".pr-tooltip-header-section");
   const header = tooltip.querySelector(".pr-tooltip-header");
   const resizeHandle = tooltip.querySelector(".pr-tooltip-resize-handle");
   const tabs = tooltip.querySelectorAll(".pr-tooltip-tab");
@@ -543,58 +559,58 @@ function setupDragListeners(tooltip) {
     });
   }
 
-  // Remove old listeners if any by cloning
-  const newHeader = header.cloneNode(true);
-  header.parentNode.replaceChild(newHeader, header);
+  // Make header draggable
+  if (headerSection) {
+    let startX, startY, tooltipLeft, tooltipTop;
 
-  let startX, startY, tooltipLeft, tooltipTop;
-
-  newHeader.addEventListener("mousedown", (e) => {
-    // Don't drag if clicking close button
-    if (e.target.classList.contains("pr-tooltip-close")) return;
-    
-    e.preventDefault();
-    window.PRTooltipState.isDragging = true;
-    tooltip.classList.add("pr-dragging");
-    
-    startX = e.clientX;
-    startY = e.clientY;
-    tooltipLeft = parseInt(tooltip.style.left) || 0;
-    tooltipTop = parseInt(tooltip.style.top) || 0;
-
-    const onMouseMove = (moveEvent) => {
-      if (!window.PRTooltipState.isDragging) return;
+    headerSection.addEventListener("mousedown", (e) => {
+      // Don't drag if clicking close button or tab
+      if (e.target.classList.contains("pr-tooltip-close") || 
+          e.target.classList.contains("pr-tooltip-tab")) return;
       
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
+      e.preventDefault();
+      window.PRTooltipState.isDragging = true;
+      tooltip.classList.add("pr-dragging");
       
-      let newLeft = tooltipLeft + deltaX;
-      let newTop = tooltipTop + deltaY;
+      startX = e.clientX;
+      startY = e.clientY;
+      tooltipLeft = parseInt(tooltip.style.left) || 0;
+      tooltipTop = parseInt(tooltip.style.top) || 0;
 
-      // Clamp to viewport edges
-      const tipW = tooltip.offsetWidth;
-      const tipH = tooltip.offsetHeight;
-      const margin = 10;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
+      const onMouseMove = (moveEvent) => {
+        if (!window.PRTooltipState.isDragging) return;
+        
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        
+        let newLeft = tooltipLeft + deltaX;
+        let newTop = tooltipTop + deltaY;
 
-      newLeft = Math.max(margin, Math.min(newLeft, vw - tipW - margin));
-      newTop = Math.max(margin, Math.min(newTop, vh - tipH - margin));
+        // Clamp to viewport edges
+        const tipW = tooltip.offsetWidth;
+        const tipH = tooltip.offsetHeight;
+        const margin = 10;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
 
-      tooltip.style.left = `${newLeft}px`;
-      tooltip.style.top = `${newTop}px`;
-    };
+        newLeft = Math.max(margin, Math.min(newLeft, vw - tipW - margin));
+        newTop = Math.max(margin, Math.min(newTop, vh - tipH - margin));
 
-    const onMouseUp = () => {
-      window.PRTooltipState.isDragging = false;
-      tooltip.classList.remove("pr-dragging");
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
+        tooltip.style.left = `${newLeft}px`;
+        tooltip.style.top = `${newTop}px`;
+      };
 
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  });
+      const onMouseUp = () => {
+        window.PRTooltipState.isDragging = false;
+        tooltip.classList.remove("pr-dragging");
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  }
 
   // Resize handle - only resizes width, height auto-fits content
   if (resizeHandle) {
@@ -629,11 +645,12 @@ function setupDragListeners(tooltip) {
 
 /* ─── Position ───────────────────────────────────────────────────────────── */
 // Uses fixed positioning so getBoundingClientRect() coords align correctly.
-// Always clamps to viewport on all 4 edges.
+// Always clamps to viewport on all 4 edges, respecting max-height.
 function positionTooltip(tooltip, element) {
   const rect   = element.getBoundingClientRect();
   const tipW   = tooltip.offsetWidth  || 268;
-  const tipH   = tooltip.offsetHeight || 160;
+  const maxTipH = 500; // Match CSS max-height
+  const tipH   = Math.min(tooltip.offsetHeight || 200, maxTipH);
   const margin = 10;
   const vw     = window.innerWidth;
   const vh     = window.innerHeight;
@@ -649,6 +666,8 @@ function positionTooltip(tooltip, element) {
   } else {
     top = rect.bottom + 4;        // below, only 4px gap
   }
+  
+  // Critical: clamp to ensure tooltip never goes off bottom
   top = Math.max(margin, Math.min(top, vh - tipH - margin));
 
   tooltip.style.left = `${left}px`;
@@ -759,14 +778,9 @@ function buildContent(name, rating, numEvals, department, analysis, reviews = []
   // Build sections
   const sections = [];
   
-  // AI Overview section
+  // AI Overview section (no header in content, it's in the fixed header)
   sections.push(`
     <div class="pr-tooltip-section" data-section-id="overview">
-      <div class="pr-tooltip-header">
-        <span class="pr-tooltip-name">${escapeHtml(name)}</span>
-        <span class="pr-badge ${badgeClass}">${badgeText}</span>
-      </div>
-      <div class="pr-tooltip-divider"></div>
       <div class="pr-tooltip-summary">${summaryText}</div>
       <div class="pr-tooltip-footer">${footerText}</div>
     </div>
@@ -806,8 +820,14 @@ function buildContent(name, rating, numEvals, department, analysis, reviews = []
   return `
     <div class="pr-tooltip-inner">
       <button class="pr-tooltip-close" title="Close">×</button>
-      <div class="pr-tooltip-tabs">
-        ${tabs.join('')}
+      <div class="pr-tooltip-header-section">
+        <div class="pr-tooltip-header">
+          <span class="pr-tooltip-name">${escapeHtml(name)}</span>
+          <span class="pr-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <div class="pr-tooltip-tabs">
+          ${tabs.join('')}
+        </div>
       </div>
       <div class="pr-tooltip-content">
         ${sections.join('')}
