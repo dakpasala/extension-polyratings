@@ -193,13 +193,7 @@ function initTooltipState() {
       isDragging: false,
       dragOffset: { x: 0, y: 0 },
     };
-    // Hide on scroll or window blur
-    document.addEventListener(
-      "scroll",
-      () => hideProfessorTooltip(null, true),
-      { capture: true, passive: true }
-    );
-    window.addEventListener("blur", () => hideProfessorTooltip(null, true));
+    // Tooltips now persist — user closes via X button
   }
 }
 
@@ -247,17 +241,9 @@ function addHoverTooltip(element, professor) {
 
   element.addEventListener("mouseleave", () => {
     window.PRTooltipState.isHovering = false;
-
     clearTimeout(window.PRTooltipState.showTimeout);
     window.PRTooltipState.showTimeout = null;
-    clearTimeout(window.PRTooltipState.hideTimeout);
-    window.PRTooltipState.hideTimeout = null;
-
-    // 300ms grace — enough time to move mouse from name to tooltip
-    window.PRTooltipState.hideTimeout = setTimeout(() => {
-      hideProfessorTooltip(element, false);
-      window.PRTooltipState.hideTimeout = null;
-    }, 300);
+    // Tooltip stays open — user must click X to close
   });
 }
 
@@ -352,12 +338,8 @@ function showProfessorTooltip(element, professor) {
 
   tooltip.addEventListener("mouseleave", () => {
     window.PRTooltipState.isHovering = false;
-    // Cancel expand if they left before it triggered
     clearTimeout(window.PRTooltipState.expandTimeout);
-    window.PRTooltipState.hideTimeout = setTimeout(() => {
-      hideProfessorTooltip(element, false);
-      window.PRTooltipState.hideTimeout = null;
-    }, 300);
+    // Tooltip stays open — user must click X to close
   });
 }
 
