@@ -20,6 +20,8 @@
       position: fixed;
       z-index: 99999;
       width: 268px;
+      min-width: 200px;
+      max-width: 500px;
       background: #ffffff;
       border: 1px solid #e8e8e8;
       border-radius: 10px;
@@ -41,6 +43,27 @@
       cursor: grabbing;
     }
 
+    .pr-tooltip-resize-handle {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      pointer-events: auto;
+    }
+
+    .pr-tooltip-resize-handle::after {
+      content: '';
+      position: absolute;
+      bottom: 3px;
+      right: 3px;
+      width: 10px;
+      height: 10px;
+      border-right: 2px solid #ccc;
+      border-bottom: 2px solid #ccc;
+    }
+
     .pr-professor-tooltip.pr-tooltip-visible {
       opacity: 1;
       transform: translateY(0);
@@ -49,6 +72,9 @@
 
     .pr-tooltip-inner {
       padding: 13px 15px;
+      max-height: 100%;
+      overflow-y: auto;
+      box-sizing: border-box;
     }
 
     /* ── Header ── */
@@ -346,6 +372,8 @@ function showProfessorTooltip(element, professor) {
 /* ─── Drag setup helper ─────────────────────────────────────────────────── */
 function setupDragListeners(tooltip) {
   const header = tooltip.querySelector(".pr-tooltip-header");
+  const resizeHandle = tooltip.querySelector(".pr-tooltip-resize-handle");
+  
   if (!header) return;
 
   // Remove old listeners if any by cloning
@@ -400,6 +428,49 @@ function setupDragListeners(tooltip) {
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
   });
+
+      // Resize handle
+  if (resizeHandle) {
+    resizeHandle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startWidth = tooltip.offsetWidth;
+      const startHeight = tooltip.offsetHeight;
+      const startX = e.clientX;
+      const startY = e.clientY;
+
+      // Get actual content height
+      const inner = tooltip.querySelector(".pr-tooltip-inner");
+      const contentHeight = inner ? inner.scrollHeight + 26 : 200; // +26 for padding
+
+      const onMouseMove = (moveEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+
+        let newWidth = startWidth + deltaX;
+        let newHeight = startHeight + deltaY;
+
+        // Clamp width
+        newWidth = Math.max(200, Math.min(newWidth, 500));
+        
+        // Clamp height — can't go beyond actual content
+        const maxHeight = Math.min(700, contentHeight);
+        newHeight = Math.max(150, Math.min(newHeight, maxHeight));
+
+        tooltip.style.width = `${newWidth}px`;
+        tooltip.style.height = `${newHeight}px`;
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  }
 }
 
 /* ─── Position ───────────────────────────────────────────────────────────── */
@@ -523,6 +594,7 @@ function buildContent(name, rating, numEvals, department, analysis) {
       <div class="pr-tooltip-summary">${summaryText}</div>
       <div class="pr-tooltip-footer">${footerText}</div>
     </div>
+    <div class="pr-tooltip-resize-handle"></div>
   `;
 }
 
