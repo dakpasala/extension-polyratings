@@ -18,7 +18,7 @@ async function supabaseQuery(table, params = {}) {
   if (params.eq) {
     Object.entries(params.eq).forEach(([key, value]) => {
       url.searchParams.set(key, `eq.${value}`);
-    });
+    }); 
   }
   
   if (params.ilike) {
