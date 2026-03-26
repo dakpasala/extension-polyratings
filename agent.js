@@ -24,7 +24,8 @@ function openAgentPopup(button) {
     flex-direction: column;
     overflow: hidden;
     z-index: 10000;
-    animation: slideUp 0.4s ease-out;
+    opacity: 0;
+    animation: fadeIn 0.2s ease-out forwards;
     resize: both;
   `;
 
@@ -187,13 +188,12 @@ function openAgentPopup(button) {
     const style = document.createElement("style");
     style.id = "agent-popup-styles";
     style.textContent = `
-      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-      @keyframes slideUp {
-        from { opacity: 0; transform: translateY(30px) scale(0.95); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
+      @keyframes fadeIn { 
+        from { opacity: 0; } 
+        to { opacity: 1; } 
       }
-      .agent-popup input:focus { border-color: #FFD700 !important; }
-      .agent-popup button:hover { transform: translateY(-1px); }
+      .pr-agent-popup input:focus { border-color: #FFD700 !important; }
+      .pr-agent-popup button:hover { transform: translateY(-1px); }
       @keyframes slideInRight {
         from { opacity: 0; transform: translateX(20px); }
         to { opacity: 1; transform: translateX(0); }
