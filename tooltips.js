@@ -39,10 +39,19 @@
       user-select: none;
       display: flex;
       flex-direction: column;
+      cursor: default;
     }
     
     .pr-professor-tooltip.pr-dragging {
       transition: none;
+      cursor: grabbing;
+    }
+
+    .pr-tooltip-header-section {
+      cursor: grab;
+    }
+
+    .pr-tooltip-header-section:active {
       cursor: grabbing;
     }
 
@@ -497,7 +506,13 @@ function showProfessorTooltip(element, professor) {
     }, 120);
   });
 
-  tooltip.addEventListener("mouseleave", () => {
+  tooltip.addEventListener("mouseleave", (e) => {
+    // Don't hide if dragging, resizing, or mouse is still within tooltip
+    if (window.PRTooltipState.isDragging || 
+        window.PRTooltipState.isResizing ||
+        tooltip.contains(e.relatedTarget)) {
+      return;
+    }
     window.PRTooltipState.isHovering = false;
     clearTimeout(window.PRTooltipState.expandTimeout);
     // Tooltip stays open — user must click X to close
@@ -618,6 +633,7 @@ function setupDragListeners(tooltip) {
       e.preventDefault();
       e.stopPropagation();
 
+      window.PRTooltipState.isResizing = true;
       const startWidth = tooltip.offsetWidth;
       const startX = e.clientX;
 
@@ -633,6 +649,7 @@ function setupDragListeners(tooltip) {
       };
 
       const onMouseUp = () => {
+        window.PRTooltipState.isResizing = false;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
