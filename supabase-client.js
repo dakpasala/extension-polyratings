@@ -156,9 +156,10 @@ async function getReviewsByProfessor(professorName, limit = 100) {
 
 async function getReviewsByCourse(courseCode, limit = 50) {
   try {
+    // Get reviews ordered by date (not rating) for representative sample
     const data = await supabaseQuery('professor_reviews', {
       eq: { course_code: courseCode },
-      order: 'overall_rating.desc',
+      order: 'post_date.desc',
       limit: limit
     });
     

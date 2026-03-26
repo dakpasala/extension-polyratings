@@ -17,35 +17,178 @@ const sampleProfessors = [
   }
 ];
 
-/* ==================== HELPER FUNCTIONS ==================== */
+/* ==================== RAG SYSTEM ==================== */
 
-// Parse query to determine intent
-function parseQueryIntent(query) {
-  const lower = query.toLowerCase();
-  
-  // Extract professor names (stops before "for")
-  const profMatch = lower.match(/(?:professor|prof|dr\.?)\s+([a-z]+(?:\s+[a-z]+)?)\s+(?:for|in|teaching)/i);
-  const profName = profMatch ? profMatch[1].trim() : null;
-  
-  // Extract course codes
-  const coursePattern = /([A-Z]{2,4})\s*(\d{3})/gi;
-  const courses = [];
-  let match;
-  while ((match = coursePattern.exec(query)) !== null) {
-    courses.push(`${match[1]} ${match[2]}`);
-  }
-  
-  // Detect comparison
-  const isComparison = /(?:vs|versus|compared to|or|easier|harder|better)/i.test(lower);
-  
-  return {
-    professorName: profName,
-    courses: courses,
-    isComparison: isComparison && courses.length >= 2,
-    isCourseSpecific: courses.length > 0,
-    rawQuery: query
-  };
+// Extract entities from user query using GROQ
+async function extractEntitiesWithGROQ(query) {
+  const prompt = `Extract course codes and professor names from this query. Respond ONLY with valid JSON, no markdown formatting.
+
+Query: "${query}"
+
+Return format:
+{
+  "courses": ["CSC 307", "CPE 350"],
+  "professors": ["Oliver", "Seng"],
+  "intent": "comparison" | "difficulty" | "rating" | "recommendation" | "general"
 }
+
+Rules:
+- Course codes: 2-4 UPPERCASE letters + 3 digits (e.g., CSC 307, CHEM 110)
+- Normalize casing: "csc 307" → "CSC 307"
+- Professors: Extract last names only
+- If nothing found, return empty arrays
+- Intent: What is the user asking about?
+
+Examples:
+"CSC 307 vs CSC 357" → {"courses": ["CSC 307", "CSC 357"], "professors": [], "intent": "comparison"}
+"How is Professor Oliver for CPE 350?" → {"courses": ["CPE 350"], "professors": ["Oliver"], "intent": "rating"}
+"Is chem 110 hard?" → {"courses": ["CHEM 110"], "professors": [], "intent": "difficulty"}`;
+
+  try {
+    const response = await callGroqAPI([
+      { role: "system", content: "You extract structured data from queries. Return only valid JSON." },
+      { role: "user", content: prompt }
+    ]);
+    
+    // Clean response (remove markdown if present)
+    const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    
+    console.log("🧠 Extracted entities:", parsed);
+    return parsed;
+  } catch (error) {
+    console.error("❌ Entity extraction failed:", error);
+    return { courses: [], professors: [], intent: "general" };
+  }
+}
+
+// Universal RAG query handler
+async function handleRAGQuery(query) {
+  try {
+    // Step 1: Extract entities
+    const entities = await extractEntitiesWithGROQ(query);
+    
+    // Step 2: Fetch relevant data
+    let reviewData = {};
+    let professorData = {};
+    
+    // Fetch course reviews
+    if (entities.courses.length > 0) {
+      console.log(`📚 Fetching reviews for courses: ${entities.courses.join(', ')}`);
+      for (const course of entities.courses) {
+        const reviews = await getReviewsByCourse(course, 20);
+        reviewData[course] = {
+          reviews: reviews,
+          avgRating: reviews.length > 0 
+            ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2)
+            : "N/A",
+          count: reviews.length
+        };
+      }
+    }
+    
+    // Fetch professor reviews
+    if (entities.professors.length > 0) {
+      console.log(`👨‍🏫 Fetching reviews for professors: ${entities.professors.join(', ')}`);
+      for (const profName of entities.professors) {
+        const professor = await findProfessor(profName);
+        if (professor) {
+          // If specific course mentioned, get professor+course reviews
+          if (entities.courses.length === 1) {
+            const reviews = await getReviewsByProfessorAndCourse(professor.name, entities.courses[0], 15);
+            professorData[professor.name] = {
+              info: professor,
+              reviews: reviews,
+              course: entities.courses[0],
+              avgRating: reviews.length > 0
+                ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2)
+                : "N/A",
+              count: reviews.length
+            };
+          } else {
+            // General professor reviews
+            const reviews = await getReviewsByProfessor(professor.name, 20);
+            professorData[professor.name] = {
+              info: professor,
+              reviews: reviews.slice(0, 10), // Limit to 10 for context
+              avgRating: professor.rating,
+              count: reviews.length
+            };
+          }
+        }
+      }
+    }
+    
+    // Step 3: Build context for GROQ - just feed all the data
+    let context = `User Question: "${query}"\n\n`;
+    
+    if (Object.keys(reviewData).length > 0) {
+      context += "=== COURSE REVIEWS ===\n";
+      for (const [course, data] of Object.entries(reviewData)) {
+        context += `\n${course} (${data.count} student reviews):\n`;
+        
+        // Group by professor to show who teaches it
+        const byProfessor = {};
+        data.reviews.forEach(r => {
+          if (!byProfessor[r.professor]) byProfessor[r.professor] = [];
+          byProfessor[r.professor].push(r);
+        });
+        
+        // Show reviews grouped by professor
+        Object.entries(byProfessor).forEach(([prof, reviews]) => {
+          const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
+          context += `\n  Professor: ${prof} (${reviews.length} reviews, avg rating: ${avgRating}/4.0)\n`;
+          reviews.slice(0, 3).forEach(r => {
+            context += `    - "${r.text.substring(0, 120)}..." [${r.rating}/4.0, Grade: ${r.grade || 'N/A'}]\n`;
+          });
+        });
+      }
+    }
+    
+    if (Object.keys(professorData).length > 0) {
+      context += "\n=== PROFESSOR REVIEWS ===\n";
+      for (const [profName, data] of Object.entries(professorData)) {
+        context += `\n${profName} (${data.count} total reviews, avg: ${data.avgRating}/4.0)`;
+        if (data.course) {
+          context += ` - specifically for ${data.course}`;
+        }
+        context += `:\n`;
+        data.reviews.slice(0, 8).forEach(r => {
+          context += `  - "${r.text.substring(0, 120)}..." [${r.rating}/4.0, Grade: ${r.grade || 'N/A'}]\n`;
+        });
+      }
+    }
+    
+    if (Object.keys(reviewData).length === 0 && Object.keys(professorData).length === 0) {
+      return "I couldn't find any review data for that query. Try asking about a specific Cal Poly professor or course!";
+    }
+    
+    // Step 4: Let the model figure out what to do with the data
+    const answerPrompt = `${context}
+
+Answer the user's question based on the review data above. Guidelines:
+- Be conversational and helpful (3-4 sentences)
+- DON'T calculate or mention overall course averages (the sample is biased)
+- DO mention what students say about difficulty, workload, teaching style, grading
+- If comparing courses: highlight key differences students mention
+- If asked "best professor": recommend based on ratings and positive feedback
+- If asked about difficulty: cite specific student comments
+- Reference professor names when relevant`;
+
+    const answer = await callGroqAPI([
+      { role: "system", content: "You are a Cal Poly academic advisor helping students choose courses and professors. Be helpful and specific based on the student review data provided." },
+      { role: "user", content: answerPrompt }
+    ]);
+    
+    return answer;
+    
+  } catch (error) {
+    console.error("❌ RAG query failed:", error);
+    throw error;
+  }
+}
+
+/* ==================== HELPER FUNCTIONS ==================== */
 
 // Fetch professor data from Supabase
 async function fetchProfessorData() {
@@ -91,7 +234,8 @@ async function findProfessor(profName) {
     const normalized = profName.toLowerCase().trim();
     const cached = professorCache.find(p => 
       p.name.toLowerCase().trim() === normalized ||
-      p.name.toLowerCase().includes(normalized)
+      p.name.toLowerCase().includes(normalized) ||
+      p.lastName?.toLowerCase() === normalized
     );
     if (cached) {
       console.log(`✅ Found in cache: ${profName} → ${cached.name}`);
@@ -187,10 +331,6 @@ function extractProfessorNameFromQuery(query) {
   return null;
 }
 
-async function generateGeneralResponse(query) {
-  return "I'm here to help with professor info! Try asking about a specific professor.";
-}
-
 /* ==================== MESSAGE HANDLERS ==================== */
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -224,103 +364,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const query = message.query;
-        const intent = parseQueryIntent(query);
+        console.log(`💬 User query: "${query}"`);
         
-        console.log("🔍 Query intent:", intent);
+        // Try RAG system for all queries
+        const answer = await handleRAGQuery(query);
         
-        // CASE 1: Course comparison
-        if (intent.isComparison && intent.courses.length >= 2) {
-          try {
-            const reviewsGrouped = await getReviewsForCourses(intent.courses, 10);
-            
-            const courseData = intent.courses.map(course => {
-              const reviews = reviewsGrouped[course] || [];
-              const avgRating = reviews.length > 0
-                ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-                : 0;
-              
-              return {
-                course,
-                avgRating: avgRating.toFixed(2),
-                reviewCount: reviews.length,
-                sampleReviews: reviews
-              };
-            });
-            
-            const response = await compareCourses(courseData, query);
-            
-            sendResponse({
-              status: "success",
-              professor: { analysis: response }
-            });
-          } catch (error) {
-            console.error("Comparison failed:", error);
-            sendResponse({
-              status: "error",
-              message: "Sorry, couldn't compare courses."
-            });
-          }
-          return;
-        }
-        
-        // CASE 2: Professor + specific course
-        if (intent.professorName && intent.isCourseSpecific) {
-          const professor = await findProfessor(intent.professorName);
-          if (!professor) {
-            sendResponse({
-              status: "not_found",
-              message: `Professor ${intent.professorName} not found.`
-            });
-            return;
-          }
-          
-          const courseCode = intent.courses[0];
-          const reviews = await getReviewsByProfessorAndCourse(professor.name, courseCode, 15);
-          
-          if (reviews.length === 0) {
-            sendResponse({
-              status: "success",
-              professor: {
-                analysis: `No ratings found for ${professor.name} teaching ${courseCode}.`
-              }
-            });
-            return;
-          }
-          
-          const response = await analyzeProfessorForCourse(professor.name, courseCode, reviews);
-          
-          sendResponse({
-            status: "success",
-            professor: { ...professor, analysis: response }
-          });
-          return;
-        }
-        
-        // CASE 3: General professor query
-        const professorName = extractProfessorNameFromQuery(query);
-        if (professorName) {
-          await fetchProfessorData();
-          const professor = await findProfessor(professorName);
-          const analysis = await callGeminiAnalysis(professorName, professor);
-          sendResponse({
-            status: "success",
-            professor: { ...professor, analysis },
-          });
-          return;
-        }
-        
-        // CASE 4: General question
-        const generalResponse = await generateGeneralResponse(query);
         sendResponse({
-          status: "general_response",
-          message: generalResponse,
+          status: "success",
+          professor: { analysis: answer }
         });
         
       } catch (error) {
         console.error("Chatbot error:", error);
+        
+        // Fallback to simple professor lookup
+        const professorName = extractProfessorNameFromQuery(message.query);
+        if (professorName) {
+          try {
+            await fetchProfessorData();
+            const professor = await findProfessor(professorName);
+            const analysis = await callGeminiAnalysis(professorName, professor);
+            sendResponse({
+              status: "success",
+              professor: { ...professor, analysis },
+            });
+            return;
+          } catch (e) {
+            console.error("Fallback also failed:", e);
+          }
+        }
+        
         sendResponse({
           status: "error",
-          message: "Sorry, couldn't process your query.",
+          message: "Sorry, I couldn't process your query. Try asking about a specific Cal Poly professor or course!",
         });
       }
     })();
