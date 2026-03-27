@@ -72,6 +72,7 @@
       height: 100%;
       min-height: 0;
       overflow: hidden;
+      position: relative;
     }
 
     /* Fixed header section */
@@ -198,7 +199,6 @@
       margin-bottom: 9px;
       cursor: grab;
       padding: 2px 0;
-      position: relative;
     }
     
     .pr-tooltip-header:active {
