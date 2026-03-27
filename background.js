@@ -91,7 +91,32 @@ async function handleRAGQuery(query) {
     if (entities.professors.length > 0) {
       console.log(`👨‍🏫 Fetching reviews for professors: ${entities.professors.join(', ')}`);
       for (const profName of entities.professors) {
-        const professor = await findProfessor(profName);
+        let professor = await findProfessor(profName);
+        
+        // Verify we found the right professor (fuzzy search might match wrong person)
+        // Check if extracted name appears as a complete WORD in found professor's name
+        const nameWords = professor.name.toLowerCase().split(/\s+/);
+        const searchWords = profName.toLowerCase().split(/\s+/);
+        const allWordsMatch = searchWords.every(word => nameWords.includes(word));
+        
+        if (professor && !allWordsMatch) {
+          console.log(`⚠️ Fuzzy match might be wrong: searched "${profName}", found "${professor.name}"`);
+          
+          // Try to find full name in original query
+          const profPattern = /(?:tell me about|about|professor|prof|dr\.?|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i;
+          const match = query.match(profPattern);
+          
+          if (match && match[1]) {
+            const fullName = match[1].trim();
+            console.log(`🔍 Trying full name from query: "${fullName}"`);
+            const betterMatch = await findProfessor(fullName);
+            if (betterMatch) {
+              console.log(`✅ Better match found: ${fullName} → ${betterMatch.name}`);
+              professor = betterMatch; // Use the better match
+            }
+          }
+        }
+        
         if (professor) {
           // If specific course mentioned, get professor+course reviews
           if (entities.courses.length === 1) {
