@@ -1,5 +1,5 @@
-// Load client modules
-importScripts('supabase-client.js', 'groq-client.js');
+// Load client modules (relative to backend/ folder)
+importScripts('supabase-client.js', 'groq-client.js', '../shared/utils.js');
 
 console.log("PolyRatings Enhancer background script is active.");
 console.log("🚀 Background loaded at:", new Date().toISOString());
@@ -103,7 +103,7 @@ async function handleRAGQuery(query) {
           console.log(`⚠️ Fuzzy match might be wrong: searched "${profName}", found "${professor.name}"`);
           
           // Try to find full name in original query
-          const profPattern = /(?:tell me about|about|professor|prof|dr\.?|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i;
+          const profPattern = /(?:tell me about|about|professor|prof|dr\.?|for)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)+)/i;
           const match = query.match(profPattern);
           
           if (match && match[1]) {
