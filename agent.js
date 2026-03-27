@@ -4,27 +4,44 @@ function openAgentPopup(button) {
   button.style.background = "linear-gradient(135deg, #4CAF50, #45a049)";
   button.style.color = "#fff";
 
-  const popup = document.createElement("div");
-  popup.className = CSS_CLASSES.AGENT_POPUP;
-  popup.style.cssText = `
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.5); z-index: 10000; display: flex;
-    align-items: center; justify-content: center; animation: fadeIn 0.3s ease-out;
-  `;
-
   const chatContainer = document.createElement("div");
+  chatContainer.className = "pr-agent-popup";
   chatContainer.style.cssText = `
-    background: white; border-radius: 16px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-    width: 400px; max-width: 90vw; height: 500px; max-height: 80vh;
-    display: flex; flex-direction: column; overflow: hidden; position: relative;
-    animation: slideUp 0.4s ease-out;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    width: 400px;
+    max-width: 90vw;
+    height: 500px;
+    max-height: 80vh;
+    min-width: 300px;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10000;
+    opacity: 0;
+    animation: fadeIn 0.2s ease-out forwards;
+    resize: both;
   `;
 
   const header = document.createElement("div");
+  header.className = "pr-agent-header";
   header.style.cssText = `
-    background: linear-gradient(135deg, #FFD700, #FFA500); color: #000;
-    padding: 16px 20px; font-weight: 600; font-size: 16px;
-    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #000;
+    padding: 16px 20px;
+    font-weight: 600;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: grab;
+    user-select: none;
   `;
   header.innerHTML = `
     <span>🤖 PolyRatings Agent</span>
@@ -34,6 +51,54 @@ function openAgentPopup(button) {
       display: flex; align-items: center; justify-content: center;
     ">×</button>
   `;
+
+  // Make draggable
+  let isDragging = false;
+  let startX, startY, initialLeft, initialTop;
+
+  header.addEventListener("mousedown", (e) => {
+    if (e.target.classList.contains("close-agent-btn")) return;
+    
+    isDragging = true;
+    header.style.cursor = "grabbing";
+    
+    const rect = chatContainer.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    initialLeft = rect.left;
+    initialTop = rect.top;
+
+    const onMouseMove = (moveEvent) => {
+      if (!isDragging) return;
+      
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newLeft = initialLeft + deltaX;
+      let newTop = initialTop + deltaY;
+
+      // Clamp to viewport
+      const margin = 10;
+      const width = chatContainer.offsetWidth;
+      const height = chatContainer.offsetHeight;
+      newLeft = Math.max(margin, Math.min(newLeft, window.innerWidth - width - margin));
+      newTop = Math.max(margin, Math.min(newTop, window.innerHeight - height - margin));
+
+      chatContainer.style.left = `${newLeft}px`;
+      chatContainer.style.top = `${newTop}px`;
+      chatContainer.style.transform = "none";
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      header.style.cursor = "grab";
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  });
 
   const messagesArea = document.createElement("div");
   messagesArea.className = "agent-messages";
@@ -116,21 +181,19 @@ function openAgentPopup(button) {
   chatContainer.appendChild(header);
   chatContainer.appendChild(messagesArea);
   chatContainer.appendChild(inputArea);
-  popup.appendChild(chatContainer);
-  document.body.appendChild(popup);
+  document.body.appendChild(chatContainer); // Append directly, no dark background wrapper
   setTimeout(() => input.focus(), 100);
 
   if (!document.querySelector("#agent-popup-styles")) {
     const style = document.createElement("style");
     style.id = "agent-popup-styles";
     style.textContent = `
-      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-      @keyframes slideUp {
-        from { opacity: 0; transform: translateY(30px) scale(0.95); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
+      @keyframes fadeIn { 
+        from { opacity: 0; } 
+        to { opacity: 1; } 
       }
-      .agent-popup input:focus { border-color: #FFD700 !important; }
-      .agent-popup button:hover { transform: translateY(-1px); }
+      .pr-agent-popup input:focus { border-color: #FFD700 !important; }
+      .pr-agent-popup button:hover { transform: translateY(-1px); }
       @keyframes slideInRight {
         from { opacity: 0; transform: translateX(20px); }
         to { opacity: 1; transform: translateX(0); }
@@ -145,7 +208,7 @@ function openAgentPopup(button) {
 }
 
 function closeAgentPopup() {
-  const popup = document.querySelector(`.${CSS_CLASSES.AGENT_POPUP}`);
+  const popup = document.querySelector('.pr-agent-popup');
   if (popup) popup.remove();
   const button = document.querySelector(`.${CSS_CLASSES.ASK_AGENT_BTN}`);
   if (button) {

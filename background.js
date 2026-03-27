@@ -1,172 +1,246 @@
+// Load client modules
+importScripts('supabase-client.js', 'groq-client.js');
+
 console.log("PolyRatings Enhancer background script is active.");
-console.log("🚀 Background script loaded at:", new Date().toISOString());
-console.log("🚀 Chrome runtime available:", typeof chrome !== "undefined");
-console.log(
-  "🚀 Chrome runtime onMessage available:",
-  typeof chrome.runtime.onMessage !== "undefined"
-);
+console.log("🚀 Background loaded at:", new Date().toISOString());
 
 // Cache for professor data
 let professorCache = null;
 let isFetching = false;
 
-// Sample data for testing (fallback)
+// Sample fallback data
 const sampleProfessors = [
   {
     name: "John Smith",
     rating: 4.2,
     link: "https://polyratings.dev/professor/john-smith",
-  },
-  {
-    name: "Jane Doe",
-    rating: 3.8,
-    link: "https://polyratings.dev/professor/jane-doe",
-  },
-  {
-    name: "Bob Johnson",
-    rating: 4.5,
-    link: "https://polyratings.dev/professor/bob-johnson",
-  },
+  }
 ];
 
-// Function to parse CSV data
-function parseCSV(csvText) {
-  const lines = csvText.split("\n");
-  const headers = lines[0].split(",");
-  const data = [];
+/* ==================== RAG SYSTEM ==================== */
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line) {
-      const values = line.split(",");
-      const row = {};
-      headers.forEach((header, index) => {
-        row[header] = values[index] || "";
-      });
-      data.push(row);
-    }
-  }
+// Extract entities from user query using GROQ
+async function extractEntitiesWithGROQ(query) {
+  const prompt = `Extract course codes and professor names from this query. Respond ONLY with valid JSON, no markdown formatting.
 
-  return data;
+Query: "${query}"
+
+Return format:
+{
+  "courses": ["CSC 307", "CPE 350"],
+  "professors": ["Oliver", "Seng"],
+  "intent": "comparison" | "difficulty" | "rating" | "recommendation" | "general"
 }
 
-// Function to convert CSV data to expected format
-function convertCSVToProfessorData(ratingsData, commentsData) {
-  const professorMap = new Map();
+Rules:
+- Course codes: 2-4 UPPERCASE letters + 3 digits (e.g., CSC 307, CHEM 110)
+- Normalize casing: "csc 307" → "CSC 307"
+- Professors: Extract last names only
+- If nothing found, return empty arrays
+- Intent: What is the user asking about?
 
-  ratingsData.forEach((row) => {
-    const profName = row.fullName;
-    if (!profName) return;
+Examples:
+"CSC 307 vs CSC 357" → {"courses": ["CSC 307", "CSC 357"], "professors": [], "intent": "comparison"}
+"How is Professor Oliver for CPE 350?" → {"courses": ["CPE 350"], "professors": ["Oliver"], "intent": "rating"}
+"Is chem 110 hard?" → {"courses": ["CHEM 110"], "professors": [], "intent": "difficulty"}`;
 
-    professorMap.set(profName, {
-      name: profName,
-      rating: parseFloat(row.overallRating) || 0,
-      numEvals: parseInt(row.numEvals) || 0,
-      link: /^[a-zA-Z0-9\-_]+$/.test(row.id)
-        ? `https://polyratings.dev/professor/${row.id}`
-        : "https://polyratings.dev/new-professor",
-      clarity: parseFloat(row.materialClear) || 0,
-      helpfulness: parseFloat(row.studentDifficulties) || 0,
-      comments: "",
-      department: row.department || "",
-      courses: row.courses || "",
-      allComments: [],
-      gradeLevels: [],
-      grades: [],
-    });
-  });
-
-  commentsData.forEach((row) => {
-    const profName = row.professor_name;
-    if (!profName) return;
-
-    if (!professorMap.has(profName)) {
-      professorMap.set(profName, {
-        name: profName,
-        rating: 0,
-        numEvals: 0,
-        link: `https://polyratings.dev/professor/${
-          row.professor_id || profName.toLowerCase().replace(/\s+/g, "-")
-        }`,
-        clarity: 0,
-        helpfulness: 0,
-        comments: "",
-        department: row.professor_department || "",
-        courses: row.course_code || "",
-        allComments: [],
-        gradeLevels: [],
-        grades: [],
-      });
-    }
-
-    const prof = professorMap.get(profName);
-    const comment = row.rating_text || "";
-    if (comment.trim()) prof.allComments.push(comment.trim());
-    if (row.grade_level && row.grade_level !== "N/A")
-      prof.gradeLevels.push(row.grade_level);
-    if (row.grade && row.grade !== "N/A") prof.grades.push(row.grade);
-  });
-
-  return Array.from(professorMap.values()).map((prof) => {
-    prof.comments = prof.allComments.join(" | ").substring(0, 2000);
-    delete prof.allComments;
-    delete prof.gradeLevels;
-    delete prof.grades;
-    return prof;
-  });
-}
-
-// Fetch professor data from CSVs
-async function fetchProfessorData() {
-  console.log("🚀 fetchProfessorData() called!");
-  if (professorCache) {
-    console.log("✅ Using cached professor data");
-    return professorCache;
-  }
-
-  // Clear any stale storage cache so bad links get rebuilt fresh
-  chrome.storage.local.remove("professorData");
-  console.log("🧹 Cleared stale professor cache from storage");
-
-  // If already fetching, wait and retry a few times
-  if (isFetching) {
-    console.log("⏳ Already fetching, waiting for completion...");
-    for (let i = 0; i < 50; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      if (professorCache) {
-        console.log("✅ Cache populated, returning cached data");
-        return professorCache;
-      }
-      if (!isFetching) break;
-    }
-    if (professorCache) return professorCache;
-  }
-
-  isFetching = true;
   try {
-    const [ratingsResponse, commentsResponse] = await Promise.all([
-      fetch(
-        "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professors_data.csv"
-      ),
-      fetch(
-        "https://raw.githubusercontent.com/sreshtalluri/polyratings-data-collection/refs/heads/main/data/main/professor_detailed_reviews.csv"
-      ),
+    const response = await callGroqAPI([
+      { role: "system", content: "You extract structured data from queries. Return only valid JSON." },
+      { role: "user", content: prompt }
     ]);
-    const [ratingsCsvText, commentsCsvText] = await Promise.all([
-      ratingsResponse.text(),
-      commentsResponse.text(),
+    
+    // Clean response (remove markdown if present)
+    const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    
+    console.log("🧠 Extracted entities:", parsed);
+    return parsed;
+  } catch (error) {
+    console.error("❌ Entity extraction failed:", error);
+    return { courses: [], professors: [], intent: "general" };
+  }
+}
+
+// Universal RAG query handler
+async function handleRAGQuery(query) {
+  try {
+    // Step 1: Extract entities
+    const entities = await extractEntitiesWithGROQ(query);
+    
+    // Step 2: Fetch relevant data
+    let reviewData = {};
+    let professorData = {};
+    
+    // Fetch course reviews
+    if (entities.courses.length > 0) {
+      console.log(`📚 Fetching reviews for courses: ${entities.courses.join(', ')}`);
+      for (const course of entities.courses) {
+        const reviews = await getReviewsByCourse(course, 20);
+        reviewData[course] = {
+          reviews: reviews,
+          avgRating: reviews.length > 0 
+            ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2)
+            : "N/A",
+          count: reviews.length
+        };
+      }
+    }
+    
+    // Fetch professor reviews
+    if (entities.professors.length > 0) {
+      console.log(`👨‍🏫 Fetching reviews for professors: ${entities.professors.join(', ')}`);
+      for (const profName of entities.professors) {
+        let professor = await findProfessor(profName);
+        
+        // Verify we found the right professor (fuzzy search might match wrong person)
+        // Check if extracted name appears as a complete WORD in found professor's name
+        const nameWords = professor.name.toLowerCase().split(/\s+/);
+        const searchWords = profName.toLowerCase().split(/\s+/);
+        const allWordsMatch = searchWords.every(word => nameWords.includes(word));
+        
+        if (professor && !allWordsMatch) {
+          console.log(`⚠️ Fuzzy match might be wrong: searched "${profName}", found "${professor.name}"`);
+          
+          // Try to find full name in original query
+          const profPattern = /(?:tell me about|about|professor|prof|dr\.?|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i;
+          const match = query.match(profPattern);
+          
+          if (match && match[1]) {
+            const fullName = match[1].trim();
+            console.log(`🔍 Trying full name from query: "${fullName}"`);
+            const betterMatch = await findProfessor(fullName);
+            if (betterMatch) {
+              console.log(`✅ Better match found: ${fullName} → ${betterMatch.name}`);
+              professor = betterMatch; // Use the better match
+            }
+          }
+        }
+        
+        if (professor) {
+          // If specific course mentioned, get professor+course reviews
+          if (entities.courses.length === 1) {
+            const reviews = await getReviewsByProfessorAndCourse(professor.name, entities.courses[0], 15);
+            professorData[professor.name] = {
+              info: professor,
+              reviews: reviews,
+              course: entities.courses[0],
+              avgRating: reviews.length > 0
+                ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2)
+                : "N/A",
+              count: reviews.length
+            };
+          } else {
+            // General professor reviews
+            const reviews = await getReviewsByProfessor(professor.name, 20);
+            professorData[professor.name] = {
+              info: professor,
+              reviews: reviews.slice(0, 10), // Limit to 10 for context
+              avgRating: professor.rating,
+              count: reviews.length
+            };
+          }
+        }
+      }
+    }
+    
+    // Step 3: Build context for GROQ - just feed all the data
+    let context = `User Question: "${query}"\n\n`;
+    
+    if (Object.keys(reviewData).length > 0) {
+      context += "=== COURSE REVIEWS ===\n";
+      for (const [course, data] of Object.entries(reviewData)) {
+        context += `\n${course} (${data.count} student reviews):\n`;
+        
+        // Group by professor to show who teaches it
+        const byProfessor = {};
+        data.reviews.forEach(r => {
+          if (!byProfessor[r.professor]) byProfessor[r.professor] = [];
+          byProfessor[r.professor].push(r);
+        });
+        
+        // Show reviews grouped by professor
+        Object.entries(byProfessor).forEach(([prof, reviews]) => {
+          const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
+          context += `\n  Professor: ${prof} (${reviews.length} reviews, avg rating: ${avgRating}/4.0)\n`;
+          reviews.slice(0, 3).forEach(r => {
+            context += `    - "${r.text.substring(0, 120)}..." [${r.rating}/4.0, Grade: ${r.grade || 'N/A'}]\n`;
+          });
+        });
+      }
+    }
+    
+    if (Object.keys(professorData).length > 0) {
+      context += "\n=== PROFESSOR REVIEWS ===\n";
+      for (const [profName, data] of Object.entries(professorData)) {
+        context += `\n${profName} (${data.count} total reviews, avg: ${data.avgRating}/4.0)`;
+        if (data.course) {
+          context += ` - specifically for ${data.course}`;
+        }
+        context += `:\n`;
+        data.reviews.slice(0, 8).forEach(r => {
+          context += `  - "${r.text.substring(0, 120)}..." [${r.rating}/4.0, Grade: ${r.grade || 'N/A'}]\n`;
+        });
+      }
+    }
+    
+    if (Object.keys(reviewData).length === 0 && Object.keys(professorData).length === 0) {
+      return "I couldn't find any review data for that query. Try asking about a specific Cal Poly professor or course!";
+    }
+    
+    // Step 4: Let the model figure out what to do with the data
+    const answerPrompt = `${context}
+
+Answer the user's question based on the review data above. Guidelines:
+- Be conversational and helpful (3-4 sentences)
+- DON'T calculate or mention overall course averages (the sample is biased)
+- DO mention what students say about difficulty, workload, teaching style, grading
+- If comparing courses: highlight key differences students mention
+- If asked "best professor": recommend based on ratings and positive feedback
+- If asked about difficulty: cite specific student comments
+- Reference professor names when relevant`;
+
+    const answer = await callGroqAPI([
+      { role: "system", content: "You are a Cal Poly academic advisor helping students choose courses and professors. Be helpful and specific based on the student review data provided." },
+      { role: "user", content: answerPrompt }
     ]);
-    const ratingsData = parseCSV(ratingsCsvText);
-    const commentsData = parseCSV(commentsCsvText);
-    const data = convertCSVToProfessorData(ratingsData, commentsData);
-    professorCache = data;
-    chrome.storage.local.set({ professorData: data }, () =>
-      console.log("💾 Professor data saved to chrome.storage")
-    );
-    return data;
-  } catch (err) {
-    console.log("❌ Error fetching professor data:", err);
-    return sampleProfessors;
+    
+    return answer;
+    
+  } catch (error) {
+    console.error("❌ RAG query failed:", error);
+    throw error;
+  }
+}
+
+/* ==================== HELPER FUNCTIONS ==================== */
+
+// Fetch professor data from Supabase
+async function fetchProfessorData() {
+  if (professorCache) return professorCache;
+  if (isFetching) {
+    return new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (professorCache) {
+          clearInterval(check);
+          resolve(professorCache);
+        }
+      }, 100);
+    });
+  }
+  
+  isFetching = true;
+  console.log("📚 Fetching professors from Supabase...");
+  
+  try {
+    const professors = await getAllProfessors();
+    professorCache = professors;
+    console.log(`✅ Loaded ${professorCache.length} professors`);
+    return professorCache;
+  } catch (error) {
+    console.error("❌ Failed to fetch from Supabase:", error);
+    professorCache = sampleProfessors;
+    return professorCache;
   } finally {
     isFetching = false;
   }
@@ -176,101 +250,57 @@ function preloadProfessorData() {
   fetchProfessorData();
 }
 
-// Find professor in cache
-function findProfessor(profName) {
-  if (!professorCache) {
-    console.log(
-      `❌ No professor cache available when searching for: ${profName}`
+// Find professor in cache or DB
+async function findProfessor(profName) {
+  if (!profName) return null;
+  
+  // Try cache first
+  if (professorCache) {
+    const normalized = profName.toLowerCase().trim();
+    const cached = professorCache.find(p => 
+      p.name.toLowerCase().trim() === normalized ||
+      p.name.toLowerCase().includes(normalized) ||
+      p.lastName?.toLowerCase() === normalized
     );
-    return null;
+    if (cached) {
+      console.log(`✅ Found in cache: ${profName} → ${cached.name}`);
+      return cached;
+    }
   }
-  const normalized = profName.toLowerCase().trim();
-  console.log(
-    `🔍 Searching for professor: "${profName}" (normalized: "${normalized}")`
-  );
-
-  // Try exact match first
-  const exactMatch = professorCache.find(
-    (p) => p.name.toLowerCase().trim() === normalized
-  );
-  if (exactMatch) {
-    console.log(`✅ Exact match found: ${exactMatch.name}`);
-    return exactMatch;
-  }
-
-  // Try partial match — require at least 2 words in common to avoid false positives
-  const partialMatch = professorCache.find((p) => {
-    const name = p.name.toLowerCase().trim();
-    if (name.length < 4) return false;
-    const nameWords = name.split(/\s+/);
-    const searchWords = normalized.split(/\s+/).filter(w => w.length > 1);
-    const commonWords = searchWords.filter(w => nameWords.includes(w));
-    return commonWords.length >= 2;
-  });
-  if (partialMatch) {
-    console.log(
-      `✅ Partial match found: ${partialMatch.name} (searched for: ${profName})`
-    );
-    return partialMatch;
-  }
-
-  // Debug: show similar names
-  const similarNames = professorCache
-    .filter((p) => {
-      const name = p.name.toLowerCase().trim();
-      const searchWords = normalized.split(" ");
-      return (
-        searchWords.some((word) => name.includes(word)) ||
-        name.split(" ").some((word) => normalized.includes(word))
-      );
-    })
-    .slice(0, 5)
-    .map((p) => p.name);
-
-  if (similarNames.length > 0) {
-    console.log(`💡 Similar names found: ${similarNames.join(", ")}`);
-  } else {
-    console.log(`❌ No match found for: ${profName}`);
-  }
-
-  return null;
+  
+  // Try Supabase with fuzzy search
+  console.log(`🔍 Searching Supabase for: ${profName}`);
+  return await findProfessorByName(profName);
 }
 
-/* -------------------- STATIC AI SUMMARIES (JSON-BASED) -------------------- */
+/* ==================== AI SUMMARIES (GITHUB) ==================== */
 
 const AI_SUMMARIES_URL =
   "https://raw.githubusercontent.com/dakpasala/polyratings-ai-generator/main/summaries/ai_summaries.json";
 
 let aiSummariesCache = null;
 
-// Fetch once & cache
 async function fetchAISummaries() {
   if (aiSummariesCache) return aiSummariesCache;
   try {
-    console.log("🌐 Fetching pre-generated AI summaries...");
+    console.log("🌐 Fetching AI summaries...");
     const res = await fetch(AI_SUMMARIES_URL, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     aiSummariesCache = await res.json();
-    console.log(
-      `✅ Loaded ${Object.keys(aiSummariesCache).length} AI summaries`
-    );
+    console.log(`✅ Loaded ${Object.keys(aiSummariesCache).length} summaries`);
     return aiSummariesCache;
   } catch (err) {
-    console.error("❌ Failed to fetch AI summaries:", err);
+    console.error("❌ Failed to fetch summaries:", err);
     aiSummariesCache = {};
     return {};
   }
 }
 
-// Shared fallback message for any professor without a summary
 function noRatingsMessage(profName) {
-  return `No PolyRatings found. Try asking classmates or other professors for insights before enrolling.\n\nhttps://polyratings.dev/new-professor`;
+  return `No PolyRatings found. Try asking classmates or other professors for insights.\n\nhttps://polyratings.dev/new-professor`;
 }
 
-// Tooltip (no link shown — link stripped by tooltips.js)
 async function callGeminiTooltipAnalysis(profName) {
-  await fetchProfessorData();
-
   const summaries = await fetchAISummaries();
   const key = Object.keys(summaries).find(
     (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
@@ -283,16 +313,12 @@ async function callGeminiTooltipAnalysis(profName) {
     }
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
-    console.log(`💬 Tooltip summary for ${profName}:`, summary);
     return summary;
   }
 
-  // No summary found — same message whether in CSV or not
-  console.log(`💬 No summary for ${profName}, showing fallback`);
-  return "No PolyRatings found. Try asking classmates or other professors for insights before enrolling.";
+  return "No PolyRatings found. Try asking classmates for insights.";
 }
 
-// Chatbot / popup (with add-professor link)
 async function callGeminiAnalysis(profName, professorData = null) {
   const summaries = await fetchAISummaries();
   const key = Object.keys(summaries).find(
@@ -306,33 +332,23 @@ async function callGeminiAnalysis(profName, professorData = null) {
     }
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
-    console.log(`🧠 Found AI summary for ${profName}`);
-    // Use the professor's real profile link if available
     return `${summary}\n\n${professorData?.link || ""}`;
   }
 
-  // No summary found — same message whether in CSV or not, always include add link
-  console.log(`🚫 No summary for ${profName}, showing fallback`);
   return noRatingsMessage(profName);
 }
 
-/* ------------------ END STATIC AI SUMMARIES ------------------ */
-
-// Extract professor name from query
 function extractProfessorNameFromQuery(query) {
   const patterns = [
-    /(?:tell me about|what about|how is|rate|rating for|info on|information about)\s+([a-z\s,]+)/i,
-    /(?:professor|prof|dr\.?|dr)\s+([a-z\s,]+)/i,
+    /(?:tell me about|what about|how is|rate|rating for|info on)\s+([a-z\s,]+)/i,
+    /(?:professor|prof|dr\.?)\s+([a-z\s,]+)/i,
     /^([a-z\s,]+)$/i,
   ];
   for (const p of patterns) {
     const m = query.match(p);
     if (m && m[1]) {
       let n = m[1]
-        .replace(
-          /\b(professor|prof|dr|dr\.|about|tell|me|how|is|rate|rating|info|information)\b/gi,
-          ""
-        )
+        .replace(/\b(professor|prof|dr|about|tell|me|how|is|rate|rating|info)\b/gi, "")
         .trim();
       if (n.length > 2) return n;
     }
@@ -340,29 +356,24 @@ function extractProfessorNameFromQuery(query) {
   return null;
 }
 
-// General chatbot fallback
-async function generateGeneralResponse(query) {
-  return "I'm here to help with professor info! Try asking about a specific professor by name.";
-}
-
-/* ------------------ MESSAGING HANDLER ------------------ */
+/* ==================== MESSAGE HANDLERS ==================== */
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getProfRating") {
     (async () => {
       try {
-        const data = await fetchProfessorData();
-        const professor = findProfessor(message.profName);
+        await fetchProfessorData();
+        const professor = await findProfessor(message.profName);
         if (professor) {
           sendResponse({ status: "success", professor });
         } else {
           sendResponse({
             status: "not_found",
-            message: "Professor not found in database",
+            message: "Professor not found",
           });
         }
       } catch (e) {
-        sendResponse({ status: "error", message: "Failed to fetch rating" });
+        sendResponse({ status: "error", message: "Failed to fetch" });
       }
     })();
     return true;
@@ -377,27 +388,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "chatbotQuery") {
     (async () => {
       try {
-        const query = message.query.toLowerCase();
-        const professorName = extractProfessorNameFromQuery(query);
-        if (professorName) {
-          const data = await fetchProfessorData();
-          const professor = findProfessor(professorName);
-          const analysis = await callGeminiAnalysis(professorName, professor);
-          sendResponse({
-            status: "success",
-            professor: { ...professor, analysis },
-          });
-        } else {
-          const generalResponse = await generateGeneralResponse(query);
-          sendResponse({
-            status: "general_response",
-            message: generalResponse,
-          });
-        }
+        const query = message.query;
+        console.log(`💬 User query: "${query}"`);
+        
+        // Try RAG system for all queries
+        const answer = await handleRAGQuery(query);
+        
+        sendResponse({
+          status: "success",
+          professor: { analysis: answer }
+        });
+        
       } catch (error) {
+        console.error("Chatbot error:", error);
+        
+        // Fallback to simple professor lookup
+        const professorName = extractProfessorNameFromQuery(message.query);
+        if (professorName) {
+          try {
+            await fetchProfessorData();
+            const professor = await findProfessor(professorName);
+            const analysis = await callGeminiAnalysis(professorName, professor);
+            sendResponse({
+              status: "success",
+              professor: { ...professor, analysis },
+            });
+            return;
+          } catch (e) {
+            console.error("Fallback also failed:", e);
+          }
+        }
+        
         sendResponse({
           status: "error",
-          message: "Sorry, I couldn't process your query.",
+          message: "Sorry, I couldn't process your query. Try asking about a specific Cal Poly professor or course!",
         });
       }
     })();
@@ -407,8 +431,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getGeminiAnalysis") {
     (async () => {
       try {
-        const data = await fetchProfessorData();
-        const professor = findProfessor(message.profName);
+        await fetchProfessorData();
+        const professor = await findProfessor(message.profName);
         const analysis = await callGeminiAnalysis(message.profName, professor);
         sendResponse({
           status: "success",
@@ -428,8 +452,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getGeminiTooltipAnalysis") {
     (async () => {
       try {
-        const data = await fetchProfessorData();
-        const professor = findProfessor(message.profName);
+        await fetchProfessorData();
+        const professor = await findProfessor(message.profName);
         const analysis = await callGeminiTooltipAnalysis(message.profName);
         sendResponse({
           status: "success",
@@ -441,6 +465,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           status: "error",
           message: "Failed to get tooltip summary",
         });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === "getProfessorReviews") {
+    (async () => {
+      try {
+        const profName = message.profName;
+        if (!profName) {
+          sendResponse({ status: "error", reviews: [] });
+          return;
+        }
+
+        const reviews = await getReviewsByProfessor(profName, 100);
+        sendResponse({ status: "success", reviews });
+      } catch (error) {
+        console.error("Failed to fetch reviews:", error);
+        sendResponse({ status: "error", reviews: [] });
       }
     })();
     return true;

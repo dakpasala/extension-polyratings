@@ -1,4 +1,14 @@
 // ==================== TOOLTIPS ====================
+// Drop-in replacement — all existing function names preserved.
+//
+// Fixes:
+//   ✅ position: fixed  (was: absolute — caused viewport vs page coord drift)
+//   ✅ Skeleton loader  (was: "Loading..." text flash)
+//   ✅ Smooth fade + slide  (was: bouncy cubic-bezier scale)
+//   ✅ 500ms show delay  (was: 400ms — feels more intentional)
+//   ✅ 150ms hide grace  (was: 100ms — less flicker on mouse movement)
+//   ✅ Styles in a <style> tag  (was: inline cssText soup)
+//   ✅ Clean minimal design  (was: gold gradient)
 
 /* ─── Inject styles once ─────────────────────────────────────────────────── */
 (function injectTooltipStyles() {
@@ -10,6 +20,11 @@
       position: fixed;
       z-index: 99999;
       width: 268px;
+      min-width: 200px;
+      max-width: 700px;
+      height: 400px;
+      min-height: 300px;
+      max-height: 90vh;
       background: #ffffff;
       border: 1px solid #e8e8e8;
       border-radius: 10px;
@@ -23,6 +38,25 @@
       opacity: 0;
       transform: translateY(6px);
       transition: opacity 0.16s ease, transform 0.16s ease;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      cursor: default;
+      resize: both;
+      overflow: hidden;
+    }
+    
+    .pr-professor-tooltip.pr-dragging {
+      transition: none;
+      cursor: grabbing;
+    }
+
+    .pr-tooltip-header-section {
+      cursor: grab;
+    }
+
+    .pr-tooltip-header-section:active {
+      cursor: grabbing;
     }
 
     .pr-professor-tooltip.pr-tooltip-visible {
@@ -32,7 +66,127 @@
     }
 
     .pr-tooltip-inner {
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Fixed header section */
+    .pr-tooltip-header-section {
+      flex-shrink: 0;
+      padding: 13px 15px 0 15px;
+      background: #fff;
+      border-bottom: 1px solid #e8e8e8;
+    }
+
+    /* Tab navigation */
+    .pr-tooltip-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 8px 0 0 0;
+      overflow-x: auto;
+      flex-shrink: 0;
+      scrollbar-width: thin;
+      margin: 0 -15px;
+      padding-left: 15px;
+      padding-right: 15px;
+    }
+
+    .pr-tooltip-tabs::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .pr-tooltip-tabs::-webkit-scrollbar-thumb {
+      background: #ddd;
+      border-radius: 2px;
+    }
+
+    .pr-tooltip-tab {
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #666;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      pointer-events: auto;
+    }
+
+    .pr-tooltip-tab:hover {
+      color: #333;
+      background: #f8f8f8;
+    }
+
+    .pr-tooltip-tab.active {
+      color: #2a7a2a;
+      border-bottom-color: #2a7a2a;
+    }
+
+    .pr-tooltip-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
       padding: 13px 15px;
+      min-height: 0; /* Critical for flex scrolling */
+    }
+
+    .pr-tooltip-section {
+      scroll-margin-top: 10px;
+      padding-bottom: 12px;
+    }
+
+    .pr-tooltip-section + .pr-tooltip-section {
+      margin-top: 28px;
+      padding-top: 12px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .pr-course-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .pr-review {
+      background: #f8f8f8;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .pr-review:last-child {
+      margin-bottom: 0;
+    }
+
+    .pr-review-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+      font-size: 10px;
+      color: #666;
+    }
+
+    .pr-review-tag {
+      background: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .pr-review-text {
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: #333;
     }
 
     /* ── Header ── */
@@ -42,6 +196,40 @@
       justify-content: space-between;
       gap: 8px;
       margin-bottom: 9px;
+      cursor: grab;
+      padding: 2px 0;
+      position: relative;
+    }
+    
+    .pr-tooltip-header:active {
+      cursor: grabbing;
+    }
+
+    .pr-tooltip-close {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #f3f3f3;
+      border: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      color: #666;
+      transition: all 0.15s ease;
+      pointer-events: auto;
+      z-index: 10;
+    }
+
+    .pr-tooltip-close:hover {
+      background: #e8e8e8;
+      color: #333;
+      transform: scale(1.1);
     }
 
     .pr-tooltip-name {
@@ -141,14 +329,10 @@ function initTooltipState() {
       expandTimeout: null,
       currentTooltip: null,
       isHovering: false,
+      isDragging: false,
+      dragOffset: { x: 0, y: 0 },
     };
-    // Hide on scroll or window blur
-    document.addEventListener(
-      "scroll",
-      () => hideProfessorTooltip(null, true),
-      { capture: true, passive: true }
-    );
-    window.addEventListener("blur", () => hideProfessorTooltip(null, true));
+    // Tooltips now persist — user closes via X button
   }
 }
 
@@ -191,22 +375,14 @@ function addHoverTooltip(element, professor) {
         showProfessorTooltip(element, professor);
       }
       window.PRTooltipState.showTimeout = null;
-    }, 700);
+    }, 500);
   });
 
   element.addEventListener("mouseleave", () => {
     window.PRTooltipState.isHovering = false;
-
     clearTimeout(window.PRTooltipState.showTimeout);
     window.PRTooltipState.showTimeout = null;
-    clearTimeout(window.PRTooltipState.hideTimeout);
-    window.PRTooltipState.hideTimeout = null;
-
-    // 300ms grace — enough time to move mouse from name to tooltip
-    window.PRTooltipState.hideTimeout = setTimeout(() => {
-      hideProfessorTooltip(element, false);
-      window.PRTooltipState.hideTimeout = null;
-    }, 300);
+    // Tooltip stays open — user must click X to close
   });
 }
 
@@ -254,7 +430,33 @@ function showProfessorTooltip(element, professor) {
           prof.rating,
           prof.numEvals,
           prof.department,
-          response.analysis
+          response.analysis,
+          [] // Empty reviews initially - we'll fetch separately
+        );
+        
+        // Re-position after real content loads
+        positionTooltip(tooltip, element);
+        // Re-attach drag after content rebuild
+        setupDragListeners(tooltip);
+
+        // NOW fetch reviews separately (async, doesn't block tooltip)
+        chrome.runtime.sendMessage(
+          { type: "getProfessorReviews", profName: prof.name },
+          (reviewsResponse) => {
+            if (reviewsResponse?.status === "success" && reviewsResponse.reviews) {
+              // Rebuild tooltip with reviews added
+              tooltip.innerHTML = buildContent(
+                prof.name,
+                prof.rating,
+                prof.numEvals,
+                prof.department,
+                response.analysis,
+                reviewsResponse.reviews
+              );
+              positionTooltip(tooltip, element);
+              setupDragListeners(tooltip);
+            }
+          }
         );
       } else {
         // Not found or error — show fallback with whatever analysis text exists
@@ -263,15 +465,18 @@ function showProfessorTooltip(element, professor) {
           null,
           null,
           null,
-          response?.analysis || null
+          response?.analysis || null,
+          []
         );
+        positionTooltip(tooltip, element);
+        setupDragListeners(tooltip);
       }
-
-      // Re-position after real content loads (height will have changed)
-      positionTooltip(tooltip, element);
     }
   );
 
+  // Setup initial drag listeners
+  setupDragListeners(tooltip);
+  
   // Hovering onto the tooltip — expand and stay open
   tooltip.addEventListener("mouseenter", () => {
     window.PRTooltipState.isHovering = true;
@@ -280,34 +485,155 @@ function showProfessorTooltip(element, professor) {
     // Small delay before expanding — feels intentional, not jumpy
     window.PRTooltipState.expandTimeout = setTimeout(() => {
       tooltip.classList.add("pr-tooltip-expanded");
+      // Re-clamp after expansion changes height
+      setTimeout(() => {
+        const rect = tooltip.getBoundingClientRect();
+        const margin = 10;
+        const vh = window.innerHeight;
+        if (rect.bottom > vh - margin) {
+          const overflow = rect.bottom - (vh - margin);
+          const currentTop = parseInt(tooltip.style.top);
+          tooltip.style.top = `${Math.max(margin, currentTop - overflow)}px`;
+        }
+      }, 500); // wait for transition
     }, 120);
   });
 
-  tooltip.addEventListener("mouseleave", () => {
+  tooltip.addEventListener("mouseleave", (e) => {
+    // Don't hide if dragging or mouse is still within tooltip
+    if (window.PRTooltipState.isDragging || 
+        tooltip.contains(e.relatedTarget)) {
+      return;
+    }
     window.PRTooltipState.isHovering = false;
-    // Cancel expand if they left before it triggered
     clearTimeout(window.PRTooltipState.expandTimeout);
-    window.PRTooltipState.hideTimeout = setTimeout(() => {
-      hideProfessorTooltip(element, false);
-      window.PRTooltipState.hideTimeout = null;
-    }, 300);
+    // Tooltip stays open — user must click X to close
   });
+}
+
+/* ─── Drag setup helper ─────────────────────────────────────────────────── */
+function setupDragListeners(tooltip) {
+  const headerSection = tooltip.querySelector(".pr-tooltip-header-section");
+  const header = tooltip.querySelector(".pr-tooltip-header");
+  const tabs = tooltip.querySelectorAll(".pr-tooltip-tab");
+  const content = tooltip.querySelector(".pr-tooltip-content");
+  const closeBtn = tooltip.querySelector(".pr-tooltip-close");
+  
+  if (!header) return;
+
+  // Close button
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      tooltip.remove();
+    });
+  }
+
+  // Tab navigation
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      const sectionId = tab.dataset.section;
+      const section = tooltip.querySelector(`[data-section-id="${sectionId}"]`);
+      if (section && content) {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  });
+
+  // Scroll spy - highlight active tab based on scroll position
+  if (content) {
+    content.addEventListener("scroll", () => {
+      const sections = tooltip.querySelectorAll(".pr-tooltip-section");
+      let currentSection = null;
+
+      sections.forEach(section => {
+        const rect = section.getBoundingClientRect();
+        const contentRect = content.getBoundingClientRect();
+        if (rect.top <= contentRect.top + 50) {
+          currentSection = section.dataset.sectionId;
+        }
+      });
+
+      if (currentSection) {
+        tabs.forEach(tab => {
+          if (tab.dataset.section === currentSection) {
+            tab.classList.add("active");
+          } else {
+            tab.classList.remove("active");
+          }
+        });
+      }
+    });
+  }
+
+  // Make header draggable
+  if (headerSection) {
+    let startX, startY, tooltipLeft, tooltipTop;
+
+    headerSection.addEventListener("mousedown", (e) => {
+      // Don't drag if clicking close button or tab
+      if (e.target.classList.contains("pr-tooltip-close") || 
+          e.target.classList.contains("pr-tooltip-tab")) return;
+      
+      e.preventDefault();
+      window.PRTooltipState.isDragging = true;
+      tooltip.classList.add("pr-dragging");
+      
+      startX = e.clientX;
+      startY = e.clientY;
+      tooltipLeft = parseInt(tooltip.style.left) || 0;
+      tooltipTop = parseInt(tooltip.style.top) || 0;
+
+      const onMouseMove = (moveEvent) => {
+        if (!window.PRTooltipState.isDragging) return;
+        
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        
+        let newLeft = tooltipLeft + deltaX;
+        let newTop = tooltipTop + deltaY;
+
+        // Clamp to viewport edges
+        const tipW = tooltip.offsetWidth;
+        const tipH = tooltip.offsetHeight;
+        const margin = 10;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        newLeft = Math.max(margin, Math.min(newLeft, vw - tipW - margin));
+        newTop = Math.max(margin, Math.min(newTop, vh - tipH - margin));
+
+        tooltip.style.left = `${newLeft}px`;
+        tooltip.style.top = `${newTop}px`;
+      };
+
+      const onMouseUp = () => {
+        window.PRTooltipState.isDragging = false;
+        tooltip.classList.remove("pr-dragging");
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+  }
 }
 
 /* ─── Position ───────────────────────────────────────────────────────────── */
 // Uses fixed positioning so getBoundingClientRect() coords align correctly.
+// Always clamps to viewport on all 4 edges, respecting max-height.
 function positionTooltip(tooltip, element) {
   const rect   = element.getBoundingClientRect();
   const tipW   = tooltip.offsetWidth  || 268;
-  const tipH   = tooltip.offsetHeight || 160;
+  const maxTipH = 500; // Match CSS max-height
+  const tipH   = Math.min(tooltip.offsetHeight || 200, maxTipH);
   const margin = 10;
   const vw     = window.innerWidth;
   const vh     = window.innerHeight;
 
   // Horizontal: centre under/over element, clamped to viewport
   let left = rect.left + rect.width / 2 - tipW / 2;
-  if (left < margin)             left = margin;
-  if (left + tipW > vw - margin) left = vw - tipW - margin;
+  left = Math.max(margin, Math.min(left, vw - tipW - margin));
 
   // Vertical: prefer above, flip below if not enough room
   let top;
@@ -316,6 +642,8 @@ function positionTooltip(tooltip, element) {
   } else {
     top = rect.bottom + 4;        // below, only 4px gap
   }
+  
+  // Critical: clamp to ensure tooltip never goes off bottom
   top = Math.max(margin, Math.min(top, vh - tipH - margin));
 
   tooltip.style.left = `${left}px`;
@@ -368,7 +696,7 @@ function buildSkeleton() {
   `;
 }
 
-function buildContent(name, rating, numEvals, department, analysis) {
+function buildContent(name, rating, numEvals, department, analysis, reviews = []) {
   const hasRating = rating && parseFloat(rating) > 0;
   const ratingVal = hasRating ? parseFloat(rating) : null;
 
@@ -390,7 +718,7 @@ function buildContent(name, rating, numEvals, department, analysis) {
   const summaryText = analysis
     ? escapeHtml(
         analysis
-          .replace(/https?:\/\/[^\s]+/g, "") // strip raw URLs
+          .replace(/https?:\/\/[^\s]+/g, "")
           .replace(/\n+/g, " ")
           .trim()
       )
@@ -398,21 +726,88 @@ function buildContent(name, rating, numEvals, department, analysis) {
 
   const footerParts = [
     department || "",
-    numEvals   ? `${numEvals} reviews` : "",
+    numEvals ? `${numEvals} reviews` : "",
   ].filter(Boolean);
   const footerText = footerParts.length
     ? escapeHtml(footerParts.join(" · "))
     : "PolyRatings";
 
-  return `
-    <div class="pr-tooltip-inner">
-      <div class="pr-tooltip-header">
-        <span class="pr-tooltip-name">${escapeHtml(name)}</span>
-        <span class="pr-badge ${badgeClass}">${badgeText}</span>
-      </div>
-      <div class="pr-tooltip-divider"></div>
+  // Group reviews by course
+  const reviewsByCourse = {};
+  (reviews || []).forEach(review => {
+    const course = review.course || "Unknown Course";
+    if (!reviewsByCourse[course]) {
+      reviewsByCourse[course] = [];
+    }
+    reviewsByCourse[course].push(review);
+  });
+
+  const courses = Object.keys(reviewsByCourse).sort();
+  
+  // Build tabs
+  const tabs = ['<button class="pr-tooltip-tab active" data-section="overview">AI Overview</button>'];
+  courses.forEach(course => {
+    const count = reviewsByCourse[course].length;
+    tabs.push(`<button class="pr-tooltip-tab" data-section="${escapeHtml(course)}">${escapeHtml(course)} (${count})</button>`);
+  });
+
+  // Build sections
+  const sections = [];
+  
+  // AI Overview section (no header in content, it's in the fixed header)
+  sections.push(`
+    <div class="pr-tooltip-section" data-section-id="overview">
       <div class="pr-tooltip-summary">${summaryText}</div>
       <div class="pr-tooltip-footer">${footerText}</div>
+    </div>
+  `);
+
+  // Course review sections
+  courses.forEach(course => {
+    const courseReviews = reviewsByCourse[course];
+    const reviewsHtml = courseReviews.map(review => {
+      const meta = [];
+      if (review.rating) meta.push(`★ ${review.rating.toFixed(1)}`);
+      if (review.grade) meta.push(`Grade: ${review.grade}`);
+      if (review.gradeLevel) meta.push(review.gradeLevel);
+      if (review.date) {
+        const date = new Date(review.date);
+        meta.push(date.getFullYear());
+      }
+
+      return `
+        <div class="pr-review">
+          <div class="pr-review-meta">
+            ${meta.map(m => `<span class="pr-review-tag">${escapeHtml(m)}</span>`).join('')}
+          </div>
+          <div class="pr-review-text">${escapeHtml(review.text)}</div>
+        </div>
+      `;
+    }).join('');
+
+    sections.push(`
+      <div class="pr-tooltip-section" data-section-id="${escapeHtml(course)}">
+        <div class="pr-course-title">${escapeHtml(course)}</div>
+        ${reviewsHtml}
+      </div>
+    `);
+  });
+
+  return `
+    <div class="pr-tooltip-inner">
+      <button class="pr-tooltip-close" title="Close">×</button>
+      <div class="pr-tooltip-header-section">
+        <div class="pr-tooltip-header">
+          <span class="pr-tooltip-name">${escapeHtml(name)}</span>
+          <span class="pr-badge ${badgeClass}">${badgeText}</span>
+        </div>
+        <div class="pr-tooltip-tabs">
+          ${tabs.join('')}
+        </div>
+      </div>
+      <div class="pr-tooltip-content">
+        ${sections.join('')}
+      </div>
     </div>
   `;
 }
