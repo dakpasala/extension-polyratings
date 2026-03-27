@@ -19,10 +19,10 @@
     .pr-professor-tooltip {
       position: fixed;
       z-index: 99999;
-      width: 268px;
-      min-width: 200px;
+      width: 350px;
+      min-width: 250px;
       max-width: 700px;
-      height: 400px;
+      height: 450px;
       min-height: 300px;
       max-height: 90vh;
       background: #ffffff;
@@ -155,6 +155,8 @@
       margin-bottom: 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid #f0f0f0;
+      background: #fff;
+      display: block;
     }
 
     .pr-review {
