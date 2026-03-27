@@ -19,10 +19,10 @@
     .pr-professor-tooltip {
       position: fixed;
       z-index: 99999;
-      width: 268px;
-      min-width: 200px;
+      width: 350px;
+      min-width: 250px;
       max-width: 700px;
-      height: 400px;
+      height: 450px;
       min-height: 300px;
       max-height: 90vh;
       background: #ffffff;
@@ -72,6 +72,7 @@
       height: 100%;
       min-height: 0;
       overflow: hidden;
+      position: relative;
     }
 
     /* Fixed header section */
@@ -154,6 +155,8 @@
       margin-bottom: 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid #f0f0f0;
+      background: #fff;
+      display: block;
     }
 
     .pr-review {
@@ -198,7 +201,6 @@
       margin-bottom: 9px;
       cursor: grab;
       padding: 2px 0;
-      position: relative;
     }
     
     .pr-tooltip-header:active {
