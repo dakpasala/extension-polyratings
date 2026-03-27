@@ -21,8 +21,10 @@
       z-index: 99999;
       width: 268px;
       min-width: 200px;
-      max-width: 500px;
-      max-height: 500px;
+      max-width: 700px;
+      height: 400px;
+      min-height: 300px;
+      max-height: 90vh;
       background: #ffffff;
       border: 1px solid #e8e8e8;
       border-radius: 10px;
@@ -40,6 +42,8 @@
       display: flex;
       flex-direction: column;
       cursor: default;
+      resize: both;
+      overflow: hidden;
     }
     
     .pr-professor-tooltip.pr-dragging {
@@ -53,26 +57,6 @@
 
     .pr-tooltip-header-section:active {
       cursor: grabbing;
-    }
-
-    .pr-tooltip-resize-handle {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 16px;
-      height: 16px;
-      cursor: ew-resize;
-      pointer-events: auto;
-    }
-
-    .pr-tooltip-resize-handle::after {
-      content: '';
-      position: absolute;
-      bottom: 6px;
-      right: 3px;
-      width: 8px;
-      height: 8px;
-      border-right: 2px solid #ccc;
     }
 
     .pr-professor-tooltip.pr-tooltip-visible {
@@ -154,24 +138,33 @@
 
     .pr-tooltip-section {
       scroll-margin-top: 10px;
+      padding-bottom: 12px;
     }
 
     .pr-tooltip-section + .pr-tooltip-section {
-      margin-top: 24px;
+      margin-top: 28px;
+      padding-top: 12px;
+      border-top: 1px solid #f0f0f0;
     }
 
     .pr-course-title {
       font-size: 13px;
       font-weight: 600;
       color: #111;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #f0f0f0;
     }
 
     .pr-review {
       background: #f8f8f8;
       border-radius: 6px;
-      padding: 10px;
-      margin-bottom: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .pr-review:last-child {
+      margin-bottom: 0;
     }
 
     .pr-review-meta {
@@ -507,9 +500,8 @@ function showProfessorTooltip(element, professor) {
   });
 
   tooltip.addEventListener("mouseleave", (e) => {
-    // Don't hide if dragging, resizing, or mouse is still within tooltip
+    // Don't hide if dragging or mouse is still within tooltip
     if (window.PRTooltipState.isDragging || 
-        window.PRTooltipState.isResizing ||
         tooltip.contains(e.relatedTarget)) {
       return;
     }
@@ -523,7 +515,6 @@ function showProfessorTooltip(element, professor) {
 function setupDragListeners(tooltip) {
   const headerSection = tooltip.querySelector(".pr-tooltip-header-section");
   const header = tooltip.querySelector(".pr-tooltip-header");
-  const resizeHandle = tooltip.querySelector(".pr-tooltip-resize-handle");
   const tabs = tooltip.querySelectorAll(".pr-tooltip-tab");
   const content = tooltip.querySelector(".pr-tooltip-content");
   const closeBtn = tooltip.querySelector(".pr-tooltip-close");
@@ -618,38 +609,6 @@ function setupDragListeners(tooltip) {
       const onMouseUp = () => {
         window.PRTooltipState.isDragging = false;
         tooltip.classList.remove("pr-dragging");
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-      };
-
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    });
-  }
-
-  // Resize handle - only resizes width, height auto-fits content
-  if (resizeHandle) {
-    resizeHandle.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      window.PRTooltipState.isResizing = true;
-      const startWidth = tooltip.offsetWidth;
-      const startX = e.clientX;
-
-      const onMouseMove = (moveEvent) => {
-        const deltaX = moveEvent.clientX - startX;
-        let newWidth = startWidth + deltaX;
-
-        // Clamp width
-        newWidth = Math.max(200, Math.min(newWidth, 500));
-
-        tooltip.style.width = `${newWidth}px`;
-        // Height auto-adjusts to content
-      };
-
-      const onMouseUp = () => {
-        window.PRTooltipState.isResizing = false;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
@@ -850,7 +809,6 @@ function buildContent(name, rating, numEvals, department, analysis, reviews = []
         ${sections.join('')}
       </div>
     </div>
-    <div class="pr-tooltip-resize-handle"></div>
   `;
 }
 
