@@ -214,8 +214,6 @@ function renderWelcomeMessage(messagesArea) {
     <div style="font-weight: 600; margin-bottom: 8px; color: #333;">👋 Hi! I'm your PolyRatings Agent</div>
     <div style="color: #666; font-size: 14px; line-height: 1.4;">
       I can help you analyze professor ratings, compare courses, and answer questions about your schedule.
-      <br><br>
-      <strong>🎓 I'll be able to select courses for you super soon!</strong> Stay tuned for this exciting feature!
     </div>
   `;
   messagesArea.appendChild(welcomeMessage);
