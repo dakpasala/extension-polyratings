@@ -307,8 +307,10 @@ function addTypingMessage(container) {
   return typingId;
 }
 
+// This file contains only the updated button injection code
+// Replace the injectAskAgentButton function in your agent.js with this
+
 function injectAskAgentButton() {
-  // Always allow agent button, just check if it should be enabled
   if (!shouldEnableAgent(document)) {
     console.log("🚫 Agent button not enabled on this page");
     return;
@@ -343,25 +345,20 @@ function injectAskAgentButton() {
     const buttonContainer = deleteButton.parentElement;
     if (buttonContainer) {
       const askAgentButton = document.createElement("button");
-      askAgentButton.className = CSS_CLASSES.ASK_AGENT_BTN;
-      askAgentButton.textContent = "Ask Agent";
+      // Use Cal Poly classes + our custom class
+      askAgentButton.className = 'cx-MuiButtonBase-root cx-MuiButton-root cx-MuiButton-contained mr-1 ' + CSS_CLASSES.ASK_AGENT_BTN;
+      askAgentButton.tabIndex = 0;
+      askAgentButton.type = 'button';
       askAgentButton.style.cssText = `
         background: linear-gradient(135deg, #FFD700, #FFA500);
-        color: #000; border: none; border-radius: 4px;
-        padding: 8px 16px; font-size: 14px; font-weight: 600;
-        cursor: pointer; margin-right: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: all 0.2s ease; display: inline-flex;
-        align-items: center; gap: 6px;
       `;
-      askAgentButton.addEventListener("mouseenter", () => {
-        askAgentButton.style.transform = "translateY(-1px)";
-        askAgentButton.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
-      });
-      askAgentButton.addEventListener("mouseleave", () => {
-        askAgentButton.style.transform = "translateY(0)";
-        askAgentButton.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-      });
+      
+      // Create button label span (Cal Poly structure)
+      const buttonLabel = document.createElement('span');
+      buttonLabel.className = 'cx-MuiButton-label';
+      buttonLabel.textContent = 'ask agent';
+      askAgentButton.appendChild(buttonLabel);
+      
       askAgentButton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -405,25 +402,18 @@ function injectAskAgentButton() {
       foundButtons[0].closest("div") || foundButtons[0].parentElement;
     if (buttonContainer) {
       const askAgentButton = document.createElement("button");
-      askAgentButton.className = CSS_CLASSES.ASK_AGENT_BTN;
-      askAgentButton.textContent = "Ask Agent";
+      askAgentButton.className = 'cx-MuiButtonBase-root cx-MuiButton-root cx-MuiButton-contained mr-1 ' + CSS_CLASSES.ASK_AGENT_BTN;
+      askAgentButton.tabIndex = 0;
+      askAgentButton.type = 'button';
       askAgentButton.style.cssText = `
         background: linear-gradient(135deg, #FFD700, #FFA500);
-        color: #000; border: none; border-radius: 8px;
-        padding: 10px 20px; font-size: 14px; font-weight: 600;
-        cursor: pointer; margin-right: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: all 0.2s ease; display: inline-flex;
-        align-items: center; gap: 6px;
       `;
-      askAgentButton.addEventListener("mouseenter", () => {
-        askAgentButton.style.transform = "translateY(-1px)";
-        askAgentButton.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
-      });
-      askAgentButton.addEventListener("mouseleave", () => {
-        askAgentButton.style.transform = "translateY(0)";
-        askAgentButton.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-      });
+      
+      const buttonLabel = document.createElement('span');
+      buttonLabel.className = 'cx-MuiButton-label';
+      buttonLabel.textContent = 'ask agent';
+      askAgentButton.appendChild(buttonLabel);
+      
       askAgentButton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
