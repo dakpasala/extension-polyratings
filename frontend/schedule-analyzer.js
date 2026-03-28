@@ -141,9 +141,15 @@ function openAnalysisPopup(courses) {
     flex-direction: column;
     overflow: hidden;
     z-index: 10000;
-    animation: fadeIn 0.2s ease-out;
+    opacity: 0;
     resize: both;
   `;
+  
+  // Trigger fade in after element is in DOM
+  setTimeout(() => {
+    popup.style.transition = 'opacity 0.2s ease-out';
+    popup.style.opacity = '1';
+  }, 10);
   
   // Header
   const header = document.createElement('div');
@@ -258,9 +264,11 @@ function openAnalysisPopup(courses) {
   popup.appendChild(messagesArea);
   document.body.appendChild(popup);
   
-  // Close button handler
+  // Close button handler with animation
   header.querySelector('.close-analysis-btn').addEventListener('click', () => {
-    popup.remove();
+    popup.style.transition = 'opacity 0.2s ease-out';
+    popup.style.opacity = '0';
+    setTimeout(() => popup.remove(), 200);
   });
   
   // Send to background for analysis
@@ -274,12 +282,14 @@ function openAnalysisPopup(courses) {
       typingIndicator.remove();
       analyzingMsg.remove();
       
-      // Show result with better formatting
+      // Show result with better formatting and smooth animation
       const resultMsg = document.createElement('div');
       resultMsg.style.cssText = `
         background: white; padding: 20px; border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         border-left: 4px solid ${response?.status === 'success' ? '#667eea' : '#f44336'};
+        opacity: 0;
+        animation: fadeInResult 0.4s ease-out forwards;
       `;
       
       if (response?.status === 'success') {
@@ -360,3 +370,24 @@ scheduleObserver.observe(document.body, {
   childList: true,
   subtree: true
 });
+
+// Add animation styles
+if (!document.querySelector('#schedule-analyzer-styles')) {
+  const style = document.createElement('style');
+  style.id = 'schedule-analyzer-styles';
+  style.textContent = `
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: scale(1); }
+      to { opacity: 0; transform: scale(0.95); }
+    }
+    @keyframes fadeInResult {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  `;
+  document.head.appendChild(style);
+}
