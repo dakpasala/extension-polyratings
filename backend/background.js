@@ -491,5 +491,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Handle schedule analysis
+  if (message.type === "analyzeSchedule") {
+    (async () => {
+      try {
+        const courses = message.courses;
+        console.log(`📊 Analyzing schedule with ${courses.length} courses:`, courses);
+        
+        // Build analysis prompt
+        const courseList = courses.map(c => `${c.code} - ${c.title} (${c.units} units)`).join('\n');
+        const totalUnits = courses.reduce((sum, c) => {
+          const units = parseInt(c.units) || 0;
+          return sum + units;
+        }, 0);
+        
+        const prompt = `Analyze this Cal Poly student's schedule and provide helpful insights:
+
+Courses (${courses.length} total, ${totalUnits} units):
+${courseList}
+
+Provide a concise analysis with these 4 sections (use this exact format):
+
+1. Overall workload assessment: [Your assessment in one sentence]
+2. Most challenging courses: [List the toughest courses and why in 1-2 sentences]
+3. Tips for balancing workload: [Practical advice in 1-2 sentences]
+4. Recommendations and warnings: [Key recommendations in 1-2 sentences]
+
+Be encouraging but realistic. No bullet points, no bold formatting, just clear sentences.`;
+        
+        // Use correct GROQ API format with messages array
+        const messages = [
+          { role: "user", content: prompt }
+        ];
+        
+        // callGroqAPI already returns the content directly (not the full response object)
+        const analysis = await callGroqAPI(messages);
+        
+        sendResponse({
+          status: "success",
+          analysis: analysis
+        });
+        
+      } catch (error) {
+        console.error("Schedule analysis error:", error);
+        sendResponse({
+          status: "error",
+          message: "Sorry, I couldn't analyze your schedule. Please try again."
+        });
+      }
+    })();
+    return true;
+  }
+
   sendResponse({ status: "error", message: "Unknown message type" });
 });
