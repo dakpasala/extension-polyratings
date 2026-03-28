@@ -269,6 +269,29 @@ function convertLinksToHTML(text) {
   });
 }
 
+function formatBotMessage(text) {
+  if (!text || typeof text !== "string") return text;
+  
+  // Convert **bold** to <strong>
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  
+  // Convert *italic* to <em>
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  
+  // Convert line breaks to paragraphs
+  const paragraphs = text.split('\n\n').filter(p => p.trim());
+  
+  return paragraphs.map(para => {
+    // Check if it's a list
+    if (para.includes('\n- ') || para.includes('\n• ')) {
+      const items = para.split(/\n[-•]\s+/).filter(i => i.trim());
+      const listItems = items.map(item => `<li>${item.trim()}</li>`).join('');
+      return `<ul style="margin: 8px 0; padding-left: 24px;">${listItems}</ul>`;
+    }
+    return `<p style="margin: 8px 0;">${para.trim()}</p>`;
+  }).join('');
+}
+
 function addBotMessage(container, message) {
   const messageDiv = document.createElement("div");
   messageDiv.style.cssText = `
@@ -276,9 +299,14 @@ function addBotMessage(container, message) {
     border-radius: 18px 18px 18px 4px; margin-bottom: 12px;
     margin-right: 40px; font-size: 14px; word-wrap: break-word;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    animation: slideInLeft 0.3s ease-out; line-height: 1.5;
+    animation: slideInLeft 0.3s ease-out; line-height: 1.6;
   `;
-  messageDiv.innerHTML = convertLinksToHTML(message);
+  
+  // First convert links, then format markdown
+  const withLinks = convertLinksToHTML(message);
+  const formatted = formatBotMessage(withLinks);
+  
+  messageDiv.innerHTML = formatted;
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
 }

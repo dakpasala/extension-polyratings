@@ -1,5 +1,5 @@
 /* ==================== GROQ CLIENT ==================== */
-const GROQ_API_KEY = "your_groq_api_key_here"; // TODO: Replace
+const GROQ_API_KEY = "" // TODO: Replace
 
 const GROQ_MODELS = [
   "llama-3.3-70b-versatile",           // Llama 3.3 70B - best quality, 131K context
