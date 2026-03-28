@@ -1,4 +1,354 @@
 // ==================== AGENT POPUP ====================
+
+// Rate limiting
+const RATE_LIMIT = {
+  MAX_MESSAGES: 10,
+  STORAGE_KEY: 'pr_agent_usage',
+};
+
+function checkRateLimit() {
+  const today = new Date().toDateString();
+  const stored = localStorage.getItem(RATE_LIMIT.STORAGE_KEY);
+  
+  let usage = { date: today, count: 0 };
+  
+  if (stored) {
+    usage = JSON.parse(stored);
+    // Reset if it's a new day
+    if (usage.date !== today) {
+      usage = { date: today, count: 0 };
+    }
+  }
+  
+  return {
+    remaining: RATE_LIMIT.MAX_MESSAGES - usage.count,
+    canSend: usage.count < RATE_LIMIT.MAX_MESSAGES,
+    usage: usage
+  };
+}
+
+function incrementUsage() {
+  const today = new Date().toDateString();
+  const stored = localStorage.getItem(RATE_LIMIT.STORAGE_KEY);
+  
+  let usage = { date: today, count: 0 };
+  
+  if (stored) {
+    usage = JSON.parse(stored);
+    if (usage.date !== today) {
+      usage = { date: today, count: 0 };
+    }
+  }
+  
+  usage.count++;
+  localStorage.setItem(RATE_LIMIT.STORAGE_KEY, JSON.stringify(usage));
+}
+
+// ==================== RESET (for testing) ====================
+function resetAgentUsage() {
+  localStorage.removeItem(RATE_LIMIT.STORAGE_KEY);
+  localStorage.removeItem(CHAT_HISTORY.STORAGE_KEY);
+  console.log('🔄 Agent usage & history reset');
+}
+
+// ==================== CHAT HISTORY ====================
+const CHAT_HISTORY = {
+  STORAGE_KEY: 'pr_agent_history',
+};
+
+function saveChatMessage(role, text) {
+  const now = new Date();
+  const dateKey = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  
+  let history = {};
+  try {
+    const stored = localStorage.getItem(CHAT_HISTORY.STORAGE_KEY);
+    if (stored) history = JSON.parse(stored);
+  } catch (e) { /* ignore */ }
+
+  if (!history[dateKey]) history[dateKey] = [];
+  history[dateKey].push({
+    role,        // 'user' or 'bot'
+    text,
+    time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+  });
+
+  localStorage.setItem(CHAT_HISTORY.STORAGE_KEY, JSON.stringify(history));
+}
+
+function getChatHistory() {
+  try {
+    const stored = localStorage.getItem(CHAT_HISTORY.STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function renderHistoryView(messagesArea) {
+  const history = getChatHistory();
+  const dates = Object.keys(history);
+
+  const popup = messagesArea.closest('.pr-agent-popup');
+  const inputArea = popup?.querySelector('.pr-agent-input-area');
+
+  // Fade out current content
+  messagesArea.style.transition = 'opacity 0.15s ease-out';
+  messagesArea.style.opacity = '0';
+
+  setTimeout(() => {
+    // Clear and rebuild while invisible
+    messagesArea.innerHTML = '';
+    if (inputArea) inputArea.style.display = 'none';
+
+    // Back button
+    const backBtn = document.createElement('div');
+    backBtn.style.cssText = `
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #666; font-size: 13px; font-weight: 600;
+      cursor: pointer; padding: 4px 0; margin-bottom: 12px;
+      transition: color 0.2s;
+    `;
+    backBtn.innerHTML = `← Back to chat`;
+    backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
+    backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#666');
+    backBtn.addEventListener('click', () => {
+      // Fade out history
+      messagesArea.style.transition = 'opacity 0.15s ease-out';
+      messagesArea.style.opacity = '0';
+      setTimeout(() => {
+        if (inputArea) inputArea.style.display = 'flex';
+        messagesArea.innerHTML = '';
+        renderWelcomeMessage(messagesArea);
+        // Fade in welcome
+        messagesArea.style.transition = 'opacity 0.2s ease-in';
+        messagesArea.style.opacity = '1';
+      }, 150);
+    });
+    messagesArea.appendChild(backBtn);
+
+  if (dates.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = `
+      text-align: center; color: #999; font-size: 14px;
+      padding: 40px 20px;
+    `;
+    empty.textContent = 'No past messages yet. Start chatting!';
+    messagesArea.appendChild(empty);
+    messagesArea.style.transition = 'opacity 0.2s ease-in';
+    messagesArea.style.opacity = '1';
+    return;
+  }
+
+  // Render dates in reverse chronological order
+  dates.reverse().forEach(dateKey => {
+    const messages = history[dateKey];
+
+    // Date header
+    const dateHeader = document.createElement('div');
+    dateHeader.style.cssText = `
+      font-size: 12px; font-weight: 600; color: #999;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 8px 0 6px; margin-top: 8px;
+      border-bottom: 1px solid #e8e8e8; margin-bottom: 10px;
+    `;
+    dateHeader.textContent = dateKey;
+    messagesArea.appendChild(dateHeader);
+
+    // Messages for that date
+    messages.forEach(msg => {
+      const row = document.createElement('div');
+      const isUser = msg.role === 'user';
+      row.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        align-items: ${isUser ? 'flex-end' : 'flex-start'};
+        margin-bottom: 8px;
+      `;
+
+      const bubble = document.createElement('div');
+      bubble.style.cssText = isUser
+        ? `background: linear-gradient(135deg, #FFD700, #FFA500); color: #000;
+           padding: 8px 14px; border-radius: 14px 14px 4px 14px;
+           max-width: 80%; font-size: 13px; word-wrap: break-word;`
+        : `background: white; color: #333; padding: 8px 14px;
+           border-radius: 14px 14px 14px 4px; max-width: 80%;
+           font-size: 13px; word-wrap: break-word;
+           box-shadow: 0 1px 3px rgba(0,0,0,0.08);`;
+
+      // For bot messages, format them; for user, plain text
+      if (isUser) {
+        bubble.textContent = msg.text;
+      } else {
+        const withLinks = convertLinksToHTML(msg.text);
+        const formatted = formatBotMessage(withLinks);
+        bubble.innerHTML = formatted;
+      }
+
+      const time = document.createElement('div');
+      time.style.cssText = `font-size: 10px; color: #bbb; margin-top: 2px; padding: 0 4px;`;
+      time.textContent = msg.time;
+
+      row.appendChild(bubble);
+      row.appendChild(time);
+      messagesArea.appendChild(row);
+    });
+  });
+
+  messagesArea.scrollTop = 0;
+
+  // Fade in the history content
+  messagesArea.style.transition = 'opacity 0.2s ease-in';
+  messagesArea.style.opacity = '1';
+  }, 150); // end setTimeout
+}
+
+function renderWelcomeMessage(messagesArea) {
+  const welcomeMessage = document.createElement("div");
+  welcomeMessage.style.cssText = `
+    background: white; padding: 16px; border-radius: 12px;
+    margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #FFD700;
+  `;
+  welcomeMessage.innerHTML = `
+    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">👋 Hi! I'm your PolyRatings Agent</div>
+    <div style="color: #666; font-size: 14px; line-height: 1.4;">
+      I can help you analyze professor ratings, compare courses, and answer questions about your schedule.
+    </div>
+  `;
+  messagesArea.appendChild(welcomeMessage);
+
+  // History button
+  const history = getChatHistory();
+  const totalMessages = Object.values(history).reduce((sum, msgs) => sum + msgs.length, 0);
+
+  const historyBtn = document.createElement('div');
+  historyBtn.style.cssText = `
+    background: white; padding: 12px 16px; border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; transition: all 0.2s;
+    border: 1px solid #eee; margin-bottom: 16px;
+  `;
+  historyBtn.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 16px;">📜</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #333;">View past messages</div>
+        <div style="font-size: 11px; color: #999; margin-top: 1px;">
+          ${totalMessages > 0 ? `${totalMessages} message${totalMessages === 1 ? '' : 's'} saved` : 'No messages yet'}
+        </div>
+      </div>
+    </div>
+    <span style="color: #ccc; font-size: 14px;">›</span>
+  `;
+  historyBtn.addEventListener('mouseenter', () => {
+    historyBtn.style.borderColor = '#FFD700';
+    historyBtn.style.background = '#FFFDF5';
+  });
+  historyBtn.addEventListener('mouseleave', () => {
+    historyBtn.style.borderColor = '#eee';
+    historyBtn.style.background = 'white';
+  });
+  historyBtn.addEventListener('click', () => renderHistoryView(messagesArea));
+  messagesArea.appendChild(historyBtn);
+}
+
+function showRateLimitBanner(container, remaining) {
+  // container here is messagesArea, but we need the popup root
+  const popup = container.closest('.pr-agent-popup');
+  if (!popup) return;
+
+  // Remove any existing banner
+  const existingBanner = popup.querySelector('.rate-limit-banner');
+  if (existingBanner) existingBanner.remove();
+  
+  // Don't show if more than 3 messages remaining
+  if (remaining > 3) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'rate-limit-banner';
+
+  // Base styles — sits between messages and input, dark bar like Claude.ai
+  banner.style.cssText = `
+    background: rgba(45, 35, 55, 0.95);
+    backdrop-filter: blur(8px);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    animation: bannerSlideIn 0.3s ease-out;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  `;
+
+  if (remaining === 0) {
+    banner.innerHTML = `
+      <span style="
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.01em;
+        line-height: 1.4;
+      ">Usage limit reached — your limit will reset at 12:00 AM.</span>
+    `;
+  } else {
+    banner.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: ${remaining === 1 ? '#F59E0B' : '#A78BFA'};
+          flex-shrink: 0;
+        "></div>
+        <span style="
+          color: rgba(255, 255, 255, 0.85);
+          font-size: 13px;
+          font-weight: 500;
+          letter-spacing: 0.01em;
+        ">${remaining} message${remaining === 1 ? '' : 's'} remaining today</span>
+      </div>
+    `;
+  }
+
+  // Inject animation keyframes if not already present
+  if (!document.querySelector('#rate-limit-banner-styles')) {
+    const style = document.createElement('style');
+    style.id = 'rate-limit-banner-styles';
+    style.textContent = `
+      @keyframes bannerSlideIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Insert between messages area and input area (above input)
+  const inputArea = popup.querySelector('.pr-agent-input-area');
+  if (inputArea) {
+    popup.insertBefore(banner, inputArea);
+  }
+
+  // If limit is fully hit, disable the input and send button
+  if (remaining === 0) {
+    const input = inputArea.querySelector('input');
+    const sendBtn = inputArea.querySelector('button');
+    if (input) {
+      input.disabled = true;
+      input.placeholder = 'Daily limit reached';
+      input.style.opacity = '0.5';
+      input.style.cursor = 'not-allowed';
+    }
+    if (sendBtn) {
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = '0.5';
+      sendBtn.style.cursor = 'not-allowed';
+    }
+  }
+}
+
 function openAgentPopup(button) {
   // Update button label properly
   const buttonLabel = button.querySelector('.cx-MuiButton-label');
@@ -113,23 +463,10 @@ function openAgentPopup(button) {
   messagesArea.style.cssText =
     "flex: 1; padding: 20px; overflow-y: auto; background: #f8f9fa;";
 
-  const welcomeMessage = document.createElement("div");
-  welcomeMessage.style.cssText = `
-    background: white; padding: 16px; border-radius: 12px;
-    margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    border-left: 4px solid #FFD700;
-  `;
-  welcomeMessage.innerHTML = `
-    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">👋 Hi! I'm your PolyRatings Agent</div>
-    <div style="color: #666; font-size: 14px; line-height: 1.4;">
-      I can help you analyze professor ratings, compare courses, and answer questions about your schedule.
-      <br><br>
-      <strong>🎓 I'll be able to select courses for you super soon!</strong> Stay tuned for this exciting feature!
-    </div>
-  `;
-  messagesArea.appendChild(welcomeMessage);
+  renderWelcomeMessage(messagesArea);
 
   const inputArea = document.createElement("div");
+  inputArea.className = "pr-agent-input-area";
   inputArea.style.cssText =
     "padding: 16px 20px; background: white; border-top: 1px solid #e0e0e0; display: flex; gap: 12px;";
 
@@ -154,31 +491,52 @@ function openAgentPopup(button) {
     .addEventListener("click", closeAgentPopup);
   sendBtn.addEventListener("click", () => {
     const message = input.value.trim();
-    if (message) {
-      addUserMessage(messagesArea, message);
-      input.value = "";
-      const typingId = addTypingMessage(messagesArea);
-      chrome.runtime.sendMessage(
-        { type: "chatbotQuery", query: message },
-        (response) => {
-          const typingElement = document.getElementById(typingId);
-          if (typingElement) typingElement.remove();
-
-          if (response?.status === "success") {
-            addBotMessage(messagesArea, response.professor.analysis);
-          } else if (response?.status === "ai_analysis") {
-            addBotMessage(messagesArea, response.professor.analysis);
-          } else if (response?.status === "general_response") {
-            addBotMessage(messagesArea, response.message);
-          } else {
-            addBotMessage(
-              messagesArea,
-              "❌ Sorry, I couldn't process your request. Please try again."
-            );
-          }
-        }
-      );
+    if (!message) return;
+    
+    // Check rate limit
+    const rateLimit = checkRateLimit();
+    if (!rateLimit.canSend) {
+      showRateLimitBanner(messagesArea, 0);
+      return;
     }
+    
+    addUserMessage(messagesArea, message);
+    input.value = "";
+    const typingId = addTypingMessage(messagesArea);
+    chrome.runtime.sendMessage(
+      { type: "chatbotQuery", query: message },
+      (response) => {
+        const typingElement = document.getElementById(typingId);
+        if (typingElement) typingElement.remove();
+
+        if (response?.status === "success") {
+          addBotMessage(messagesArea, response.professor.analysis);
+          // Increment usage on successful response
+          incrementUsage();
+          
+          // Always update banner to show current remaining count
+          const updated = checkRateLimit();
+          showRateLimitBanner(messagesArea, updated.remaining);
+        } else if (response?.status === "ai_analysis") {
+          addBotMessage(messagesArea, response.professor.analysis);
+          incrementUsage();
+          
+          const updated = checkRateLimit();
+          showRateLimitBanner(messagesArea, updated.remaining);
+        } else if (response?.status === "general_response") {
+          addBotMessage(messagesArea, response.message);
+          incrementUsage();
+          
+          const updated = checkRateLimit();
+          showRateLimitBanner(messagesArea, updated.remaining);
+        } else {
+          addBotMessage(
+            messagesArea,
+            "❌ Sorry, I couldn't process your request. Please try again."
+          );
+        }
+      }
+    );
   });
   input.addEventListener("keypress", (e) => {
     if (e.key === "Enter") sendBtn.click();
@@ -190,6 +548,13 @@ function openAgentPopup(button) {
   chatContainer.appendChild(messagesArea);
   chatContainer.appendChild(inputArea);
   document.body.appendChild(chatContainer);
+
+  // Check rate limit on open — show banner immediately if needed
+  const initialLimit = checkRateLimit();
+  if (initialLimit.remaining <= 3) {
+    showRateLimitBanner(messagesArea, initialLimit.remaining);
+  }
+
   setTimeout(() => input.focus(), 100);
 
   if (!document.querySelector("#agent-popup-styles")) {
@@ -229,16 +594,30 @@ function closeAgentPopup() {
 }
 
 function addUserMessage(container, message) {
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = `
+    display: flex; flex-direction: column; align-items: flex-end;
+    margin-bottom: 12px; animation: slideInRight 0.3s ease-out;
+  `;
+
   const messageDiv = document.createElement("div");
   messageDiv.style.cssText = `
     background: linear-gradient(135deg, #FFD700, #FFA500); color: #000;
     padding: 12px 16px; border-radius: 18px 18px 4px 18px;
-    margin-bottom: 12px; margin-left: 40px; font-size: 14px;
-    word-wrap: break-word; animation: slideInRight 0.3s ease-out;
+    margin-left: 40px; font-size: 14px;
+    word-wrap: break-word;
   `;
   messageDiv.textContent = message;
-  container.appendChild(messageDiv);
+
+  const time = document.createElement("div");
+  time.style.cssText = `font-size: 10px; color: #bbb; margin-top: 3px; padding: 0 4px;`;
+  time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  wrapper.appendChild(messageDiv);
+  wrapper.appendChild(time);
+  container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
+  saveChatMessage('user', message);
 }
 
 function convertLinksToHTML(text) {
@@ -269,18 +648,58 @@ function convertLinksToHTML(text) {
   });
 }
 
+function formatBotMessage(text) {
+  if (!text || typeof text !== "string") return text;
+  
+  // Convert **bold** to <strong>
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  
+  // Convert *italic* to <em>
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  
+  // Convert line breaks to paragraphs
+  const paragraphs = text.split('\n\n').filter(p => p.trim());
+  
+  return paragraphs.map(para => {
+    // Check if it's a list
+    if (para.includes('\n- ') || para.includes('\n• ')) {
+      const items = para.split(/\n[-•]\s+/).filter(i => i.trim());
+      const listItems = items.map(item => `<li>${item.trim()}</li>`).join('');
+      return `<ul style="margin: 8px 0; padding-left: 24px;">${listItems}</ul>`;
+    }
+    return `<p style="margin: 8px 0;">${para.trim()}</p>`;
+  }).join('');
+}
+
 function addBotMessage(container, message) {
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = `
+    display: flex; flex-direction: column; align-items: flex-start;
+    margin-bottom: 12px; animation: slideInLeft 0.3s ease-out;
+  `;
+
   const messageDiv = document.createElement("div");
   messageDiv.style.cssText = `
     background: white; color: #333; padding: 12px 16px;
-    border-radius: 18px 18px 18px 4px; margin-bottom: 12px;
+    border-radius: 18px 18px 18px 4px;
     margin-right: 40px; font-size: 14px; word-wrap: break-word;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    animation: slideInLeft 0.3s ease-out; line-height: 1.5;
+    line-height: 1.6;
   `;
-  messageDiv.innerHTML = convertLinksToHTML(message);
-  container.appendChild(messageDiv);
+  
+  const withLinks = convertLinksToHTML(message);
+  const formatted = formatBotMessage(withLinks);
+  messageDiv.innerHTML = formatted;
+
+  const time = document.createElement("div");
+  time.style.cssText = `font-size: 10px; color: #bbb; margin-top: 3px; padding: 0 4px;`;
+  time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  wrapper.appendChild(messageDiv);
+  wrapper.appendChild(time);
+  container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
+  saveChatMessage('bot', message);
 }
 
 function addTypingMessage(container) {
