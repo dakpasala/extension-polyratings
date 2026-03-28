@@ -1,8 +1,11 @@
 // ==================== AGENT POPUP ====================
 function openAgentPopup(button) {
-  button.textContent = "Active Agent";
+  // Update button label properly
+  const buttonLabel = button.querySelector('.cx-MuiButton-label');
+  if (buttonLabel) {
+    buttonLabel.textContent = 'active agent';
+  }
   button.style.background = "linear-gradient(135deg, #4CAF50, #45a049)";
-  button.style.color = "#fff";
 
   const chatContainer = document.createElement("div");
   chatContainer.className = "pr-agent-popup";
@@ -25,9 +28,14 @@ function openAgentPopup(button) {
     overflow: hidden;
     z-index: 10000;
     opacity: 0;
-    animation: fadeIn 0.2s ease-out forwards;
     resize: both;
   `;
+  
+  // Trigger fade in after element is in DOM
+  setTimeout(() => {
+    chatContainer.style.transition = 'opacity 0.2s ease-out';
+    chatContainer.style.opacity = '1';
+  }, 10);
 
   const header = document.createElement("div");
   header.className = "pr-agent-header";
@@ -181,17 +189,13 @@ function openAgentPopup(button) {
   chatContainer.appendChild(header);
   chatContainer.appendChild(messagesArea);
   chatContainer.appendChild(inputArea);
-  document.body.appendChild(chatContainer); // Append directly, no dark background wrapper
+  document.body.appendChild(chatContainer);
   setTimeout(() => input.focus(), 100);
 
   if (!document.querySelector("#agent-popup-styles")) {
     const style = document.createElement("style");
     style.id = "agent-popup-styles";
     style.textContent = `
-      @keyframes fadeIn { 
-        from { opacity: 0; } 
-        to { opacity: 1; } 
-      }
       .pr-agent-popup input:focus { border-color: #FFD700 !important; }
       .pr-agent-popup button:hover { transform: translateY(-1px); }
       @keyframes slideInRight {
@@ -209,12 +213,18 @@ function openAgentPopup(button) {
 
 function closeAgentPopup() {
   const popup = document.querySelector('.pr-agent-popup');
-  if (popup) popup.remove();
+  if (popup) {
+    popup.style.transition = 'opacity 0.2s ease-out';
+    popup.style.opacity = '0';
+    setTimeout(() => popup.remove(), 200);
+  }
   const button = document.querySelector(`.${CSS_CLASSES.ASK_AGENT_BTN}`);
   if (button) {
-    button.textContent = "Ask Agent";
+    const buttonLabel = button.querySelector('.cx-MuiButton-label');
+    if (buttonLabel) {
+      buttonLabel.textContent = 'ask agent';
+    }
     button.style.background = "linear-gradient(135deg, #FFD700, #FFA500)";
-    button.style.color = "#000";
   }
 }
 
@@ -308,7 +318,6 @@ function addTypingMessage(container) {
 }
 
 function injectAskAgentButton() {
-  // Always allow agent button, just check if it should be enabled
   if (!shouldEnableAgent(document)) {
     console.log("🚫 Agent button not enabled on this page");
     return;
@@ -343,25 +352,20 @@ function injectAskAgentButton() {
     const buttonContainer = deleteButton.parentElement;
     if (buttonContainer) {
       const askAgentButton = document.createElement("button");
-      askAgentButton.className = CSS_CLASSES.ASK_AGENT_BTN;
-      askAgentButton.textContent = "Ask Agent";
+      // Use Cal Poly classes + our custom class
+      askAgentButton.className = 'cx-MuiButtonBase-root cx-MuiButton-root cx-MuiButton-contained mr-1 ' + CSS_CLASSES.ASK_AGENT_BTN;
+      askAgentButton.tabIndex = 0;
+      askAgentButton.type = 'button';
       askAgentButton.style.cssText = `
         background: linear-gradient(135deg, #FFD700, #FFA500);
-        color: #000; border: none; border-radius: 4px;
-        padding: 8px 16px; font-size: 14px; font-weight: 600;
-        cursor: pointer; margin-right: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: all 0.2s ease; display: inline-flex;
-        align-items: center; gap: 6px;
       `;
-      askAgentButton.addEventListener("mouseenter", () => {
-        askAgentButton.style.transform = "translateY(-1px)";
-        askAgentButton.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
-      });
-      askAgentButton.addEventListener("mouseleave", () => {
-        askAgentButton.style.transform = "translateY(0)";
-        askAgentButton.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-      });
+      
+      // Create button label span (Cal Poly structure)
+      const buttonLabel = document.createElement('span');
+      buttonLabel.className = 'cx-MuiButton-label';
+      buttonLabel.textContent = 'ask agent';
+      askAgentButton.appendChild(buttonLabel);
+      
       askAgentButton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -405,25 +409,18 @@ function injectAskAgentButton() {
       foundButtons[0].closest("div") || foundButtons[0].parentElement;
     if (buttonContainer) {
       const askAgentButton = document.createElement("button");
-      askAgentButton.className = CSS_CLASSES.ASK_AGENT_BTN;
-      askAgentButton.textContent = "Ask Agent";
+      askAgentButton.className = 'cx-MuiButtonBase-root cx-MuiButton-root cx-MuiButton-contained mr-1 ' + CSS_CLASSES.ASK_AGENT_BTN;
+      askAgentButton.tabIndex = 0;
+      askAgentButton.type = 'button';
       askAgentButton.style.cssText = `
         background: linear-gradient(135deg, #FFD700, #FFA500);
-        color: #000; border: none; border-radius: 8px;
-        padding: 10px 20px; font-size: 14px; font-weight: 600;
-        cursor: pointer; margin-right: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: all 0.2s ease; display: inline-flex;
-        align-items: center; gap: 6px;
       `;
-      askAgentButton.addEventListener("mouseenter", () => {
-        askAgentButton.style.transform = "translateY(-1px)";
-        askAgentButton.style.boxShadow = "0 4px 8px rgba(0,0,0,0.15)";
-      });
-      askAgentButton.addEventListener("mouseleave", () => {
-        askAgentButton.style.transform = "translateY(0)";
-        askAgentButton.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-      });
+      
+      const buttonLabel = document.createElement('span');
+      buttonLabel.className = 'cx-MuiButton-label';
+      buttonLabel.textContent = 'ask agent';
+      askAgentButton.appendChild(buttonLabel);
+      
       askAgentButton.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();

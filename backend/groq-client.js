@@ -1,17 +1,13 @@
 /* ==================== GROQ CLIENT ==================== */
-const GROQ_API_KEY = "" // TODO: Replace
+const GROQ_API_KEY = "your_groq_api_key_here"; // TODO: Replace
 
 const GROQ_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-70b-versatile",
-  "llama-3.1-8b-instant",
-  "mixtral-8x7b-32768",
-  "gemma2-9b-it",
-  "llama3-70b-8192",
-  "llama3-8b-8192",
-  "gemma-7b-it",
-  "llama-3.2-90b-text-preview",
-  "llama-3.2-11b-text-preview"
+  "llama-3.3-70b-versatile",           // Llama 3.3 70B - best quality, 131K context
+  "openai/gpt-oss-120b",               // GPT OSS 120B - good quality, 131K context
+  "meta-llama/llama-4-scout-17b-16e-instruct", // Llama 4 Scout 17B
+  "openai/gpt-oss-20b",                // GPT OSS 20B - faster fallback
+  "groq/compound",                     // Groq Compound - 131K context
+  "llama-3.1-8b-instant"               // Llama 3.1 8B - fast fallback
 ];
 
 let currentModelIndex = 0;
