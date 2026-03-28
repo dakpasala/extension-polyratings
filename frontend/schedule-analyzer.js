@@ -135,11 +135,14 @@ function openAnalysisPopup(courses) {
     max-width: 90vw;
     height: 600px;
     max-height: 80vh;
+    min-width: 350px;
+    min-height: 400px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     z-index: 10000;
     animation: fadeIn 0.2s ease-out;
+    resize: both;
   `;
   
   // Header
