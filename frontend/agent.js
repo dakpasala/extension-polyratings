@@ -92,6 +92,11 @@ function renderHistoryView(messagesArea) {
   // Clear current messages
   messagesArea.innerHTML = '';
 
+  // Hide the input area
+  const popup = messagesArea.closest('.pr-agent-popup');
+  const inputArea = popup?.querySelector('.pr-agent-input-area');
+  if (inputArea) inputArea.style.display = 'none';
+
   // Back button
   const backBtn = document.createElement('div');
   backBtn.style.cssText = `
@@ -104,6 +109,8 @@ function renderHistoryView(messagesArea) {
   backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
   backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#666');
   backBtn.addEventListener('click', () => {
+    // Show the input area again
+    if (inputArea) inputArea.style.display = 'flex';
     // Rebuild the welcome view
     messagesArea.innerHTML = '';
     renderWelcomeMessage(messagesArea);
@@ -206,7 +213,7 @@ function renderWelcomeMessage(messagesArea) {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     display: flex; align-items: center; justify-content: space-between;
     cursor: pointer; transition: all 0.2s;
-    border: 1px solid #eee;
+    border: 1px solid #eee; margin-bottom: 16px;
   `;
   historyBtn.innerHTML = `
     <div style="display: flex; align-items: center; gap: 10px;">
@@ -572,15 +579,28 @@ function closeAgentPopup() {
 }
 
 function addUserMessage(container, message) {
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = `
+    display: flex; flex-direction: column; align-items: flex-end;
+    margin-bottom: 12px; animation: slideInRight 0.3s ease-out;
+  `;
+
   const messageDiv = document.createElement("div");
   messageDiv.style.cssText = `
     background: linear-gradient(135deg, #FFD700, #FFA500); color: #000;
     padding: 12px 16px; border-radius: 18px 18px 4px 18px;
-    margin-bottom: 12px; margin-left: 40px; font-size: 14px;
-    word-wrap: break-word; animation: slideInRight 0.3s ease-out;
+    margin-left: 40px; font-size: 14px;
+    word-wrap: break-word;
   `;
   messageDiv.textContent = message;
-  container.appendChild(messageDiv);
+
+  const time = document.createElement("div");
+  time.style.cssText = `font-size: 10px; color: #bbb; margin-top: 3px; padding: 0 4px;`;
+  time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  wrapper.appendChild(messageDiv);
+  wrapper.appendChild(time);
+  container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
   saveChatMessage('user', message);
 }
@@ -637,21 +657,32 @@ function formatBotMessage(text) {
 }
 
 function addBotMessage(container, message) {
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = `
+    display: flex; flex-direction: column; align-items: flex-start;
+    margin-bottom: 12px; animation: slideInLeft 0.3s ease-out;
+  `;
+
   const messageDiv = document.createElement("div");
   messageDiv.style.cssText = `
     background: white; color: #333; padding: 12px 16px;
-    border-radius: 18px 18px 18px 4px; margin-bottom: 12px;
+    border-radius: 18px 18px 18px 4px;
     margin-right: 40px; font-size: 14px; word-wrap: break-word;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    animation: slideInLeft 0.3s ease-out; line-height: 1.6;
+    line-height: 1.6;
   `;
   
-  // First convert links, then format markdown
   const withLinks = convertLinksToHTML(message);
   const formatted = formatBotMessage(withLinks);
-  
   messageDiv.innerHTML = formatted;
-  container.appendChild(messageDiv);
+
+  const time = document.createElement("div");
+  time.style.cssText = `font-size: 10px; color: #bbb; margin-top: 3px; padding: 0 4px;`;
+  time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+  wrapper.appendChild(messageDiv);
+  wrapper.appendChild(time);
+  container.appendChild(wrapper);
   container.scrollTop = container.scrollHeight;
   saveChatMessage('bot', message);
 }
