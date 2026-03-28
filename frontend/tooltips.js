@@ -334,7 +334,6 @@ function initTooltipState() {
       isDragging: false,
       dragOffset: { x: 0, y: 0 },
     };
-    // Tooltips now persist — user closes via X button
   }
 }
 
@@ -350,19 +349,18 @@ function addHoverTooltip(element, professor) {
     clearTimeout(window.PRTooltipState.showTimeout);
     window.PRTooltipState.showTimeout = null;
 
+    // If tooltip already showing for this professor, don't re-create it
+    if (window.PRTooltipState.currentTooltip && 
+        window.PRTooltipState.owner === element) {
+      return;  // Already showing, keep it
+    }
+
     // If a different element was active, hide it immediately
     if (
       window.PRTooltipState.owner &&
       window.PRTooltipState.owner !== element
     ) {
       hideProfessorTooltip(window.PRTooltipState.owner, true);
-    }
-
-    // Collapse expanded state when returning to the name
-    const existing = window.PRTooltipState.currentTooltip;
-    if (existing) {
-      clearTimeout(window.PRTooltipState.expandTimeout);
-      existing.classList.remove("pr-tooltip-expanded");
     }
 
     window.PRTooltipState.owner = element;
@@ -384,7 +382,7 @@ function addHoverTooltip(element, professor) {
     window.PRTooltipState.isHovering = false;
     clearTimeout(window.PRTooltipState.showTimeout);
     window.PRTooltipState.showTimeout = null;
-    // Tooltip stays open — user must click X to close
+    // Tooltip stays visible - user must click X to close
   });
 }
 
@@ -502,14 +500,14 @@ function showProfessorTooltip(element, professor) {
   });
 
   tooltip.addEventListener("mouseleave", (e) => {
-    // Don't hide if dragging or mouse is still within tooltip
+    // Don't hide during drag
     if (window.PRTooltipState.isDragging || 
         tooltip.contains(e.relatedTarget)) {
       return;
     }
     window.PRTooltipState.isHovering = false;
     clearTimeout(window.PRTooltipState.expandTimeout);
-    // Tooltip stays open — user must click X to close
+    // Tooltip stays open - user must click X to close
   });
 }
 
