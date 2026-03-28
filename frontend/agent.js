@@ -1,8 +1,11 @@
 // ==================== AGENT POPUP ====================
 function openAgentPopup(button) {
-  button.textContent = "Active Agent";
+  // Update button label properly
+  const buttonLabel = button.querySelector('.cx-MuiButton-label');
+  if (buttonLabel) {
+    buttonLabel.textContent = 'active agent';
+  }
   button.style.background = "linear-gradient(135deg, #4CAF50, #45a049)";
-  button.style.color = "#fff";
 
   const chatContainer = document.createElement("div");
   chatContainer.className = "pr-agent-popup";
@@ -25,9 +28,14 @@ function openAgentPopup(button) {
     overflow: hidden;
     z-index: 10000;
     opacity: 0;
-    animation: fadeIn 0.2s ease-out forwards;
     resize: both;
   `;
+  
+  // Trigger fade in after element is in DOM
+  setTimeout(() => {
+    chatContainer.style.transition = 'opacity 0.2s ease-out';
+    chatContainer.style.opacity = '1';
+  }, 10);
 
   const header = document.createElement("div");
   header.className = "pr-agent-header";
@@ -181,17 +189,13 @@ function openAgentPopup(button) {
   chatContainer.appendChild(header);
   chatContainer.appendChild(messagesArea);
   chatContainer.appendChild(inputArea);
-  document.body.appendChild(chatContainer); // Append directly, no dark background wrapper
+  document.body.appendChild(chatContainer);
   setTimeout(() => input.focus(), 100);
 
   if (!document.querySelector("#agent-popup-styles")) {
     const style = document.createElement("style");
     style.id = "agent-popup-styles";
     style.textContent = `
-      @keyframes fadeIn { 
-        from { opacity: 0; } 
-        to { opacity: 1; } 
-      }
       .pr-agent-popup input:focus { border-color: #FFD700 !important; }
       .pr-agent-popup button:hover { transform: translateY(-1px); }
       @keyframes slideInRight {
@@ -209,12 +213,18 @@ function openAgentPopup(button) {
 
 function closeAgentPopup() {
   const popup = document.querySelector('.pr-agent-popup');
-  if (popup) popup.remove();
+  if (popup) {
+    popup.style.transition = 'opacity 0.2s ease-out';
+    popup.style.opacity = '0';
+    setTimeout(() => popup.remove(), 200);
+  }
   const button = document.querySelector(`.${CSS_CLASSES.ASK_AGENT_BTN}`);
   if (button) {
-    button.textContent = "Ask Agent";
+    const buttonLabel = button.querySelector('.cx-MuiButton-label');
+    if (buttonLabel) {
+      buttonLabel.textContent = 'ask agent';
+    }
     button.style.background = "linear-gradient(135deg, #FFD700, #FFA500)";
-    button.style.color = "#000";
   }
 }
 
@@ -306,9 +316,6 @@ function addTypingMessage(container) {
   container.scrollTop = container.scrollHeight;
   return typingId;
 }
-
-// This file contains only the updated button injection code
-// Replace the injectAskAgentButton function in your agent.js with this
 
 function injectAskAgentButton() {
   if (!shouldEnableAgent(document)) {
