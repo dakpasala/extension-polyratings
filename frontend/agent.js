@@ -89,33 +89,43 @@ function renderHistoryView(messagesArea) {
   const history = getChatHistory();
   const dates = Object.keys(history);
 
-  // Clear current messages
-  messagesArea.innerHTML = '';
-
-  // Hide the input area
   const popup = messagesArea.closest('.pr-agent-popup');
   const inputArea = popup?.querySelector('.pr-agent-input-area');
-  if (inputArea) inputArea.style.display = 'none';
 
-  // Back button
-  const backBtn = document.createElement('div');
-  backBtn.style.cssText = `
-    display: inline-flex; align-items: center; gap: 6px;
-    color: #666; font-size: 13px; font-weight: 600;
-    cursor: pointer; padding: 4px 0; margin-bottom: 12px;
-    transition: color 0.2s;
-  `;
-  backBtn.innerHTML = `← Back to chat`;
-  backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
-  backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#666');
-  backBtn.addEventListener('click', () => {
-    // Show the input area again
-    if (inputArea) inputArea.style.display = 'flex';
-    // Rebuild the welcome view
+  // Fade out current content
+  messagesArea.style.transition = 'opacity 0.15s ease-out';
+  messagesArea.style.opacity = '0';
+
+  setTimeout(() => {
+    // Clear and rebuild while invisible
     messagesArea.innerHTML = '';
-    renderWelcomeMessage(messagesArea);
-  });
-  messagesArea.appendChild(backBtn);
+    if (inputArea) inputArea.style.display = 'none';
+
+    // Back button
+    const backBtn = document.createElement('div');
+    backBtn.style.cssText = `
+      display: inline-flex; align-items: center; gap: 6px;
+      color: #666; font-size: 13px; font-weight: 600;
+      cursor: pointer; padding: 4px 0; margin-bottom: 12px;
+      transition: color 0.2s;
+    `;
+    backBtn.innerHTML = `← Back to chat`;
+    backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
+    backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#666');
+    backBtn.addEventListener('click', () => {
+      // Fade out history
+      messagesArea.style.transition = 'opacity 0.15s ease-out';
+      messagesArea.style.opacity = '0';
+      setTimeout(() => {
+        if (inputArea) inputArea.style.display = 'flex';
+        messagesArea.innerHTML = '';
+        renderWelcomeMessage(messagesArea);
+        // Fade in welcome
+        messagesArea.style.transition = 'opacity 0.2s ease-in';
+        messagesArea.style.opacity = '1';
+      }, 150);
+    });
+    messagesArea.appendChild(backBtn);
 
   if (dates.length === 0) {
     const empty = document.createElement('div');
@@ -125,6 +135,8 @@ function renderHistoryView(messagesArea) {
     `;
     empty.textContent = 'No past messages yet. Start chatting!';
     messagesArea.appendChild(empty);
+    messagesArea.style.transition = 'opacity 0.2s ease-in';
+    messagesArea.style.opacity = '1';
     return;
   }
 
@@ -184,6 +196,11 @@ function renderHistoryView(messagesArea) {
   });
 
   messagesArea.scrollTop = 0;
+
+  // Fade in the history content
+  messagesArea.style.transition = 'opacity 0.2s ease-in';
+  messagesArea.style.opacity = '1';
+  }, 150); // end setTimeout
 }
 
 function renderWelcomeMessage(messagesArea) {
