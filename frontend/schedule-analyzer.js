@@ -80,9 +80,21 @@ function createAnalyzeScheduleButton() {
   
   // Create Analyze button matching Cal Poly's style
   const analyzeBtn = document.createElement('button');
-  analyzeBtn.className = 'pr-analyze-schedule-btn cx-MuiButtonBase-root cx-MuiButton-root cx-MuiButton-outlined mr-1 cx-MuiButton-outlinedSecondary';
+  analyzeBtn.className = 'pr-analyze-schedule-btn cx-MuiButtonBase-root cx-MuiButton-root cx-MuiButton-outlined mr-1';
   analyzeBtn.tabIndex = 0;
   analyzeBtn.type = 'button';
+  
+  // Override outline color to purple
+  analyzeBtn.style.cssText = `
+    border-color: #667eea;
+    color: #667eea;
+  `;
+  analyzeBtn.addEventListener('mouseenter', () => {
+    analyzeBtn.style.backgroundColor = 'rgba(102, 126, 234, 0.08)';
+  });
+  analyzeBtn.addEventListener('mouseleave', () => {
+    analyzeBtn.style.backgroundColor = 'transparent';
+  });
   
   // Create button label span (Cal Poly structure)
   const buttonLabel = document.createElement('span');
@@ -141,15 +153,65 @@ function openAnalysisPopup(courses) {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    cursor: grab;
+    user-select: none;
   `;
   header.innerHTML = `
-    <span>📊 Schedule Analysis</span>
+    <span>Schedule Analysis</span>
     <button class="close-analysis-btn" style="
       background: none; border: none; font-size: 20px; cursor: pointer;
       color: white; padding: 0; width: 24px; height: 24px;
       display: flex; align-items: center; justify-content: center;
     ">×</button>
   `;
+  
+  // Make draggable
+  let isDragging = false;
+  let startX, startY, initialLeft, initialTop;
+  
+  header.addEventListener('mousedown', (e) => {
+    if (e.target.classList.contains('close-analysis-btn')) return;
+    
+    isDragging = true;
+    header.style.cursor = 'grabbing';
+    
+    const rect = popup.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    
+    const onMouseMove = (moveEvent) => {
+      if (!isDragging) return;
+      
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      
+      let newLeft = initialLeft + deltaX;
+      let newTop = initialTop + deltaY;
+      
+      // Clamp to viewport
+      const margin = 10;
+      const width = popup.offsetWidth;
+      const height = popup.offsetHeight;
+      newLeft = Math.max(margin, Math.min(newLeft, window.innerWidth - width - margin));
+      newTop = Math.max(margin, Math.min(newTop, window.innerHeight - height - margin));
+      
+      popup.style.left = `${newLeft}px`;
+      popup.style.top = `${newTop}px`;
+      popup.style.transform = 'none';
+    };
+    
+    const onMouseUp = () => {
+      isDragging = false;
+      header.style.cursor = 'grab';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
   
   // Messages area
   const messagesArea = document.createElement('div');
@@ -165,7 +227,7 @@ function openAnalysisPopup(courses) {
   `;
   analyzingMsg.innerHTML = `
     <div style="font-weight: 600; margin-bottom: 8px; color: #333;">
-      🔍 Analyzing Your Schedule
+      Analyzing Your Schedule
     </div>
     <div style="color: #666; font-size: 14px; line-height: 1.4;">
       Checking ${courses.length} course${courses.length > 1 ? 's' : ''}...<br>
@@ -245,7 +307,7 @@ function openAnalysisPopup(courses) {
         
         resultMsg.innerHTML = `
           <div style="font-weight: 600; color: #333; margin-bottom: 16px; font-size: 16px; border-bottom: 2px solid #f0f0f0; padding-bottom: 12px;">
-            📊 Your Schedule Analysis
+            Your Schedule Analysis
           </div>
           ${formattedAnalysis}
         `;
@@ -275,16 +337,20 @@ function analyzeSchedule() {
   openAnalysisPopup(courses);
 }
 
-// Initialize on page load
+// Initialize only when DOM is ready, but don't parse courses yet
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', createAnalyzeScheduleButton);
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(createAnalyzeScheduleButton, 500);
+  });
 } else {
-  createAnalyzeScheduleButton();
+  setTimeout(createAnalyzeScheduleButton, 500);
 }
 
-// Also watch for dynamic page changes
+// Watch for page changes (in case user navigates)
 const scheduleObserver = new MutationObserver(() => {
-  createAnalyzeScheduleButton();
+  if (!document.querySelector('.pr-analyze-schedule-btn')) {
+    createAnalyzeScheduleButton();
+  }
 });
 
 scheduleObserver.observe(document.body, {
