@@ -44,6 +44,194 @@ function incrementUsage() {
   localStorage.setItem(RATE_LIMIT.STORAGE_KEY, JSON.stringify(usage));
 }
 
+// ==================== RESET (for testing) ====================
+function resetAgentUsage() {
+  localStorage.removeItem(RATE_LIMIT.STORAGE_KEY);
+  localStorage.removeItem(CHAT_HISTORY.STORAGE_KEY);
+  console.log('🔄 Agent usage & history reset');
+}
+
+// ==================== CHAT HISTORY ====================
+const CHAT_HISTORY = {
+  STORAGE_KEY: 'pr_agent_history',
+};
+
+function saveChatMessage(role, text) {
+  const now = new Date();
+  const dateKey = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  
+  let history = {};
+  try {
+    const stored = localStorage.getItem(CHAT_HISTORY.STORAGE_KEY);
+    if (stored) history = JSON.parse(stored);
+  } catch (e) { /* ignore */ }
+
+  if (!history[dateKey]) history[dateKey] = [];
+  history[dateKey].push({
+    role,        // 'user' or 'bot'
+    text,
+    time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+  });
+
+  localStorage.setItem(CHAT_HISTORY.STORAGE_KEY, JSON.stringify(history));
+}
+
+function getChatHistory() {
+  try {
+    const stored = localStorage.getItem(CHAT_HISTORY.STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function renderHistoryView(messagesArea) {
+  const history = getChatHistory();
+  const dates = Object.keys(history);
+
+  // Clear current messages
+  messagesArea.innerHTML = '';
+
+  // Back button
+  const backBtn = document.createElement('div');
+  backBtn.style.cssText = `
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #666; font-size: 13px; font-weight: 600;
+    cursor: pointer; padding: 4px 0; margin-bottom: 12px;
+    transition: color 0.2s;
+  `;
+  backBtn.innerHTML = `← Back to chat`;
+  backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
+  backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#666');
+  backBtn.addEventListener('click', () => {
+    // Rebuild the welcome view
+    messagesArea.innerHTML = '';
+    renderWelcomeMessage(messagesArea);
+  });
+  messagesArea.appendChild(backBtn);
+
+  if (dates.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = `
+      text-align: center; color: #999; font-size: 14px;
+      padding: 40px 20px;
+    `;
+    empty.textContent = 'No past messages yet. Start chatting!';
+    messagesArea.appendChild(empty);
+    return;
+  }
+
+  // Render dates in reverse chronological order
+  dates.reverse().forEach(dateKey => {
+    const messages = history[dateKey];
+
+    // Date header
+    const dateHeader = document.createElement('div');
+    dateHeader.style.cssText = `
+      font-size: 12px; font-weight: 600; color: #999;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 8px 0 6px; margin-top: 8px;
+      border-bottom: 1px solid #e8e8e8; margin-bottom: 10px;
+    `;
+    dateHeader.textContent = dateKey;
+    messagesArea.appendChild(dateHeader);
+
+    // Messages for that date
+    messages.forEach(msg => {
+      const row = document.createElement('div');
+      const isUser = msg.role === 'user';
+      row.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        align-items: ${isUser ? 'flex-end' : 'flex-start'};
+        margin-bottom: 8px;
+      `;
+
+      const bubble = document.createElement('div');
+      bubble.style.cssText = isUser
+        ? `background: linear-gradient(135deg, #FFD700, #FFA500); color: #000;
+           padding: 8px 14px; border-radius: 14px 14px 4px 14px;
+           max-width: 80%; font-size: 13px; word-wrap: break-word;`
+        : `background: white; color: #333; padding: 8px 14px;
+           border-radius: 14px 14px 14px 4px; max-width: 80%;
+           font-size: 13px; word-wrap: break-word;
+           box-shadow: 0 1px 3px rgba(0,0,0,0.08);`;
+
+      // For bot messages, format them; for user, plain text
+      if (isUser) {
+        bubble.textContent = msg.text;
+      } else {
+        const withLinks = convertLinksToHTML(msg.text);
+        const formatted = formatBotMessage(withLinks);
+        bubble.innerHTML = formatted;
+      }
+
+      const time = document.createElement('div');
+      time.style.cssText = `font-size: 10px; color: #bbb; margin-top: 2px; padding: 0 4px;`;
+      time.textContent = msg.time;
+
+      row.appendChild(bubble);
+      row.appendChild(time);
+      messagesArea.appendChild(row);
+    });
+  });
+
+  messagesArea.scrollTop = 0;
+}
+
+function renderWelcomeMessage(messagesArea) {
+  const welcomeMessage = document.createElement("div");
+  welcomeMessage.style.cssText = `
+    background: white; padding: 16px; border-radius: 12px;
+    margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #FFD700;
+  `;
+  welcomeMessage.innerHTML = `
+    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">👋 Hi! I'm your PolyRatings Agent</div>
+    <div style="color: #666; font-size: 14px; line-height: 1.4;">
+      I can help you analyze professor ratings, compare courses, and answer questions about your schedule.
+      <br><br>
+      <strong>🎓 I'll be able to select courses for you super soon!</strong> Stay tuned for this exciting feature!
+    </div>
+  `;
+  messagesArea.appendChild(welcomeMessage);
+
+  // History button
+  const history = getChatHistory();
+  const totalMessages = Object.values(history).reduce((sum, msgs) => sum + msgs.length, 0);
+
+  const historyBtn = document.createElement('div');
+  historyBtn.style.cssText = `
+    background: white; padding: 12px 16px; border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; transition: all 0.2s;
+    border: 1px solid #eee;
+  `;
+  historyBtn.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 16px;">📜</span>
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #333;">View past messages</div>
+        <div style="font-size: 11px; color: #999; margin-top: 1px;">
+          ${totalMessages > 0 ? `${totalMessages} message${totalMessages === 1 ? '' : 's'} saved` : 'No messages yet'}
+        </div>
+      </div>
+    </div>
+    <span style="color: #ccc; font-size: 14px;">›</span>
+  `;
+  historyBtn.addEventListener('mouseenter', () => {
+    historyBtn.style.borderColor = '#FFD700';
+    historyBtn.style.background = '#FFFDF5';
+  });
+  historyBtn.addEventListener('mouseleave', () => {
+    historyBtn.style.borderColor = '#eee';
+    historyBtn.style.background = 'white';
+  });
+  historyBtn.addEventListener('click', () => renderHistoryView(messagesArea));
+  messagesArea.appendChild(historyBtn);
+}
+
 function showRateLimitBanner(container, remaining) {
   // container here is messagesArea, but we need the popup root
   const popup = container.closest('.pr-agent-popup');
@@ -253,21 +441,7 @@ function openAgentPopup(button) {
   messagesArea.style.cssText =
     "flex: 1; padding: 20px; overflow-y: auto; background: #f8f9fa;";
 
-  const welcomeMessage = document.createElement("div");
-  welcomeMessage.style.cssText = `
-    background: white; padding: 16px; border-radius: 12px;
-    margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    border-left: 4px solid #FFD700;
-  `;
-  welcomeMessage.innerHTML = `
-    <div style="font-weight: 600; margin-bottom: 8px; color: #333;">👋 Hi! I'm your PolyRatings Agent</div>
-    <div style="color: #666; font-size: 14px; line-height: 1.4;">
-      I can help you analyze professor ratings, compare courses, and answer questions about your schedule.
-      <br><br>
-      <strong>🎓 I'll be able to select courses for you super soon!</strong> Stay tuned for this exciting feature!
-    </div>
-  `;
-  messagesArea.appendChild(welcomeMessage);
+  renderWelcomeMessage(messagesArea);
 
   const inputArea = document.createElement("div");
   inputArea.className = "pr-agent-input-area";
@@ -408,6 +582,7 @@ function addUserMessage(container, message) {
   messageDiv.textContent = message;
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
+  saveChatMessage('user', message);
 }
 
 function convertLinksToHTML(text) {
@@ -478,6 +653,7 @@ function addBotMessage(container, message) {
   messageDiv.innerHTML = formatted;
   container.appendChild(messageDiv);
   container.scrollTop = container.scrollHeight;
+  saveChatMessage('bot', message);
 }
 
 function addTypingMessage(container) {
