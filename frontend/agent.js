@@ -85,6 +85,74 @@ function getChatHistory() {
   }
 }
 
+// ==================== SEARCH HELPERS ====================
+
+function highlightTerm(text, term) {
+  if (!term || !text) return text;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  return text.replace(regex, '<mark style="background: #FFE082; color: #000; border-radius: 2px; padding: 0 1px;">$1</mark>');
+}
+
+function getSnippet(text, term, maxLen) {
+  maxLen = maxLen || 80;
+  if (!term) return text.length > maxLen ? text.substring(0, maxLen) + '…' : text;
+
+  // Normalize both for finding the match position
+  const normalizedText = normalizeText(text).toLowerCase();
+  const normalizedTerm = normalizeText(term).toLowerCase();
+  const idx = normalizedText.indexOf(normalizedTerm);
+  if (idx === -1) return text.length > maxLen ? text.substring(0, maxLen) + '…' : text;
+
+  const half = Math.floor((maxLen - term.length) / 2);
+  let start = Math.max(0, idx - half);
+  let end = Math.min(text.length, start + maxLen);
+  if (start > 0) start = Math.max(0, end - maxLen);
+
+  let snippet = text.substring(start, end);
+  if (start > 0) snippet = '…' + snippet;
+  if (end < text.length) snippet = snippet + '…';
+
+  return snippet;
+}
+
+function normalizeText(text) {
+  return text
+    // Strip markdown
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    // Normalize all types of hyphens/dashes to regular hyphen
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+    // Normalize all types of spaces to regular space
+    .replace(/[\u00A0\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000]/g, ' ')
+    // Normalize quotes
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+}
+
+function searchHistory(term) {
+  const history = getChatHistory();
+  const results = [];
+  const normalizedTerm = normalizeText(term).toLowerCase();
+
+  const dates = Object.keys(history).reverse();
+  dates.forEach(dateKey => {
+    const messages = history[dateKey];
+    messages.forEach((msg, msgIndex) => {
+      const normalizedMsg = normalizeText(msg.text).toLowerCase();
+      const inText = normalizedMsg.includes(normalizedTerm);
+      const inDate = dateKey.toLowerCase().includes(normalizedTerm);
+      if (inText || inDate) {
+        results.push({ dateKey, msgIndex, msg, matchInDate: inDate && !inText });
+      }
+    });
+  });
+
+  return results;
+}
+
+// ==================== HISTORY VIEW ====================
+
 function renderHistoryView(messagesArea) {
   const history = getChatHistory();
   const dates = Object.keys(history);
@@ -97,36 +165,110 @@ function renderHistoryView(messagesArea) {
   messagesArea.style.opacity = '0';
 
   setTimeout(() => {
-    // Clear and rebuild while invisible
     messagesArea.innerHTML = '';
     if (inputArea) inputArea.style.display = 'none';
+    // Hide rate limit banner in history view
+    const rateBanner = popup?.querySelector('.rate-limit-banner');
+    if (rateBanner) rateBanner.style.display = 'none';
 
-    // Back button
+    // -- Top bar: back button --
     const backBtn = document.createElement('div');
     backBtn.style.cssText = `
       display: inline-flex; align-items: center; gap: 6px;
       color: #666; font-size: 13px; font-weight: 600;
-      cursor: pointer; padding: 4px 0; margin-bottom: 12px;
+      cursor: pointer; padding: 4px 0; margin-bottom: 10px;
       transition: color 0.2s;
     `;
     backBtn.innerHTML = `← Back to chat`;
     backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
     backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#666');
     backBtn.addEventListener('click', () => {
-      // Fade out history
       messagesArea.style.transition = 'opacity 0.15s ease-out';
       messagesArea.style.opacity = '0';
       setTimeout(() => {
         if (inputArea) inputArea.style.display = 'flex';
+        // Show rate limit banner again
+        const rateBanner = popup?.querySelector('.rate-limit-banner');
+        if (rateBanner) rateBanner.style.display = 'flex';
         messagesArea.innerHTML = '';
         renderWelcomeMessage(messagesArea);
-        // Fade in welcome
         messagesArea.style.transition = 'opacity 0.2s ease-in';
         messagesArea.style.opacity = '1';
       }, 150);
     });
     messagesArea.appendChild(backBtn);
 
+    // -- Search bar --
+    const searchWrap = document.createElement('div');
+    searchWrap.style.cssText = `position: relative; margin-bottom: 14px;`;
+
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search messages…';
+    searchInput.style.cssText = `
+      width: 100%; padding: 10px 14px 10px 34px;
+      border: 1.5px solid #e0e0e0; border-radius: 10px;
+      font-size: 13px; outline: none; background: white;
+      transition: border-color 0.2s; box-sizing: border-box;
+    `;
+    searchInput.addEventListener('focus', () => searchInput.style.borderColor = '#FFD700');
+    searchInput.addEventListener('blur', () => {
+      if (!searchInput.value) searchInput.style.borderColor = '#e0e0e0';
+    });
+
+    const searchIcon = document.createElement('div');
+    searchIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+    searchIcon.style.cssText = `
+      position: absolute; left: 12px; top: 50%;
+      transform: translateY(-50%); pointer-events: none;
+    `;
+
+    searchWrap.appendChild(searchIcon);
+    searchWrap.appendChild(searchInput);
+    messagesArea.appendChild(searchWrap);
+
+    // -- Content area --
+    const contentArea = document.createElement('div');
+    contentArea.className = 'history-content-area';
+    messagesArea.appendChild(contentArea);
+
+    // Render full history initially
+    renderFullHistory(contentArea, history, dates);
+
+    // Wire up search with debounce
+    let searchTimeout = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const term = searchInput.value.trim();
+
+        // Fade content area
+        contentArea.style.transition = 'opacity 0.12s ease-out';
+        contentArea.style.opacity = '0';
+
+        setTimeout(() => {
+          contentArea.innerHTML = '';
+          if (!term) {
+            renderFullHistory(contentArea, history, dates);
+          } else {
+            renderSearchResults(contentArea, term, messagesArea);
+          }
+          contentArea.style.transition = 'opacity 0.15s ease-in';
+          contentArea.style.opacity = '1';
+        }, 120);
+      }, 200);
+    });
+
+    // Fade in
+    messagesArea.style.transition = 'opacity 0.2s ease-in';
+    messagesArea.style.opacity = '1';
+
+    setTimeout(() => searchInput.focus(), 220);
+  }, 150);
+}
+
+// Renders the full date-grouped history
+function renderFullHistory(container, history, dates) {
   if (dates.length === 0) {
     const empty = document.createElement('div');
     empty.style.cssText = `
@@ -134,17 +276,13 @@ function renderHistoryView(messagesArea) {
       padding: 40px 20px;
     `;
     empty.textContent = 'No past messages yet. Start chatting!';
-    messagesArea.appendChild(empty);
-    messagesArea.style.transition = 'opacity 0.2s ease-in';
-    messagesArea.style.opacity = '1';
+    container.appendChild(empty);
     return;
   }
 
-  // Render dates in reverse chronological order
-  dates.reverse().forEach(dateKey => {
+  [...dates].reverse().forEach(dateKey => {
     const messages = history[dateKey];
 
-    // Date header
     const dateHeader = document.createElement('div');
     dateHeader.style.cssText = `
       font-size: 12px; font-weight: 600; color: #999;
@@ -153,17 +291,17 @@ function renderHistoryView(messagesArea) {
       border-bottom: 1px solid #e8e8e8; margin-bottom: 10px;
     `;
     dateHeader.textContent = dateKey;
-    messagesArea.appendChild(dateHeader);
+    container.appendChild(dateHeader);
 
-    // Messages for that date
-    messages.forEach(msg => {
+    messages.forEach((msg, idx) => {
       const row = document.createElement('div');
+      row.id = `hist-${dateKey.replace(/\s/g, '_')}-${idx}`;
       const isUser = msg.role === 'user';
       row.style.cssText = `
-        display: flex;
-        flex-direction: column;
+        display: flex; flex-direction: column;
         align-items: ${isUser ? 'flex-end' : 'flex-start'};
-        margin-bottom: 8px;
+        margin-bottom: 8px; transition: background 0.4s;
+        padding: 2px 4px; border-radius: 8px;
       `;
 
       const bubble = document.createElement('div');
@@ -176,7 +314,6 @@ function renderHistoryView(messagesArea) {
            font-size: 13px; word-wrap: break-word;
            box-shadow: 0 1px 3px rgba(0,0,0,0.08);`;
 
-      // For bot messages, format them; for user, plain text
       if (isUser) {
         bubble.textContent = msg.text;
       } else {
@@ -191,16 +328,141 @@ function renderHistoryView(messagesArea) {
 
       row.appendChild(bubble);
       row.appendChild(time);
-      messagesArea.appendChild(row);
+      container.appendChild(row);
     });
   });
+}
 
-  messagesArea.scrollTop = 0;
+// Renders iMessage-style search result cards
+function renderSearchResults(container, term, messagesArea) {
+  const results = searchHistory(term);
 
-  // Fade in the history content
-  messagesArea.style.transition = 'opacity 0.2s ease-in';
-  messagesArea.style.opacity = '1';
-  }, 150); // end setTimeout
+  if (results.length === 0) {
+    const empty = document.createElement('div');
+    empty.style.cssText = `
+      text-align: center; color: #999; font-size: 14px;
+      padding: 40px 20px;
+    `;
+    empty.innerHTML = `No results for "<strong style="color:#666;">${term.replace(/</g, '&lt;')}</strong>"`;
+    container.appendChild(empty);
+    return;
+  }
+
+  // Result count
+  const countLabel = document.createElement('div');
+  countLabel.style.cssText = `
+    font-size: 11px; color: #aaa; margin-bottom: 10px; padding: 0 2px;
+  `;
+  countLabel.textContent = `${results.length} result${results.length === 1 ? '' : 's'}`;
+  container.appendChild(countLabel);
+
+  // Group by date
+  const grouped = {};
+  results.forEach(r => {
+    if (!grouped[r.dateKey]) grouped[r.dateKey] = [];
+    grouped[r.dateKey].push(r);
+  });
+
+  Object.keys(grouped).forEach(dateKey => {
+    const dateLabel = document.createElement('div');
+    dateLabel.style.cssText = `
+      font-size: 11px; font-weight: 600; color: #aaa;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 6px 0 4px; margin-top: 4px;
+    `;
+    dateLabel.textContent = dateKey;
+    container.appendChild(dateLabel);
+
+    grouped[dateKey].forEach(result => {
+      const { msg, msgIndex } = result;
+      const isUser = msg.role === 'user';
+
+      const card = document.createElement('div');
+      card.style.cssText = `
+        background: white; border-radius: 10px; padding: 10px 14px;
+        margin-bottom: 6px; cursor: pointer;
+        border: 1px solid #eee; transition: all 0.15s;
+        display: flex; flex-direction: column; gap: 4px;
+      `;
+
+      // Top row: role + time
+      const topRow = document.createElement('div');
+      topRow.style.cssText = `
+        display: flex; align-items: center; justify-content: space-between;
+      `;
+
+      const roleLabel = document.createElement('span');
+      roleLabel.style.cssText = `
+        font-size: 11px; font-weight: 700;
+        color: ${isUser ? '#E6A000' : '#666'};
+        text-transform: uppercase; letter-spacing: 0.03em;
+      `;
+      roleLabel.textContent = isUser ? 'You' : 'Agent';
+
+      const timeLabel = document.createElement('span');
+      timeLabel.style.cssText = `font-size: 10px; color: #bbb;`;
+      timeLabel.textContent = msg.time;
+
+      topRow.appendChild(roleLabel);
+      topRow.appendChild(timeLabel);
+
+      // Snippet with highlight — normalize text so term matching works
+      const snippetEl = document.createElement('div');
+      snippetEl.style.cssText = `font-size: 13px; color: #444; line-height: 1.4;`;
+      const plainText = normalizeText(msg.text);
+      const rawSnippet = getSnippet(plainText, term, 90);
+      snippetEl.innerHTML = highlightTerm(rawSnippet, term);
+
+      card.appendChild(topRow);
+      card.appendChild(snippetEl);
+
+      // Hover effects
+      card.addEventListener('mouseenter', () => {
+        card.style.borderColor = '#FFD700';
+        card.style.background = '#FFFDF5';
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.borderColor = '#eee';
+        card.style.background = 'white';
+      });
+
+      // Click — jump to message in full history
+      card.addEventListener('click', () => {
+        // Fade out search results
+        container.style.transition = 'opacity 0.12s ease-out';
+        container.style.opacity = '0';
+
+        setTimeout(() => {
+          container.innerHTML = '';
+
+          // Re-render full history
+          const freshHistory = getChatHistory();
+          const allDates = Object.keys(freshHistory);
+          renderFullHistory(container, freshHistory, allDates);
+
+          container.style.transition = 'opacity 0.15s ease-in';
+          container.style.opacity = '1';
+
+          // Scroll to and flash the target message
+          const targetId = `hist-${dateKey.replace(/\s/g, '_')}-${msgIndex}`;
+          setTimeout(() => {
+            const target = container.querySelector(`#${CSS.escape(targetId)}`);
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              target.style.background = 'rgba(255, 215, 0, 0.25)';
+              setTimeout(() => { target.style.background = 'transparent'; }, 1500);
+            }
+          }, 80);
+
+          // Clear search input
+          const searchInput = messagesArea.querySelector('input[type="text"]');
+          if (searchInput) searchInput.value = '';
+        }, 120);
+      });
+
+      container.appendChild(card);
+    });
+  });
 }
 
 function renderWelcomeMessage(messagesArea) {
@@ -255,37 +517,35 @@ function renderWelcomeMessage(messagesArea) {
 }
 
 function showRateLimitBanner(container, remaining) {
-  // container here is messagesArea, but we need the popup root
   const popup = container.closest('.pr-agent-popup');
   if (!popup) return;
 
-  // Remove any existing banner
   const existingBanner = popup.querySelector('.rate-limit-banner');
   if (existingBanner) existingBanner.remove();
   
-  // Don't show if more than 3 messages remaining
   if (remaining > 3) return;
 
   const banner = document.createElement('div');
   banner.className = 'rate-limit-banner';
 
-  // Base styles — sits between messages and input, dark bar like Claude.ai
   banner.style.cssText = `
     background: rgba(45, 35, 55, 0.95);
     backdrop-filter: blur(8px);
     padding: 10px 20px;
+    margin: 0 14px;
+    border-radius: 12px 12px 0 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     animation: bannerSlideIn 0.3s ease-out;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
   `;
 
   if (remaining === 0) {
+    banner.style.background = 'rgba(180, 30, 30, 0.92)';
     banner.innerHTML = `
       <span style="
-        color: rgba(255, 255, 255, 0.9);
+        color: rgba(255, 255, 255, 0.95);
         font-size: 13px;
         font-weight: 500;
         letter-spacing: 0.01em;
@@ -312,7 +572,6 @@ function showRateLimitBanner(container, remaining) {
     `;
   }
 
-  // Inject animation keyframes if not already present
   if (!document.querySelector('#rate-limit-banner-styles')) {
     const style = document.createElement('style');
     style.id = 'rate-limit-banner-styles';
@@ -325,13 +584,13 @@ function showRateLimitBanner(container, remaining) {
     document.head.appendChild(style);
   }
 
-  // Insert between messages area and input area (above input)
   const inputArea = popup.querySelector('.pr-agent-input-area');
   if (inputArea) {
     popup.insertBefore(banner, inputArea);
+    // Remove border so banner + input look attached
+    inputArea.style.borderTop = 'none';
   }
 
-  // If limit is fully hit, disable the input and send button
   if (remaining === 0) {
     const input = inputArea.querySelector('input');
     const sendBtn = inputArea.querySelector('button');
@@ -350,7 +609,6 @@ function showRateLimitBanner(container, remaining) {
 }
 
 function openAgentPopup(button) {
-  // Update button label properly
   const buttonLabel = button.querySelector('.cx-MuiButton-label');
   if (buttonLabel) {
     buttonLabel.textContent = 'active agent';
@@ -381,7 +639,6 @@ function openAgentPopup(button) {
     resize: both;
   `;
   
-  // Trigger fade in after element is in DOM
   setTimeout(() => {
     chatContainer.style.transition = 'opacity 0.2s ease-out';
     chatContainer.style.opacity = '1';
@@ -435,7 +692,6 @@ function openAgentPopup(button) {
       let newLeft = initialLeft + deltaX;
       let newTop = initialTop + deltaY;
 
-      // Clamp to viewport
       const margin = 10;
       const width = chatContainer.offsetWidth;
       const height = chatContainer.offsetHeight;
@@ -493,7 +749,6 @@ function openAgentPopup(button) {
     const message = input.value.trim();
     if (!message) return;
     
-    // Check rate limit
     const rateLimit = checkRateLimit();
     if (!rateLimit.canSend) {
       showRateLimitBanner(messagesArea, 0);
@@ -511,22 +766,17 @@ function openAgentPopup(button) {
 
         if (response?.status === "success") {
           addBotMessage(messagesArea, response.professor.analysis);
-          // Increment usage on successful response
           incrementUsage();
-          
-          // Always update banner to show current remaining count
           const updated = checkRateLimit();
           showRateLimitBanner(messagesArea, updated.remaining);
         } else if (response?.status === "ai_analysis") {
           addBotMessage(messagesArea, response.professor.analysis);
           incrementUsage();
-          
           const updated = checkRateLimit();
           showRateLimitBanner(messagesArea, updated.remaining);
         } else if (response?.status === "general_response") {
           addBotMessage(messagesArea, response.message);
           incrementUsage();
-          
           const updated = checkRateLimit();
           showRateLimitBanner(messagesArea, updated.remaining);
         } else {
@@ -549,7 +799,7 @@ function openAgentPopup(button) {
   chatContainer.appendChild(inputArea);
   document.body.appendChild(chatContainer);
 
-  // Check rate limit on open — show banner immediately if needed
+  // Check rate limit on open
   const initialLimit = checkRateLimit();
   if (initialLimit.remaining <= 3) {
     showRateLimitBanner(messagesArea, initialLimit.remaining);
@@ -651,17 +901,12 @@ function convertLinksToHTML(text) {
 function formatBotMessage(text) {
   if (!text || typeof text !== "string") return text;
   
-  // Convert **bold** to <strong>
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  
-  // Convert *italic* to <em>
   text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
   
-  // Convert line breaks to paragraphs
   const paragraphs = text.split('\n\n').filter(p => p.trim());
   
   return paragraphs.map(para => {
-    // Check if it's a list
     if (para.includes('\n- ') || para.includes('\n• ')) {
       const items = para.split(/\n[-•]\s+/).filter(i => i.trim());
       const listItems = items.map(item => `<li>${item.trim()}</li>`).join('');
@@ -748,7 +993,6 @@ function injectAskAgentButton() {
 
   console.log("🔍 Attempting to inject Ask Agent button...");
 
-  // First, try to find "Delete Selected" button on course selection page
   let deleteButton = null;
   let allButtons = document.querySelectorAll("button");
   console.log(`📋 Found ${allButtons.length} buttons on page`);
@@ -767,11 +1011,9 @@ function injectAskAgentButton() {
   });
 
   if (deleteButton) {
-    // Found Delete Selected button - inject to its left
     const buttonContainer = deleteButton.parentElement;
     if (buttonContainer) {
       const askAgentButton = document.createElement("button");
-      // Use Cal Poly classes + our custom class
       askAgentButton.className = 'cx-MuiButtonBase-root cx-MuiButton-root cx-MuiButton-contained mr-1 ' + CSS_CLASSES.ASK_AGENT_BTN;
       askAgentButton.tabIndex = 0;
       askAgentButton.type = 'button';
@@ -779,7 +1021,6 @@ function injectAskAgentButton() {
         background: linear-gradient(135deg, #FFD700, #FFA500);
       `;
       
-      // Create button label span (Cal Poly structure)
       const buttonLabel = document.createElement('span');
       buttonLabel.className = 'cx-MuiButton-label';
       buttonLabel.textContent = 'ask agent';
@@ -802,7 +1043,6 @@ function injectAskAgentButton() {
 
   console.log("⚠️ Delete Selected button not found, trying fallback...");
 
-  // Fallback: Look for dialog buttons (Cancel, OK, Submit)
   const buttonSelectors = [
     'button[type="button"]',
     ".MuiButton-root",
