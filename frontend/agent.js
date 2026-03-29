@@ -542,9 +542,10 @@ function showRateLimitBanner(container, remaining) {
   `;
 
   if (remaining === 0) {
+    banner.style.background = 'rgba(180, 30, 30, 0.92)';
     banner.innerHTML = `
       <span style="
-        color: rgba(255, 255, 255, 0.9);
+        color: rgba(255, 255, 255, 0.95);
         font-size: 13px;
         font-weight: 500;
         letter-spacing: 0.01em;
