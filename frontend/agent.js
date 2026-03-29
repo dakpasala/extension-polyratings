@@ -167,6 +167,9 @@ function renderHistoryView(messagesArea) {
   setTimeout(() => {
     messagesArea.innerHTML = '';
     if (inputArea) inputArea.style.display = 'none';
+    // Hide rate limit banner in history view
+    const rateBanner = popup?.querySelector('.rate-limit-banner');
+    if (rateBanner) rateBanner.style.display = 'none';
 
     // -- Top bar: back button --
     const backBtn = document.createElement('div');
@@ -184,6 +187,9 @@ function renderHistoryView(messagesArea) {
       messagesArea.style.opacity = '0';
       setTimeout(() => {
         if (inputArea) inputArea.style.display = 'flex';
+        // Show rate limit banner again
+        const rateBanner = popup?.querySelector('.rate-limit-banner');
+        if (rateBanner) rateBanner.style.display = 'flex';
         messagesArea.innerHTML = '';
         renderWelcomeMessage(messagesArea);
         messagesArea.style.transition = 'opacity 0.2s ease-in';
@@ -526,12 +532,13 @@ function showRateLimitBanner(container, remaining) {
     background: rgba(45, 35, 55, 0.95);
     backdrop-filter: blur(8px);
     padding: 10px 20px;
+    margin: 0 14px;
+    border-radius: 12px 12px 0 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     animation: bannerSlideIn 0.3s ease-out;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
   `;
 
   if (remaining === 0) {
@@ -579,6 +586,8 @@ function showRateLimitBanner(container, remaining) {
   const inputArea = popup.querySelector('.pr-agent-input-area');
   if (inputArea) {
     popup.insertBefore(banner, inputArea);
+    // Remove border so banner + input look attached
+    inputArea.style.borderTop = 'none';
   }
 
   if (remaining === 0) {
