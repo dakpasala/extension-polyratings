@@ -98,8 +98,10 @@ function getSnippet(text, term, maxLen) {
   maxLen = maxLen || 80;
   if (!term) return text.length > maxLen ? text.substring(0, maxLen) + '…' : text;
 
-  const lower = text.toLowerCase();
-  const idx = lower.indexOf(term.toLowerCase());
+  // Normalize both for finding the match position
+  const normalizedText = normalizeText(text).toLowerCase();
+  const normalizedTerm = normalizeText(term).toLowerCase();
+  const idx = normalizedText.indexOf(normalizedTerm);
   if (idx === -1) return text.length > maxLen ? text.substring(0, maxLen) + '…' : text;
 
   const half = Math.floor((maxLen - term.length) / 2);
@@ -114,17 +116,32 @@ function getSnippet(text, term, maxLen) {
   return snippet;
 }
 
+function normalizeText(text) {
+  return text
+    // Strip markdown
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    // Normalize all types of hyphens/dashes to regular hyphen
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, '-')
+    // Normalize all types of spaces to regular space
+    .replace(/[\u00A0\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000]/g, ' ')
+    // Normalize quotes
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'");
+}
+
 function searchHistory(term) {
   const history = getChatHistory();
   const results = [];
-  const lowerTerm = term.toLowerCase();
+  const normalizedTerm = normalizeText(term).toLowerCase();
 
   const dates = Object.keys(history).reverse();
   dates.forEach(dateKey => {
     const messages = history[dateKey];
     messages.forEach((msg, msgIndex) => {
-      const inText = msg.text.toLowerCase().includes(lowerTerm);
-      const inDate = dateKey.toLowerCase().includes(lowerTerm);
+      const normalizedMsg = normalizeText(msg.text).toLowerCase();
+      const inText = normalizedMsg.includes(normalizedTerm);
+      const inDate = dateKey.toLowerCase().includes(normalizedTerm);
       if (inText || inDate) {
         results.push({ dateKey, msgIndex, msg, matchInDate: inDate && !inText });
       }
@@ -383,10 +400,11 @@ function renderSearchResults(container, term, messagesArea) {
       topRow.appendChild(roleLabel);
       topRow.appendChild(timeLabel);
 
-      // Snippet with highlight
+      // Snippet with highlight — normalize text so term matching works
       const snippetEl = document.createElement('div');
       snippetEl.style.cssText = `font-size: 13px; color: #444; line-height: 1.4;`;
-      const rawSnippet = getSnippet(msg.text, term, 90);
+      const plainText = normalizeText(msg.text);
+      const rawSnippet = getSnippet(plainText, term, 90);
       snippetEl.innerHTML = highlightTerm(rawSnippet, term);
 
       card.appendChild(topRow);
