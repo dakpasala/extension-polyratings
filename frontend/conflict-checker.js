@@ -220,13 +220,12 @@ function createConflictBadge(conflictResult, sectionData) {
 }
 
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
-  // Remove existing badges from this row
-  sectionRow.querySelectorAll('.pr-conflict-badge').forEach(b => b.remove());
+  // Remove existing badges and badge wraps from this row
+  sectionRow.querySelectorAll('.pr-conflict-badge, .pr-conflict-badge-wrap').forEach(b => b.remove());
 
   const badge = createConflictBadge(conflictResult, sectionData);
 
   // Target: the START TIME cell (xs-4 index 2 inside xs-5 > xs-12)
-  // We create a wrapper div below it so the badge appears on a new line
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
   const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
@@ -234,16 +233,31 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
 
   const startTimeCell = xs4Cells[2]; // the "3:10 pm" cell
 
-  // Find or create a badge container below the cell content
-  let badgeContainer = startTimeCell.querySelector('.pr-conflict-badge-wrap');
-  if (!badgeContainer) {
-    badgeContainer = document.createElement('div');
-    badgeContainer.className = 'pr-conflict-badge-wrap';
-    badgeContainer.style.cssText = 'width: 100%; margin-top: 4px;';
-    startTimeCell.appendChild(badgeContainer);
+  // Get the inner [role="cell"] div (holds the time text)
+  const roleCell = startTimeCell.querySelector('[role="cell"]');
+  if (!roleCell) return;
+
+  // Make the role cell a flex column so badge stacks below the time text,
+  // matching how the rating UI stacks below the professor name
+  roleCell.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; white-space: normal;';
+
+  // Wrap existing text node in a span so it stays on its own line
+  if (!roleCell.querySelector('.pr-time-text')) {
+    const timeText = roleCell.textContent.trim();
+    roleCell.textContent = '';
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'pr-time-text';
+    timeSpan.textContent = timeText;
+    timeSpan.style.cssText = 'white-space: nowrap;';
+    roleCell.appendChild(timeSpan);
   }
-  badgeContainer.innerHTML = '';
+
+  // Badge container below the time text
+  const badgeContainer = document.createElement('div');
+  badgeContainer.className = 'pr-conflict-badge-wrap';
+  badgeContainer.style.cssText = 'width: 100%; margin-top: 4px;';
   badgeContainer.appendChild(badge);
+  roleCell.appendChild(badgeContainer);
 }
 
 // ==================== MAIN SCANNING LOGIC ====================
