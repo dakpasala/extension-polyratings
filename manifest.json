@@ -23,6 +23,7 @@
         "frontend/rating-ui.js",
         "frontend/agent.js",
         "frontend/schedule-analyzer.js",
+        "frontend/conflict-checker.js",
         "frontend/observers.js",
         "frontend/content.js"
       ],
