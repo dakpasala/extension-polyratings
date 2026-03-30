@@ -1,25 +1,16 @@
 // ==================== CONFLICT CHECKER ====================
-// Detects time conflicts between selected course sections.
-// Stores checked section times in localStorage as users browse.
-// Injects "Available" / "Time Conflict" badges on visible sections.
-
 const SCHEDULE_STORAGE_KEY = 'pr_schedule_map';
 
 // ==================== TIME UTILITIES ====================
 
 function parseTime(timeStr) {
   if (!timeStr || timeStr === '-' || timeStr.toLowerCase() === 'tba') return null;
-  const cleaned = timeStr.trim().toLowerCase();
-  const match = cleaned.match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/);
+  const match = timeStr.trim().toLowerCase().match(/(\d{1,2}):(\d{2})\s*(am|pm)/);
   if (!match) return null;
-
   let hours = parseInt(match[1]);
   const minutes = parseInt(match[2]);
-  const period = match[3];
-
-  if (period === 'pm' && hours !== 12) hours += 12;
-  if (period === 'am' && hours === 12) hours = 0;
-
+  if (match[3] === 'pm' && hours !== 12) hours += 12;
+  if (match[3] === 'am' && hours === 12) hours = 0;
   return hours * 60 + minutes;
 }
 
@@ -28,15 +19,10 @@ function expandDays(dayStr) {
   const dayMap = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
   const days = [];
   let i = 0;
-  const str = dayStr.trim();
-  while (i < str.length) {
-    const two = str.substring(i, i + 2);
-    if (dayMap.includes(two)) {
-      days.push(two);
-      i += 2;
-    } else {
-      i++;
-    }
+  while (i < dayStr.length) {
+    const two = dayStr.substring(i, i + 2);
+    if (dayMap.includes(two)) { days.push(two); i += 2; }
+    else i++;
   }
   return days;
 }
@@ -45,18 +31,12 @@ function timesOverlap(slot1, slot2) {
   const days1 = expandDays(slot1.days);
   const days2 = expandDays(slot2.days);
   if (days1.length === 0 || days2.length === 0) return false;
+  if (!days1.some(d => days2.includes(d))) return false;
 
-  const sharedDays = days1.filter(d => days2.includes(d));
-  if (sharedDays.length === 0) return false;
-
-  const start1 = parseTime(slot1.start);
-  const end1 = parseTime(slot1.end);
-  const start2 = parseTime(slot2.start);
-  const end2 = parseTime(slot2.end);
-
-  if (start1 === null || end1 === null || start2 === null || end2 === null) return false;
-
-  return start1 < end2 && start2 < end1;
+  const s1 = parseTime(slot1.start), e1 = parseTime(slot1.end);
+  const s2 = parseTime(slot2.start), e2 = parseTime(slot2.end);
+  if (s1 === null || e1 === null || s2 === null || e2 === null) return false;
+  return s1 < e2 && s2 < e1;
 }
 
 function formatTimeRange(slot) {
@@ -66,12 +46,8 @@ function formatTimeRange(slot) {
 // ==================== SCHEDULE STORAGE ====================
 
 function getScheduleMap() {
-  try {
-    const stored = localStorage.getItem(SCHEDULE_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch (e) {
-    return {};
-  }
+  try { return JSON.parse(localStorage.getItem(SCHEDULE_STORAGE_KEY)) || {}; }
+  catch (e) { return {}; }
 }
 
 function saveScheduleMap(map) {
@@ -81,103 +57,91 @@ function saveScheduleMap(map) {
 function addSectionToSchedule(courseCode, sectionData) {
   const map = getScheduleMap();
   if (!map[courseCode]) map[courseCode] = [];
-
-  // Replace if same section name exists (user re-checked)
   map[courseCode] = map[courseCode].filter(s => s.section !== sectionData.section);
   map[courseCode].push(sectionData);
-
   saveScheduleMap(map);
-  console.log(`📅 Added ${courseCode} ${sectionData.section}: ${formatTimeRange(sectionData)}`);
 }
 
 function removeSectionFromSchedule(courseCode, sectionName) {
   const map = getScheduleMap();
   if (!map[courseCode]) return;
-
   map[courseCode] = map[courseCode].filter(s => s.section !== sectionName);
   if (map[courseCode].length === 0) delete map[courseCode];
-
   saveScheduleMap(map);
-  console.log(`📅 Removed ${courseCode} ${sectionName}`);
 }
 
 function removeCourseFromSchedule(courseCode) {
   const map = getScheduleMap();
-  if (!map[courseCode]) return;
   delete map[courseCode];
   saveScheduleMap(map);
-  console.log(`📅 Removed entire course ${courseCode}`);
 }
 
 // ==================== DOM PARSING ====================
 
 function getCourseCodeFromRow(row) {
-  // Walk up to find the course code — it's in a cx-MuiLink-button
-  let el = row;
-  while (el) {
-    const btn = el.querySelector('button.cx-MuiLink-button');
-    if (btn) {
-      const code = btn.textContent.trim();
-      if (/^[A-Z]{2,4}\s+\d{3}/.test(code)) return code;
+  // Walk up ancestors looking for a button with course code pattern
+  let el = row.parentElement;
+  let depth = 0;
+  while (el && depth < 30) {
+    const buttons = el.querySelectorAll('button.cx-MuiLink-button, .cx-MuiLink-button');
+    for (const btn of buttons) {
+      const text = btn.textContent.trim();
+      if (/^[A-Z]{2,4}\s+\d{3}/.test(text)) return text;
     }
     el = el.parentElement;
+    depth++;
   }
   return '';
 }
 
-function extractSectionFromRow(sectionRow) {
-  // sectionRow = the [role="row"] div containing section details
-  // Returns: { section, days, start, end, isChecked, courseCode, hasTimes }
+function readCellText(cell) {
+  if (!cell) return '';
+  const roleCell = cell.querySelector('[role="cell"]');
+  const target = roleCell || cell;
 
-  // Section name from rowheader (e.g. "01-LEC*")
+  // Prefer aria-hidden text (clean display text)
+  const ariaDiv = target.querySelector('[aria-hidden="true"]');
+  if (ariaDiv) return ariaDiv.textContent.trim();
+
+  // Clone and strip injected elements
+  const clone = target.cloneNode(true);
+  clone.querySelectorAll('[data-polyratings], .polyratings-rating-element, .pr-conflict-badge').forEach(n => n.remove());
+  return clone.textContent.trim();
+}
+
+function extractSectionFromRow(sectionRow) {
   const headerEl = sectionRow.querySelector('[role="rowheader"]');
   let sectionName = '';
   if (headerEl) {
     const ariaDiv = headerEl.querySelector('[aria-hidden="true"]');
     sectionName = ariaDiv ? ariaDiv.textContent.trim() : '';
   }
+  if (!sectionName) return null;
 
-  // The xs-5 container holds: Instructor, Days, Start, End, Room
-  const detailsContainer = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
-  if (!detailsContainer) return null;
+  const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
+  if (!xs5) return null;
 
-  const detailCells = detailsContainer.querySelectorAll('.cx-MuiGrid-grid-xs-4');
-  // Index 0 = Instructor, 1 = Days, 2 = Start, 3 = End, 4 = Room
-  let days = '', start = '', end = '';
-  if (detailCells.length >= 4) {
-    days = detailCells[1]?.textContent?.trim() || '';
-    start = detailCells[2]?.textContent?.trim() || '';
-    end = detailCells[3]?.textContent?.trim() || '';
-  }
+  const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
+  if (xs4Cells.length < 4) return null;
 
-  // Checkbox state
+  const days = readCellText(xs4Cells[1]);
+  const start = readCellText(xs4Cells[2]);
+  const end = readCellText(xs4Cells[3]);
+
   const checkbox = sectionRow.querySelector('input[type="checkbox"]');
   const isChecked = checkbox?.getAttribute('aria-checked') === 'true';
-
   const courseCode = getCourseCodeFromRow(sectionRow);
 
-  // Clean up days — remove any extra whitespace or nested text
-  days = days.replace(/\s+/g, '').trim();
+  const hasTimes = !!(days && start && end && days !== '-' && start !== '-' && end !== '-'
+    && !days.toLowerCase().includes('tba'));
 
-  const hasTimes = !!(days && start && end && days !== '-' && !days.toLowerCase().includes('tba'));
-
-  return {
-    section: sectionName,
-    days,
-    start,
-    end,
-    isChecked,
-    courseCode,
-    hasTimes,
-  };
+  return { section: sectionName, days, start, end, isChecked, courseCode, hasTimes };
 }
 
 function getAllVisibleSectionRows() {
-  // Find all section rows in expanded panels
-  const rows = document.querySelectorAll('.cx-MuiExpansionPanelSummary-content [role="row"]');
-  return Array.from(rows).filter(row => {
-    // Must have a rowheader (section name) to be a section row, not a header row
-    return row.querySelector('[role="rowheader"]');
+  return Array.from(document.querySelectorAll('[role="row"]')).filter(row => {
+    const header = row.querySelector('[role="rowheader"]');
+    return header && /\d{2}-/.test(header.textContent || '');
   });
 }
 
@@ -192,27 +156,16 @@ function findConflicts(sectionData) {
   }
 
   Object.entries(map).forEach(([courseCode, sections]) => {
-    // Don't conflict-check against the same course's own sections
+    // Don't conflict with own course
     if (courseCode === sectionData.courseCode) return;
-
     sections.forEach(slot => {
       if (timesOverlap(sectionData, slot)) {
-        conflicts.push({
-          course: courseCode,
-          section: slot.section,
-          days: slot.days,
-          start: slot.start,
-          end: slot.end,
-        });
+        conflicts.push({ course: courseCode, section: slot.section, days: slot.days, start: slot.start, end: slot.end });
       }
     });
   });
 
-  return {
-    hasConflict: conflicts.length > 0,
-    conflictsWith: conflicts,
-    noTime: false,
-  };
+  return { hasConflict: conflicts.length > 0, conflictsWith: conflicts, noTime: false };
 }
 
 // ==================== BADGE UI ====================
@@ -223,11 +176,12 @@ function injectConflictStyles() {
   style.id = 'pr-conflict-styles';
   style.textContent = `
     @keyframes conflictFadeIn {
-      from { opacity: 0; transform: translateX(-4px); }
-      to { opacity: 1; transform: translateX(0); }
+      from { opacity: 0; transform: translateY(4px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .pr-conflict-badge {
-      animation: conflictFadeIn 0.25s ease-out;
+      animation: conflictFadeIn 0.3s ease-out;
+      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
   `;
   document.head.appendChild(style);
@@ -236,71 +190,98 @@ function injectConflictStyles() {
 function createConflictBadge(conflictResult, sectionData) {
   injectConflictStyles();
 
-  const badge = document.createElement('div');
+  const badge = document.createElement('span');
   badge.className = 'pr-conflict-badge';
   badge.setAttribute('data-pr-conflict', 'true');
 
+  // Match the rating element style exactly
+  const baseStyle = `
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 3px 8px; border-radius: 12px;
+    font-size: 12px; font-weight: 500;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    cursor: default;
+    max-width: calc(100% - 4px); width: fit-content;
+    margin-top: 4px;
+  `;
+
   if (!sectionData.hasTimes) {
-    badge.style.cssText = `
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 10px;
-      font-size: 11px; font-weight: 600;
-      background: #f5f5f5; color: #999;
-      border: 1px solid #e0e0e0;
-      white-space: nowrap; margin-top: 4px;
+    badge.style.cssText = baseStyle + `
+      background: rgba(245, 245, 245, 0.9); color: #999;
+      border: 1px solid #ddd;
     `;
     badge.textContent = '— No time set';
-    return badge;
-  }
+  } else if (conflictResult.hasConflict) {
+    const courses = conflictResult.conflictsWith
+      .map(c => c.course).filter((v, i, a) => a.indexOf(v) === i).join(', ');
 
-  if (conflictResult.hasConflict) {
-    const conflictCourses = conflictResult.conflictsWith
-      .map(c => c.course)
-      .filter((v, i, a) => a.indexOf(v) === i)
-      .join(', ');
-
-    badge.style.cssText = `
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 10px;
-      font-size: 11px; font-weight: 600;
-      background: #FEE2E2; color: #DC2626;
+    badge.style.cssText = baseStyle + `
+      background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
-      white-space: nowrap; margin-top: 4px;
-      cursor: default;
     `;
-    badge.innerHTML = `<span style="font-size: 12px;">⚠</span> Conflict with ${conflictCourses}`;
-
-    // Tooltip with details on hover
-    const details = conflictResult.conflictsWith
-      .map(c => `${c.course} ${c.section}: ${formatTimeRange(c)}`)
-      .join('\n');
-    badge.title = details;
+    badge.innerHTML = `⚠ Conflict · ${courses}`;
+    badge.title = conflictResult.conflictsWith
+      .map(c => `${c.course} ${c.section}: ${formatTimeRange(c)}`).join('\n');
   } else {
-    badge.style.cssText = `
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 10px;
-      font-size: 11px; font-weight: 600;
-      background: #D1FAE5; color: #059669;
+    badge.style.cssText = baseStyle + `
+      background: rgba(209, 250, 229, 0.9); color: #059669;
       border: 1px solid #A7F3D0;
-      white-space: nowrap; margin-top: 4px;
     `;
-    badge.innerHTML = `<span style="font-size: 12px;">✓</span> Available`;
+    badge.innerHTML = `✓ Available`;
   }
 
   return badge;
 }
 
+// Inject badge the same way rating-ui.js does it
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
-  // Remove existing badge on this row
-  const existing = sectionRow.querySelector('.pr-conflict-badge');
-  if (existing) existing.remove();
+  // Remove existing badges
+  sectionRow.querySelectorAll('.pr-conflict-badge').forEach(b => b.remove());
 
   const badge = createConflictBadge(conflictResult, sectionData);
 
-  // Inject near the section name (rowheader area)
-  const headerEl = sectionRow.querySelector('[role="rowheader"]');
-  if (headerEl) {
-    headerEl.appendChild(badge);
+  // Find the instructor cell — first xs-4 inside the xs-5 container
+  const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
+  if (!xs5) return;
+  const instructorCell = xs5.querySelector('.cx-MuiGrid-grid-xs-4');
+  if (!instructorCell) return;
+
+  // Look for existing polyratings container (data-polyratings="true" div)
+  const polyContainer = instructorCell.querySelector('[data-polyratings="true"]');
+
+  if (polyContainer) {
+    // Polyratings wrapper exists — append badge inside it, after the rating
+    polyContainer.appendChild(badge);
+  } else {
+    // No polyratings wrapper — find the [role="cell"] and build a container
+    // like injectDesktopRatingUI does
+    const roleCell = instructorCell.querySelector('[role="cell"]');
+    if (!roleCell) return;
+
+    // Check if it already has a flex-column container
+    const existingContainer = roleCell.querySelector('[data-pr-conflict-container]');
+    if (existingContainer) {
+      existingContainer.appendChild(badge);
+    } else {
+      // Get the original text
+      const originalText = roleCell.textContent.trim();
+
+      // Create a container matching polyratings style
+      const container = document.createElement('div');
+      container.setAttribute('data-pr-conflict-container', 'true');
+      container.style.cssText = 'display: flex; flex-direction: column; width: 100%; align-items: flex-start;';
+
+      const nameSpan = document.createElement('div');
+      nameSpan.textContent = originalText;
+      nameSpan.style.cssText = 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.43; margin-bottom: 2px;';
+
+      container.appendChild(nameSpan);
+      container.appendChild(badge);
+
+      roleCell.innerHTML = '';
+      roleCell.appendChild(container);
+    }
   }
 }
 
@@ -310,116 +291,85 @@ function scanAndUpdateConflicts() {
   const sectionRows = getAllVisibleSectionRows();
   if (sectionRows.length === 0) return;
 
-  console.log(`📅 Scanning ${sectionRows.length} visible sections for conflicts`);
-
+  // First pass: store all checked sections
   sectionRows.forEach(row => {
     const data = extractSectionFromRow(row);
     if (!data || !data.section) return;
 
-    // If checked, store in schedule map
-    if (data.isChecked && data.hasTimes) {
+    if (data.isChecked && data.hasTimes && data.courseCode) {
       addSectionToSchedule(data.courseCode, {
-        section: data.section,
-        days: data.days,
-        start: data.start,
-        end: data.end,
+        section: data.section, days: data.days, start: data.start, end: data.end,
       });
     }
-
-    // If unchecked, remove from schedule map (user deselected)
     if (!data.isChecked && data.courseCode) {
       removeSectionFromSchedule(data.courseCode, data.section);
     }
+  });
 
-    // Only show badges on unchecked sections (the ones user is deciding on)
-    if (!data.isChecked) {
-      const result = findConflicts(data);
-      injectBadgeOnRow(row, result, data);
-    } else {
-      // Remove badge from checked sections (they're part of schedule)
-      const existing = row.querySelector('.pr-conflict-badge');
-      if (existing) existing.remove();
-    }
+  // Second pass: inject badges on ALL rows (checked and unchecked)
+  sectionRows.forEach(row => {
+    const data = extractSectionFromRow(row);
+    if (!data || !data.section) return;
+
+    // Skip if badge already exists and nothing changed
+    const existingBadge = row.querySelector('.pr-conflict-badge');
+    if (existingBadge && row.getAttribute('data-pr-conflict-state') === JSON.stringify({
+      isChecked: data.isChecked, days: data.days, start: data.start, end: data.end
+    })) return;
+
+    const result = findConflicts(data);
+    injectBadgeOnRow(row, result, data);
+
+    // Track state to avoid re-injection
+    row.setAttribute('data-pr-conflict-state', JSON.stringify({
+      isChecked: data.isChecked, days: data.days, start: data.start, end: data.end
+    }));
   });
 }
 
-// ==================== DELETE COURSE HANDLER ====================
+// ==================== EVENT HANDLERS ====================
 
 function setupDeleteListeners() {
-  // Listen for clicks on delete buttons (trash icon)
   document.addEventListener('click', (e) => {
     const deleteBtn = e.target.closest('[title="Delete course"] button, [title="Delete course"]');
     if (!deleteBtn) return;
-
-    // Find the course code from the parent row
     const courseRow = deleteBtn.closest('.cx-MuiPaper-root');
     if (!courseRow) return;
-
     const courseBtn = courseRow.querySelector('button.cx-MuiLink-button');
     if (!courseBtn) return;
-
     const courseCode = courseBtn.textContent.trim();
     if (courseCode) {
-      // Small delay to let the DOM update first
-      setTimeout(() => {
-        removeCourseFromSchedule(courseCode);
-        // Re-scan to update badges
-        scanAndUpdateConflicts();
-      }, 300);
+      setTimeout(() => { removeCourseFromSchedule(courseCode); scanAndUpdateConflicts(); }, 300);
     }
   }, true);
 }
 
-// ==================== CHECKBOX CHANGE HANDLER ====================
-
 function setupCheckboxListeners() {
-  // Listen for checkbox changes in section rows
-  document.addEventListener('change', (e) => {
-    const checkbox = e.target;
-    if (checkbox.type !== 'checkbox') return;
-
-    // Check if this is a section checkbox (inside a row with rowheader)
-    const row = checkbox.closest('[role="row"]');
-    if (!row || !row.querySelector('[role="rowheader"]')) return;
-
-    // Small delay to let aria-checked update
-    setTimeout(() => {
-      scanAndUpdateConflicts();
-    }, 100);
-  }, true);
-
-  // Also catch click-based checkbox toggles (Cal Poly uses MUI checkboxes)
   document.addEventListener('click', (e) => {
     const checkboxSpan = e.target.closest('.cx-MuiCheckbox-root');
     if (!checkboxSpan) return;
-
     const row = checkboxSpan.closest('[role="row"]');
-    if (!row || !row.querySelector('[role="rowheader"]')) return;
+    if (!row) return;
+    if (!row.querySelector('[role="rowheader"]')) return;
 
-    setTimeout(() => {
-      scanAndUpdateConflicts();
-    }, 200);
+    // Clear cached state so badge gets refreshed
+    row.removeAttribute('data-pr-conflict-state');
+
+    // Wait for aria-checked to update, then rescan
+    setTimeout(() => scanAndUpdateConflicts(), 250);
   }, true);
 }
 
-// ==================== SELECT SECTIONS HANDLER ====================
-
 function setupSelectSectionsListener() {
-  // When user clicks "Select Sections", the panel expands and sections load
-  // We need to scan after the panel content loads
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
-
     const label = btn.querySelector('.cx-MuiButton-label');
     if (!label) return;
-
-    const text = label.textContent.trim().toLowerCase();
-    if (text.includes('select sections')) {
-      // Wait for the panel to expand and sections to render
+    if (label.textContent.trim().toLowerCase().includes('select sections')) {
       setTimeout(() => scanAndUpdateConflicts(), 500);
-      setTimeout(() => scanAndUpdateConflicts(), 1000);
-      setTimeout(() => scanAndUpdateConflicts(), 2000);
+      setTimeout(() => scanAndUpdateConflicts(), 1200);
+      setTimeout(() => scanAndUpdateConflicts(), 2500);
     }
   }, true);
 }
@@ -429,42 +379,32 @@ function setupSelectSectionsListener() {
 function initConflictChecker() {
   if (window.prConflictCheckerActive) return;
   window.prConflictCheckerActive = true;
-
   console.log('📅 Conflict checker initialized');
 
   setupDeleteListeners();
   setupCheckboxListeners();
   setupSelectSectionsListener();
 
-  // Initial scan for any already-visible sections
   setTimeout(() => scanAndUpdateConflicts(), 1000);
 
-  // Also watch for DOM changes (panels expanding/collapsing)
   const conflictObserver = new MutationObserver((mutations) => {
-    // Only react to relevant changes (not our own badge injections)
     const isRelevant = mutations.some(m => {
       for (const node of m.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
         if (node.classList?.contains('pr-conflict-badge')) continue;
-        if (node.querySelector?.('[role="row"]')) return true;
+        if (node.getAttribute?.('data-pr-conflict') === 'true') continue;
+        if (node.getAttribute?.('data-pr-conflict-container') === 'true') continue;
         if (node.querySelector?.('[role="rowheader"]')) return true;
         if (node.classList?.contains('cx-MuiExpansionPanelDetails-root')) return true;
       }
       return false;
     });
-
-    if (isRelevant) {
-      setTimeout(() => scanAndUpdateConflicts(), 300);
-    }
+    if (isRelevant) setTimeout(() => scanAndUpdateConflicts(), 300);
   });
 
-  conflictObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
+  conflictObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-// Start when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initConflictChecker);
 } else {
