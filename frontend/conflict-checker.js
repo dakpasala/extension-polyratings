@@ -32,7 +32,6 @@ function timesOverlap(slot1, slot2) {
   const days2 = expandDays(slot2.days);
   if (days1.length === 0 || days2.length === 0) return false;
   if (!days1.some(d => days2.includes(d))) return false;
-
   const s1 = parseTime(slot1.start), e1 = parseTime(slot1.end);
   const s2 = parseTime(slot2.start), e2 = parseTime(slot2.end);
   if (s1 === null || e1 === null || s2 === null || e2 === null) return false;
@@ -49,11 +48,9 @@ function getScheduleMap() {
   try { return JSON.parse(localStorage.getItem(SCHEDULE_STORAGE_KEY)) || {}; }
   catch (e) { return {}; }
 }
-
 function saveScheduleMap(map) {
   localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(map));
 }
-
 function addSectionToSchedule(courseCode, sectionData) {
   const map = getScheduleMap();
   if (!map[courseCode]) map[courseCode] = [];
@@ -61,7 +58,6 @@ function addSectionToSchedule(courseCode, sectionData) {
   map[courseCode].push(sectionData);
   saveScheduleMap(map);
 }
-
 function removeSectionFromSchedule(courseCode, sectionName) {
   const map = getScheduleMap();
   if (!map[courseCode]) return;
@@ -69,7 +65,6 @@ function removeSectionFromSchedule(courseCode, sectionName) {
   if (map[courseCode].length === 0) delete map[courseCode];
   saveScheduleMap(map);
 }
-
 function removeCourseFromSchedule(courseCode) {
   const map = getScheduleMap();
   delete map[courseCode];
@@ -79,7 +74,6 @@ function removeCourseFromSchedule(courseCode) {
 // ==================== DOM PARSING ====================
 
 function getCourseCodeFromRow(row) {
-  // Walk up ancestors looking for a button with course code pattern
   let el = row.parentElement;
   let depth = 0;
   while (el && depth < 30) {
@@ -98,12 +92,8 @@ function readCellText(cell) {
   if (!cell) return '';
   const roleCell = cell.querySelector('[role="cell"]');
   const target = roleCell || cell;
-
-  // Prefer aria-hidden text (clean display text)
   const ariaDiv = target.querySelector('[aria-hidden="true"]');
   if (ariaDiv) return ariaDiv.textContent.trim();
-
-  // Clone and strip injected elements
   const clone = target.cloneNode(true);
   clone.querySelectorAll('[data-polyratings], .polyratings-rating-element, .pr-conflict-badge').forEach(n => n.remove());
   return clone.textContent.trim();
@@ -120,7 +110,6 @@ function extractSectionFromRow(sectionRow) {
 
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return null;
-
   const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
   if (xs4Cells.length < 4) return null;
 
@@ -181,7 +170,6 @@ function injectConflictStyles() {
     }
     .pr-conflict-badge {
       animation: conflictFadeIn 0.3s ease-out;
-      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
   `;
   document.head.appendChild(style);
@@ -194,7 +182,6 @@ function createConflictBadge(conflictResult, sectionData) {
   badge.className = 'pr-conflict-badge';
   badge.setAttribute('data-pr-conflict', 'true');
 
-  // Match the rating element style exactly
   const baseStyle = `
     display: inline-flex; align-items: center; gap: 3px;
     padding: 3px 8px; border-radius: 12px;
@@ -203,7 +190,6 @@ function createConflictBadge(conflictResult, sectionData) {
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     cursor: default;
     max-width: calc(100% - 4px); width: fit-content;
-    margin-top: 4px;
   `;
 
   if (!sectionData.hasTimes) {
@@ -215,7 +201,6 @@ function createConflictBadge(conflictResult, sectionData) {
   } else if (conflictResult.hasConflict) {
     const courses = conflictResult.conflictsWith
       .map(c => c.course).filter((v, i, a) => a.indexOf(v) === i).join(', ');
-
     badge.style.cssText = baseStyle + `
       background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
@@ -234,55 +219,31 @@ function createConflictBadge(conflictResult, sectionData) {
   return badge;
 }
 
-// Inject badge the same way rating-ui.js does it
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
-  // Remove existing badges
+  // Remove existing badges from this row
   sectionRow.querySelectorAll('.pr-conflict-badge').forEach(b => b.remove());
 
   const badge = createConflictBadge(conflictResult, sectionData);
 
-  // Find the instructor cell — first xs-4 inside the xs-5 container
+  // Target: the START TIME cell (xs-4 index 2 inside xs-5 > xs-12)
+  // We create a wrapper div below it so the badge appears on a new line
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
-  const instructorCell = xs5.querySelector('.cx-MuiGrid-grid-xs-4');
-  if (!instructorCell) return;
+  const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
+  if (xs4Cells.length < 3) return;
 
-  // Look for existing polyratings container (data-polyratings="true" div)
-  const polyContainer = instructorCell.querySelector('[data-polyratings="true"]');
+  const startTimeCell = xs4Cells[2]; // the "3:10 pm" cell
 
-  if (polyContainer) {
-    // Polyratings wrapper exists — append badge inside it, after the rating
-    polyContainer.appendChild(badge);
-  } else {
-    // No polyratings wrapper — find the [role="cell"] and build a container
-    // like injectDesktopRatingUI does
-    const roleCell = instructorCell.querySelector('[role="cell"]');
-    if (!roleCell) return;
-
-    // Check if it already has a flex-column container
-    const existingContainer = roleCell.querySelector('[data-pr-conflict-container]');
-    if (existingContainer) {
-      existingContainer.appendChild(badge);
-    } else {
-      // Get the original text
-      const originalText = roleCell.textContent.trim();
-
-      // Create a container matching polyratings style
-      const container = document.createElement('div');
-      container.setAttribute('data-pr-conflict-container', 'true');
-      container.style.cssText = 'display: flex; flex-direction: column; width: 100%; align-items: flex-start;';
-
-      const nameSpan = document.createElement('div');
-      nameSpan.textContent = originalText;
-      nameSpan.style.cssText = 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.43; margin-bottom: 2px;';
-
-      container.appendChild(nameSpan);
-      container.appendChild(badge);
-
-      roleCell.innerHTML = '';
-      roleCell.appendChild(container);
-    }
+  // Find or create a badge container below the cell content
+  let badgeContainer = startTimeCell.querySelector('.pr-conflict-badge-wrap');
+  if (!badgeContainer) {
+    badgeContainer = document.createElement('div');
+    badgeContainer.className = 'pr-conflict-badge-wrap';
+    badgeContainer.style.cssText = 'width: 100%; margin-top: 4px;';
+    startTimeCell.appendChild(badgeContainer);
   }
+  badgeContainer.innerHTML = '';
+  badgeContainer.appendChild(badge);
 }
 
 // ==================== MAIN SCANNING LOGIC ====================
@@ -291,7 +252,7 @@ function scanAndUpdateConflicts() {
   const sectionRows = getAllVisibleSectionRows();
   if (sectionRows.length === 0) return;
 
-  // First pass: store all checked sections
+  // Pass 1: Store all checked sections into schedule map
   sectionRows.forEach(row => {
     const data = extractSectionFromRow(row);
     if (!data || !data.section) return;
@@ -306,24 +267,13 @@ function scanAndUpdateConflicts() {
     }
   });
 
-  // Second pass: inject badges on ALL rows (checked and unchecked)
+  // Pass 2: Inject badges on ALL rows (checked and unchecked)
   sectionRows.forEach(row => {
     const data = extractSectionFromRow(row);
     if (!data || !data.section) return;
 
-    // Skip if badge already exists and nothing changed
-    const existingBadge = row.querySelector('.pr-conflict-badge');
-    if (existingBadge && row.getAttribute('data-pr-conflict-state') === JSON.stringify({
-      isChecked: data.isChecked, days: data.days, start: data.start, end: data.end
-    })) return;
-
     const result = findConflicts(data);
     injectBadgeOnRow(row, result, data);
-
-    // Track state to avoid re-injection
-    row.setAttribute('data-pr-conflict-state', JSON.stringify({
-      isChecked: data.isChecked, days: data.days, start: data.start, end: data.end
-    }));
   });
 }
 
@@ -349,13 +299,8 @@ function setupCheckboxListeners() {
     const checkboxSpan = e.target.closest('.cx-MuiCheckbox-root');
     if (!checkboxSpan) return;
     const row = checkboxSpan.closest('[role="row"]');
-    if (!row) return;
-    if (!row.querySelector('[role="rowheader"]')) return;
-
-    // Clear cached state so badge gets refreshed
-    row.removeAttribute('data-pr-conflict-state');
-
-    // Wait for aria-checked to update, then rescan
+    if (!row || !row.querySelector('[role="rowheader"]')) return;
+    // Wait for aria-checked to update then rescan all
     setTimeout(() => scanAndUpdateConflicts(), 250);
   }, true);
 }
@@ -392,8 +337,8 @@ function initConflictChecker() {
       for (const node of m.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
         if (node.classList?.contains('pr-conflict-badge')) continue;
+        if (node.classList?.contains('pr-conflict-badge-wrap')) continue;
         if (node.getAttribute?.('data-pr-conflict') === 'true') continue;
-        if (node.getAttribute?.('data-pr-conflict-container') === 'true') continue;
         if (node.querySelector?.('[role="rowheader"]')) return true;
         if (node.classList?.contains('cx-MuiExpansionPanelDetails-root')) return true;
       }
