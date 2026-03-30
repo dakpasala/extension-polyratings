@@ -206,7 +206,7 @@ function createConflictBadge(conflictResult, sectionData) {
       background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
     `;
-    badge.innerHTML = `⚠ Conflict `;
+    badge.innerHTML = `⚠ Conflict · ${courses}`;
     badge.title = conflictResult.conflictsWith
       .map(c => `${c.course} ${c.section}: ${formatTimeRange(c)}`).join('\n');
   } else {
@@ -226,23 +226,18 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
   const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
   if (xs4Cells.length < 3) return;
 
-  const startTimeCell = xs4Cells[2]; // the "3:10 pm" cell
+  const startTimeCell = xs4Cells[2];
 
-  // Determine new status key
   let newStatus;
   if (!sectionData.hasTimes) newStatus = 'notime';
   else if (conflictResult.hasConflict) newStatus = 'conflict:' + conflictResult.conflictsWith.map(c => c.course).join(',');
   else newStatus = 'available';
 
-  // Skip re-injection if status unchanged — prevents flash/glitch
   let badgeContainer = startTimeCell.querySelector('.pr-conflict-badge-wrap');
   if (badgeContainer && badgeContainer.getAttribute('data-status') === newStatus) return;
   if (badgeContainer) badgeContainer.remove();
 
   const badge = createConflictBadge(conflictResult, sectionData);
-
-  // Make the xs-4 cell a flex column so badge sits below the time text
-  // The [role="cell"] inside has overflow:hidden so we inject into the outer xs-4 div instead
   startTimeCell.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start;';
 
   badgeContainer = document.createElement('div');
@@ -259,21 +254,17 @@ function scanAndUpdateConflicts() {
   const sectionRows = getAllVisibleSectionRows();
   if (sectionRows.length === 0) return;
 
-  // Pass 1: Store all checked sections into schedule map
+  // Pass 1: Rebuild map from scratch — ensures deleted courses never ghost
+  const freshMap = {};
   sectionRows.forEach(row => {
     const data = extractSectionFromRow(row);
-    if (!data || !data.section) return;
-
-    const storageKey = data.courseCode || data.section;
-    if (data.isChecked && data.hasTimes && storageKey) {
-      addSectionToSchedule(storageKey, {
-        section: data.section, days: data.days, start: data.start, end: data.end,
-      });
-    }
-    if (!data.isChecked && storageKey) {
-      removeSectionFromSchedule(storageKey, data.section);
-    }
+    if (!data || !data.section || !data.isChecked || !data.hasTimes) return;
+    const key = data.courseCode || data.section;
+    if (!freshMap[key]) freshMap[key] = [];
+    freshMap[key] = freshMap[key].filter(s => s.section !== data.section);
+    freshMap[key].push({ section: data.section, days: data.days, start: data.start, end: data.end });
   });
+  saveScheduleMap(freshMap);
 
   // Pass 2: Inject badges on ALL rows (checked and unchecked)
   sectionRows.forEach(row => {
@@ -327,6 +318,124 @@ function setupSelectSectionsListener() {
   }, true);
 }
 
+
+// ==================== API INTEGRATION ====================
+
+const BUILD_URL = 'https://cmsweb.pscs.calpoly.edu/psc/CSLOPRD/EMPLOYEE/SA/s/WEBLIB_H_SB_STD.ISCRIPT1.FieldFormula.IScript_Build?postDataBin=y';
+
+const DAY_MAP = {
+  mon: 'Mo', tues: 'Tu', wed: 'We', thurs: 'Th', fri: 'Fr', sat: 'Sa', sun: 'Su'
+};
+
+function parseApiTime(timeStr) {
+  if (!timeStr) return null;
+  const parts = timeStr.split('.');
+  let hours = parseInt(parts[0]);
+  const minutes = parts[1] || '00';
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  if (hours > 12) hours -= 12;
+  if (hours === 0) hours = 12;
+  return `${hours}:${minutes} ${ampm}`;
+}
+
+function parseDays(daysScheduled) {
+  return (daysScheduled || []).map(d => DAY_MAP[d] || '').join('');
+}
+
+function populateMapFromScheduleResponse(data) {
+  const schedules = data?.schedules;
+  if (!schedules || schedules.length === 0) {
+    console.log('📅 No schedules in response');
+    return false;
+  }
+
+  const freshMap = {};
+  schedules[0].classes.forEach(cls => {
+    const courseCode = `${cls.subject} ${cls.catalogNbr}`;
+    (cls.meetingPatterns || []).forEach(pattern => {
+      if (!pattern.startTime || !pattern.endTime || !pattern.daysScheduled.length) return;
+      const days = parseDays(pattern.daysScheduled);
+      const start = parseApiTime(pattern.startTime);
+      const end = parseApiTime(pattern.endTime);
+      const section = cls.sections?.[0]?.classSection || '';
+      if (!days || !start || !end) return;
+      if (!freshMap[courseCode]) freshMap[courseCode] = [];
+      if (!freshMap[courseCode].some(s => s.section === section)) {
+        freshMap[courseCode].push({ section, days, start, end });
+      }
+    });
+  });
+
+  if (Object.keys(freshMap).length > 0) {
+    saveScheduleMap(freshMap);
+    console.log(`✅ Schedule map populated: ${Object.keys(freshMap).length} courses with times`, freshMap);
+    return true;
+  }
+  return false;
+}
+
+const IMPORT_URL = 'https://cmsweb.pscs.calpoly.edu/psc/CSLOPRD/EMPLOYEE/SA/s/WEBLIB_H_SB_STD.ISCRIPT1.FieldFormula.IScript_Import?type=enrollment';
+
+async function fetchScheduleFromAPI() {
+  try {
+    // Step 1: GET enrolled courses (class IDs) from Cal Poly
+    console.log('📅 Step 1: Fetching enrolled courses...');
+    const importRes = await fetch(IMPORT_URL, {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    if (!importRes.ok) {
+      console.warn('📅 Import fetch failed:', importRes.status);
+      return;
+    }
+
+    const importData = await importRes.json();
+    console.log('📅 Import response:', importData);
+
+    // The import response should have courses with class IDs
+    // Use it directly as the payload for IScript_Build
+    const courses = importData?.courses || importData || [];
+    if (!courses.length) {
+      console.warn('📅 No courses in import response');
+      return;
+    }
+
+    // Step 2: POST to Build with real courses to get times
+    console.log(`📅 Step 2: Building schedule for ${courses.length} courses...`);
+    const payload = {
+      courses,
+      filters: {
+        acadCareers: [], acadGroups: [], campuses: [], classStatuses: [],
+        instructionModes: [], locations: [], minimumTimeBetweenClasses: 0,
+        sessions: [], dayTimes: [], dates: {}
+      },
+      sortType: '', pinned: [], validate: true
+    };
+
+    const buildRes = await fetch(BUILD_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!buildRes.ok) {
+      console.warn('📅 Build fetch failed:', buildRes.status);
+      return;
+    }
+
+    const buildData = await buildRes.json();
+    console.log('📅 Build response:', buildData);
+
+    if (populateMapFromScheduleResponse(buildData)) {
+      scanAndUpdateConflicts();
+    }
+  } catch (err) {
+    console.warn('📅 API fetch error:', err);
+  }
+}
+
 // ==================== INITIALIZATION ====================
 
 function initConflictChecker() {
@@ -339,6 +448,7 @@ function initConflictChecker() {
   setupSelectSectionsListener();
 
   setTimeout(() => scanAndUpdateConflicts(), 1000);
+  setTimeout(() => fetchScheduleFromAPI(), 1500);
 
   const conflictObserver = new MutationObserver((mutations) => {
     const isRelevant = mutations.some(m => {
@@ -362,4 +472,4 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initConflictChecker);
 } else {
   initConflictChecker();
-} 
+}
