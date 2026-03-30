@@ -362,4 +362,4 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initConflictChecker);
 } else {
   initConflictChecker();
-}
+} 
