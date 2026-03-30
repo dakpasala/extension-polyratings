@@ -95,7 +95,7 @@ function readCellText(cell) {
   const ariaDiv = target.querySelector('[aria-hidden="true"]');
   if (ariaDiv) return ariaDiv.textContent.trim();
   const clone = target.cloneNode(true);
-  clone.querySelectorAll('[data-polyratings], .polyratings-rating-element, .pr-conflict-badge').forEach(n => n.remove());
+  clone.querySelectorAll('[data-polyratings], .polyratings-rating-element, .pr-conflict-badge, .pr-conflict-badge-wrap').forEach(n => n.remove());
   return clone.textContent.trim();
 }
 
@@ -197,7 +197,7 @@ function createConflictBadge(conflictResult, sectionData) {
       background: rgba(245, 245, 245, 0.9); color: #999;
       border: 1px solid #ddd;
     `;
-    badge.textContent = '— No time set';
+    badge.textContent = 'No time set';
   } else if (conflictResult.hasConflict) {
     const courses = conflictResult.conflictsWith
       .map(c => c.course).filter((v, i, a) => a.indexOf(v) === i).join(', ');
@@ -220,12 +220,6 @@ function createConflictBadge(conflictResult, sectionData) {
 }
 
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
-  // Remove existing badges and badge wraps from this row
-  sectionRow.querySelectorAll('.pr-conflict-badge, .pr-conflict-badge-wrap').forEach(b => b.remove());
-
-  const badge = createConflictBadge(conflictResult, sectionData);
-
-  // Target: the START TIME cell (xs-4 index 2 inside xs-5 > xs-12)
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
   const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
@@ -233,31 +227,29 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
 
   const startTimeCell = xs4Cells[2]; // the "3:10 pm" cell
 
-  // Get the inner [role="cell"] div (holds the time text)
-  const roleCell = startTimeCell.querySelector('[role="cell"]');
-  if (!roleCell) return;
+  // Determine new status key
+  let newStatus;
+  if (!sectionData.hasTimes) newStatus = 'notime';
+  else if (conflictResult.hasConflict) newStatus = 'conflict:' + conflictResult.conflictsWith.map(c => c.course).join(',');
+  else newStatus = 'available';
 
-  // Make the role cell a flex column so badge stacks below the time text,
-  // matching how the rating UI stacks below the professor name
-  roleCell.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; white-space: normal;';
+  // Skip re-injection if status unchanged — prevents flash/glitch
+  let badgeContainer = startTimeCell.querySelector('.pr-conflict-badge-wrap');
+  if (badgeContainer && badgeContainer.getAttribute('data-status') === newStatus) return;
+  if (badgeContainer) badgeContainer.remove();
 
-  // Wrap existing text node in a span so it stays on its own line
-  if (!roleCell.querySelector('.pr-time-text')) {
-    const timeText = roleCell.textContent.trim();
-    roleCell.textContent = '';
-    const timeSpan = document.createElement('span');
-    timeSpan.className = 'pr-time-text';
-    timeSpan.textContent = timeText;
-    timeSpan.style.cssText = 'white-space: nowrap;';
-    roleCell.appendChild(timeSpan);
-  }
+  const badge = createConflictBadge(conflictResult, sectionData);
 
-  // Badge container below the time text
-  const badgeContainer = document.createElement('div');
+  // Make the xs-4 cell a flex column so badge sits below the time text
+  // The [role="cell"] inside has overflow:hidden so we inject into the outer xs-4 div instead
+  startTimeCell.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start;';
+
+  badgeContainer = document.createElement('div');
   badgeContainer.className = 'pr-conflict-badge-wrap';
-  badgeContainer.style.cssText = 'width: 100%; margin-top: 4px;';
+  badgeContainer.style.cssText = 'width: 100%; padding: 4px 4px 2px 4px;';
+  badgeContainer.setAttribute('data-status', newStatus);
   badgeContainer.appendChild(badge);
-  roleCell.appendChild(badgeContainer);
+  startTimeCell.appendChild(badgeContainer);
 }
 
 // ==================== MAIN SCANNING LOGIC ====================
