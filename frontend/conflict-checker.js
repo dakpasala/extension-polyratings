@@ -144,9 +144,10 @@ function findConflicts(sectionData) {
     return { hasConflict: false, conflictsWith: [], noTime: true };
   }
 
+  const ownKey = sectionData.courseCode || sectionData.section;
   Object.entries(map).forEach(([courseCode, sections]) => {
     // Don't conflict with own course
-    if (courseCode === sectionData.courseCode) return;
+    if (courseCode === ownKey) return;
     sections.forEach(slot => {
       if (timesOverlap(sectionData, slot)) {
         conflicts.push({ course: courseCode, section: slot.section, days: slot.days, start: slot.start, end: slot.end });
@@ -205,7 +206,7 @@ function createConflictBadge(conflictResult, sectionData) {
       background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
     `;
-    badge.innerHTML = `⚠ Conflict · ${courses}`;
+    badge.innerHTML = `⚠ Conflict `;
     badge.title = conflictResult.conflictsWith
       .map(c => `${c.course} ${c.section}: ${formatTimeRange(c)}`).join('\n');
   } else {
@@ -263,13 +264,14 @@ function scanAndUpdateConflicts() {
     const data = extractSectionFromRow(row);
     if (!data || !data.section) return;
 
-    if (data.isChecked && data.hasTimes && data.courseCode) {
-      addSectionToSchedule(data.courseCode, {
+    const storageKey = data.courseCode || data.section;
+    if (data.isChecked && data.hasTimes && storageKey) {
+      addSectionToSchedule(storageKey, {
         section: data.section, days: data.days, start: data.start, end: data.end,
       });
     }
-    if (!data.isChecked && data.courseCode) {
-      removeSectionFromSchedule(data.courseCode, data.section);
+    if (!data.isChecked && storageKey) {
+      removeSectionFromSchedule(storageKey, data.section);
     }
   });
 
