@@ -109,10 +109,18 @@ function getCourseCodeFromRow(row) {
   let el = row.parentElement;
   let depth = 0;
   while (el && depth < 30) {
+    // Check h2 headers like "CPE 470 - Selected Advanced Topics"
+    const h2s = el.querySelectorAll('h2');
+    for (const h2 of h2s) {
+      const text = h2.textContent.trim();
+      const match = text.match(/^([A-Z]{2,4}\s+\d{3})/);
+      if (match) return match[1].replace(/\s+/g, ' ').trim();
+    }
+    // Check buttons
     const buttons = el.querySelectorAll('button.cx-MuiLink-button, .cx-MuiLink-button');
     for (const btn of buttons) {
       const text = btn.textContent.trim();
-      if (/^[A-Z]{2,4}\s+\d{3}/.test(text)) return text;
+      if (/^[A-Z]{2,4}\s+\d{3}/.test(text)) return text.replace(/\s+/g, ' ').trim();
     }
     el = el.parentElement;
     depth++;
@@ -173,13 +181,17 @@ function findConflicts(sectionData, scheduleMap) {
     return { hasConflict: false, conflictsWith: [], noTime: true };
   }
 
+  // Normalize: "CPE  470" → "CPE 470"
+  const ownCourse = (sectionData.courseCode || '').replace(/\s+/g, ' ').trim();
+
   const conflicts = [];
   Object.entries(scheduleMap).forEach(([courseCode, sections]) => {
+    const mapCourse = courseCode.replace(/\s+/g, ' ').trim();
     // Don't conflict with own course
-    if (courseCode === sectionData.courseCode) return;
+    if (mapCourse === ownCourse) return;
     sections.forEach(slot => {
       if (timesOverlap(sectionData, slot)) {
-        conflicts.push({ course: courseCode, section: slot.section, days: slot.days, start: slot.start, end: slot.end });
+        conflicts.push({ course: mapCourse, section: slot.section, days: slot.days, start: slot.start, end: slot.end });
       }
     });
   });
@@ -252,19 +264,25 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
 
   const badge = createConflictBadge(conflictResult);
 
-  // Place below the START TIME cell (xs-4 index 2 inside xs-5)
+  // Place below the DAYS cell (xs-4 index 1 inside xs-5)
+  // Using days cell since it's shorter text and has room
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
   const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
-  if (xs4Cells.length < 3) return;
+  if (xs4Cells.length < 2) return;
 
-  const startTimeCell = xs4Cells[2];
+  const daysCell = xs4Cells[1];
+
+  // Make the cell a flex column so badge goes below the text
+  daysCell.style.display = 'flex';
+  daysCell.style.flexDirection = 'column';
+  daysCell.style.alignItems = 'flex-start';
 
   const badgeContainer = document.createElement('div');
   badgeContainer.className = 'pr-conflict-badge-wrap';
-  badgeContainer.style.cssText = 'width: 100%; margin-top: 4px;';
+  badgeContainer.style.cssText = 'margin-top: 4px;';
   badgeContainer.appendChild(badge);
-  startTimeCell.appendChild(badgeContainer);
+  daysCell.appendChild(badgeContainer);
 }
 
 // ==================== MAIN SCANNING LOGIC ====================
@@ -285,6 +303,7 @@ function scanAndUpdateConflicts() {
     const data = extractSectionFromRow(row);
     if (!data || !data.section || !data.hasTimes) return;
 
+    console.log(`📅 Section: ${data.courseCode} ${data.section} | ${data.days} ${data.start}-${data.end}`);
     const result = findConflicts(data, scheduleMap);
     injectBadgeOnRow(row, result, data);
   });
