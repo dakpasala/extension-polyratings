@@ -241,7 +241,7 @@ function createConflictBadge(conflictResult) {
       background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
     `;
-    badge.innerHTML = `⚠ Conflict · ${courses}`;
+    badge.innerHTML = `⚠ Conflict`;
     badge.title = conflictResult.conflictsWith
       .map(c => `${c.course} ${c.section}: ${c.days} ${c.start}–${c.end}`).join('\n');
   } else {
@@ -264,25 +264,21 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
 
   const badge = createConflictBadge(conflictResult);
 
-  // Place below the DAYS cell (xs-4 index 1 inside xs-5)
-  // Using days cell since it's shorter text and has room
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
   const xs4Cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
-  if (xs4Cells.length < 2) return;
+  if (xs4Cells.length < 3) return;
 
-  const daysCell = xs4Cells[1];
-
-  // Make the cell a flex column so badge goes below the text
-  daysCell.style.display = 'flex';
-  daysCell.style.flexDirection = 'column';
-  daysCell.style.alignItems = 'flex-start';
+  const startCell = xs4Cells[2];
+  startCell.style.display = 'flex';
+  startCell.style.flexDirection = 'column';
+  startCell.style.alignItems = 'flex-start';
 
   const badgeContainer = document.createElement('div');
   badgeContainer.className = 'pr-conflict-badge-wrap';
   badgeContainer.style.cssText = 'margin-top: 4px;';
   badgeContainer.appendChild(badge);
-  daysCell.appendChild(badgeContainer);
+  startCell.appendChild(badgeContainer);
 }
 
 // ==================== MAIN SCANNING LOGIC ====================
