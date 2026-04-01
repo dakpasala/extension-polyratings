@@ -87,18 +87,25 @@ function buildScheduleFromHighpoint() {
     });
   });
 
-  // Save to localStorage as backup
-  localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(map));
-  console.log(`📅 Schedule loaded from highpoint: ${Object.keys(map).length} courses`, map);
+  // Only write to localStorage if we got courses with times
+  // Prevents top frame (no highpoint) or empty builds from clobbering good data
+  if (Object.keys(map).length > 0) {
+    localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(map));
+    console.log(`📅 Schedule saved: ${Object.keys(map).length} courses with times`);
+  } else {
+    console.log('📅 No courses with times found in highpoint');
+  }
   return map;
 }
 
 function getScheduleMap() {
-  // Try highpoint first, fall back to localStorage
+  // Always rebuild fresh from highpoint if available
   const hp = window.highpoint;
   if (hp?.cachedBuild?.schedules?.[0]?.classes) {
-    return buildScheduleFromHighpoint();
+    const fresh = buildScheduleFromHighpoint();
+    if (Object.keys(fresh).length > 0) return fresh;
   }
+  // Fall back to localStorage
   try { return JSON.parse(localStorage.getItem(SCHEDULE_STORAGE_KEY)) || {}; }
   catch (e) { return {}; }
 }
@@ -235,6 +242,8 @@ function createConflictBadge(conflictResult) {
   `;
 
   if (conflictResult.hasConflict) {
+    const courses = conflictResult.conflictsWith
+      .map(c => c.course).filter((v, i, a) => a.indexOf(v) === i).join(', ');
     badge.style.cssText = baseStyle + `
       background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
@@ -254,8 +263,13 @@ function createConflictBadge(conflictResult) {
 }
 
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
+  // Remove existing badges
+  sectionRow.querySelectorAll('.pr-conflict-badge-wrap').forEach(b => b.remove());
+
   // No times = no badge
   if (!sectionData.hasTimes) return;
+
+  const badge = createConflictBadge(conflictResult);
 
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
@@ -263,21 +277,6 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
   if (xs4Cells.length < 3) return;
 
   const startCell = xs4Cells[2];
-  const existingWrap = startCell.querySelector('.pr-conflict-badge-wrap');
-
-  // ✅ If badge already shows the correct state, do nothing — prevents flicker
-  if (existingWrap) {
-    const existingBadge = existingWrap.querySelector('.pr-conflict-badge');
-    const isCurrentlyConflict = existingBadge?.textContent.includes('Conflict');
-    const isCurrentlyAvailable = existingBadge?.textContent.includes('Available');
-    if (conflictResult.hasConflict && isCurrentlyConflict) return;
-    if (!conflictResult.hasConflict && isCurrentlyAvailable) return;
-    // State changed — remove stale badge and re-inject
-    existingWrap.remove();
-  }
-
-  const badge = createConflictBadge(conflictResult);
-
   startCell.style.display = 'flex';
   startCell.style.flexDirection = 'column';
   startCell.style.alignItems = 'flex-start';
@@ -340,8 +339,9 @@ function setupCheckboxListeners() {
 }
 
 function setupBuildSaveListeners() {
-  // When user clicks Build Schedule or Save, highpoint.cachedBuild gets updated
-  // Re-scan after a delay to pick up changes
+  // When user clicks Build Schedule or Save, Cal Poly's app makes an API call
+  // and updates window.highpoint.cachedBuild with the response.
+  // We poll for changes by watching the schedule hash.
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
@@ -349,14 +349,27 @@ function setupBuildSaveListeners() {
     if (!label) return;
     const text = label.textContent.trim().toLowerCase();
     if (text.includes('build schedule') || text === 'save') {
-      setTimeout(() => {
-        buildScheduleFromHighpoint();
-        scanAndUpdateConflicts();
-      }, 2000);
-      setTimeout(() => {
-        buildScheduleFromHighpoint();
-        scanAndUpdateConflicts();
-      }, 4000);
+      // Capture current hash before the API call
+      const oldHash = window.highpoint?.cachedBuild?.schedules?.[0]?.hash || '';
+      console.log('📅 Waiting for schedule update... (current hash:', oldHash, ')');
+
+      let attempts = 0;
+      const maxAttempts = 20; // 20 * 500ms = 10 seconds max wait
+      const pollInterval = setInterval(() => {
+        attempts++;
+        const newHash = window.highpoint?.cachedBuild?.schedules?.[0]?.hash || '';
+
+        if (newHash !== oldHash || attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          if (newHash !== oldHash) {
+            console.log('📅 Schedule updated! New hash:', newHash);
+          } else {
+            console.log('📅 Timed out waiting for update, refreshing anyway');
+          }
+          buildScheduleFromHighpoint();
+          scanAndUpdateConflicts();
+        }
+      }, 500);
     }
   }, true);
 }
@@ -368,9 +381,22 @@ function initConflictChecker() {
   window.prConflictCheckerActive = true;
   console.log('📅 Conflict checker initialized');
 
-  // Load schedule from highpoint immediately
-  const map = getScheduleMap();
-  console.log(`📅 Loaded ${Object.keys(map).length} courses from schedule`);
+  // Load schedule from highpoint — retry a few times in case it's not hydrated yet
+  let map = getScheduleMap();
+  console.log(`📅 Initial load: ${Object.keys(map).length} courses`);
+
+  // Retry loading if highpoint wasn't ready
+  if (Object.keys(map).length === 0 && window.highpoint) {
+    [1000, 2000, 4000].forEach(delay => {
+      setTimeout(() => {
+        const fresh = getScheduleMap();
+        if (Object.keys(fresh).length > 0) {
+          console.log(`📅 Retry loaded: ${Object.keys(fresh).length} courses`);
+          scanAndUpdateConflicts();
+        }
+      }, delay);
+    });
+  }
 
   setupSelectSectionsListener();
   setupCheckboxListeners();
@@ -384,11 +410,9 @@ function initConflictChecker() {
     const isRelevant = mutations.some(m => {
       for (const node of m.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
-        // ✅ Ignore anything our own code injected — prevents observer feedback loop
         if (node.classList?.contains('pr-conflict-badge')) continue;
         if (node.classList?.contains('pr-conflict-badge-wrap')) continue;
         if (node.getAttribute?.('data-pr-conflict') === 'true') continue;
-        if (node.closest?.('.pr-conflict-badge-wrap')) continue; // also ignore children of our wrap
         if (node.querySelector?.('[role="rowheader"]')) return true;
         if (node.classList?.contains('cx-MuiExpansionPanelDetails-root')) return true;
       }
