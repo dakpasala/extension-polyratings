@@ -235,8 +235,6 @@ function createConflictBadge(conflictResult) {
   `;
 
   if (conflictResult.hasConflict) {
-    const courses = conflictResult.conflictsWith
-      .map(c => c.course).filter((v, i, a) => a.indexOf(v) === i).join(', ');
     badge.style.cssText = baseStyle + `
       background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
@@ -256,13 +254,8 @@ function createConflictBadge(conflictResult) {
 }
 
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
-  // Remove existing badges
-  sectionRow.querySelectorAll('.pr-conflict-badge-wrap').forEach(b => b.remove());
-
   // No times = no badge
   if (!sectionData.hasTimes) return;
-
-  const badge = createConflictBadge(conflictResult);
 
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
@@ -270,6 +263,21 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
   if (xs4Cells.length < 3) return;
 
   const startCell = xs4Cells[2];
+  const existingWrap = startCell.querySelector('.pr-conflict-badge-wrap');
+
+  // ✅ If badge already shows the correct state, do nothing — prevents flicker
+  if (existingWrap) {
+    const existingBadge = existingWrap.querySelector('.pr-conflict-badge');
+    const isCurrentlyConflict = existingBadge?.textContent.includes('Conflict');
+    const isCurrentlyAvailable = existingBadge?.textContent.includes('Available');
+    if (conflictResult.hasConflict && isCurrentlyConflict) return;
+    if (!conflictResult.hasConflict && isCurrentlyAvailable) return;
+    // State changed — remove stale badge and re-inject
+    existingWrap.remove();
+  }
+
+  const badge = createConflictBadge(conflictResult);
+
   startCell.style.display = 'flex';
   startCell.style.flexDirection = 'column';
   startCell.style.alignItems = 'flex-start';
@@ -341,7 +349,6 @@ function setupBuildSaveListeners() {
     if (!label) return;
     const text = label.textContent.trim().toLowerCase();
     if (text.includes('build schedule') || text === 'save') {
-      // Wait for the API response to update highpoint
       setTimeout(() => {
         buildScheduleFromHighpoint();
         scanAndUpdateConflicts();
@@ -377,9 +384,11 @@ function initConflictChecker() {
     const isRelevant = mutations.some(m => {
       for (const node of m.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        // ✅ Ignore anything our own code injected — prevents observer feedback loop
         if (node.classList?.contains('pr-conflict-badge')) continue;
         if (node.classList?.contains('pr-conflict-badge-wrap')) continue;
         if (node.getAttribute?.('data-pr-conflict') === 'true') continue;
+        if (node.closest?.('.pr-conflict-badge-wrap')) continue; // also ignore children of our wrap
         if (node.querySelector?.('[role="rowheader"]')) return true;
         if (node.classList?.contains('cx-MuiExpansionPanelDetails-root')) return true;
       }
