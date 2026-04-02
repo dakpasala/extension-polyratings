@@ -1,8 +1,7 @@
 // ==================== SCHEDULE CALENDAR TOOLTIP ====================
-// Hover over ⚠ Conflict → mini weekly calendar showing schedule + conflicting class in red
-// Hover over ✓ Available → mini weekly calendar showing schedule + this class previewed in green
-//   (if already enrolled, just highlights it green — no double-draw)
-// Draggable, resizable, closeable — matches tooltips.js patterns
+// Hover over ⚠ Conflict / ✓ Available badge → mini weekly calendar
+// Uses the HOVERED ROW's actual times from DOM (not localStorage schedule times for that course)
+// Draggable, resizable, closeable
 
 (function () {
   if (window.prScheduleTooltipActive) return;
@@ -26,7 +25,6 @@
         width: 480px;
         min-width: 320px;
         max-width: 700px;
-        min-height: 280px;
         max-height: 90vh;
         background: #fff;
         border: 1px solid #e0e0e0;
@@ -57,7 +55,6 @@
         cursor: grabbing;
       }
 
-      /* ── Header ── */
       .pr-sched-header {
         flex-shrink: 0;
         display: flex;
@@ -119,21 +116,27 @@
         transform: scale(1.1);
       }
 
-      /* ── Body ── */
       .pr-sched-body {
         flex: 1;
         overflow: auto;
         padding: 10px;
         min-height: 0;
+        max-height: 380px;
       }
 
-      /* ── Calendar Grid ── */
+      /* Calendar wrapper — scrollable */
+      .pr-cal-scroll-wrap {
+        overflow-y: auto;
+        overflow-x: hidden;
+        max-height: 280px;
+        border: 1px solid #e4e4e4;
+        border-radius: 6px;
+      }
+
       .pr-cal-grid {
         display: grid;
         grid-template-columns: 44px repeat(5, 1fr);
         gap: 0;
-        border: 1px solid #e4e4e4;
-        border-radius: 6px;
         overflow: hidden;
         position: relative;
       }
@@ -148,6 +151,9 @@
         border-bottom: 1px solid #e4e4e4;
         letter-spacing: 0.3px;
         text-transform: uppercase;
+        position: sticky;
+        top: 0;
+        z-index: 2;
       }
       .pr-cal-day-header:not(:last-child) {
         border-right: 1px solid #e4e4e4;
@@ -156,6 +162,9 @@
         background: #f7f7f7;
         border-bottom: 1px solid #e4e4e4;
         border-right: 1px solid #e4e4e4;
+        position: sticky;
+        top: 0;
+        z-index: 2;
       }
 
       .pr-cal-time-col {
@@ -190,7 +199,6 @@
         border-right: none;
       }
 
-      /* ── Event blocks ── */
       .pr-cal-event {
         position: absolute;
         left: 2px;
@@ -220,35 +228,26 @@
         margin-top: 1px;
       }
 
-      /* Enrolled (existing schedule) — blue */
       .pr-cal-event-enrolled {
         background: rgba(219, 234, 254, 0.9);
         color: #1d4ed8;
         border: 1px solid #bfdbfe;
       }
-
-      /* Already enrolled, hovering it — highlight green */
       .pr-cal-event-enrolled-highlight {
         background: rgba(209, 250, 229, 0.95);
         color: #047857;
         border: 1px solid #6ee7b7;
       }
-
-      /* Conflict preview — red */
       .pr-cal-event-conflict {
         background: rgba(254, 226, 226, 0.95);
         color: #b91c1c;
         border: 1px solid #fca5a5;
       }
-
-      /* Available preview (not yet enrolled) — green dashed */
       .pr-cal-event-available {
         background: rgba(209, 250, 229, 0.95);
         color: #047857;
         border: 1px dashed #6ee7b7;
       }
-
-      /* Conflict overlap stripe on enrolled block */
       .pr-cal-event-conflict-overlap {
         background: repeating-linear-gradient(
           135deg,
@@ -261,7 +260,6 @@
         border: 1.5px solid #ef4444;
       }
 
-      /* ── Legend ── */
       .pr-sched-legend {
         display: flex;
         gap: 12px;
@@ -282,7 +280,6 @@
         flex-shrink: 0;
       }
 
-      /* ── Info box ── */
       .pr-sched-info {
         margin-top: 8px;
         padding: 7px 9px;
@@ -312,7 +309,6 @@
 
   const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr'];
   const DAY_LABELS = { Mo: 'Mon', Tu: 'Tue', We: 'Wed', Th: 'Thu', Fr: 'Fri' };
-
   const START_HOUR = 7;
   const END_HOUR = 21;
   const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
@@ -329,18 +325,12 @@
     pinned: false,
   };
 
-  // ==================== SCHEDULE DATA ====================
+  // ==================== UTILITIES ====================
 
-  // conflict-checker.js runs before this file and writes the schedule to localStorage
-  // (pr_schedule_map) on every scan — so by the time any badge is hovered, that key
-  // always has fresh data. We read from there instead of duplicating the highpoint
-  // parsing logic, which was silently returning {} due to IIFE scoping issues.
   function getScheduleMap() {
     try { return JSON.parse(localStorage.getItem('pr_schedule_map')) || {}; }
     catch (e) { return {}; }
   }
-
-  // ==================== TIME UTILITIES ====================
 
   function parseTimeToMinutes(timeStr) {
     if (!timeStr) return null;
@@ -379,7 +369,12 @@
     return (code || '').replace(/\s+/g, ' ').trim();
   }
 
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
   // ==================== BADGE DATA EXTRACTION ====================
+  // Reads times from the HOVERED ROW's DOM, not from localStorage
 
   function extractBadgeData(badge) {
     const row = badge.closest('[role="row"]');
@@ -387,7 +382,6 @@
 
     const headerEl = row.querySelector('[role="rowheader"]');
     if (!headerEl) return null;
-
     const ariaDiv = headerEl.querySelector('[aria-hidden="true"]');
     const sectionName = ariaDiv ? ariaDiv.textContent.trim() : headerEl.textContent.trim();
     if (!sectionName) return null;
@@ -408,11 +402,12 @@
       return clone.textContent.trim();
     }
 
+    // Read times FROM THE DOM ROW — these are the actual times for this section
     const days = readCell(xs4Cells[1]);
     const start = readCell(xs4Cells[2]);
     const end = readCell(xs4Cells[3]);
 
-    // Walk up DOM to find course code — identical logic to conflict-checker.js
+    // Get course code from h2 header
     let courseCode = '';
     let el = row.parentElement;
     let depth = 0;
@@ -436,7 +431,7 @@
 
     const isConflict = badge.textContent.includes('Conflict');
 
-    // Parse conflictsWith from badge title: "DEPT NUM SECTION: DAYS START–END"
+    // Parse conflict details from badge title
     const conflictsWith = [];
     if (isConflict && badge.title) {
       badge.title.split('\n').forEach(line => {
@@ -453,7 +448,15 @@
       });
     }
 
-    return { courseCode: courseCode || 'This Course', section: sectionName, days, start, end, isConflict, conflictsWith };
+    return {
+      courseCode: courseCode || 'This Course',
+      section: sectionName,
+      days,    // FROM DOM — actual times for this specific section
+      start,   // FROM DOM
+      end,     // FROM DOM
+      isConflict,
+      conflictsWith
+    };
   }
 
   // ==================== CALENDAR BUILDER ====================
@@ -474,10 +477,26 @@
     const candidateEnd = parseTimeToMinutes(end);
     const candidateCode = normalizeCode(courseCode);
 
-    // Is this course already on the enrolled schedule?
-    // Uses same normalized course code comparison as conflict-checker.js (e.g. "CPE 470" === "CPE 470")
-    const alreadyEnrolled = !isConflict && Object.keys(scheduleMap)
-      .some(code => normalizeCode(code) === candidateCode);
+    // Is this exact section already enrolled?
+    const alreadyEnrolled = !isConflict && enrolledEvents.some(ev =>
+      normalizeCode(ev.course) === candidateCode &&
+      candidateDays.length > 0 &&
+      expandDays(ev.days).some(d => candidateDays.includes(d)) &&
+      parseTimeToMinutes(ev.start) === candidateStart &&
+      parseTimeToMinutes(ev.end) === candidateEnd
+    );
+
+    // Find the earliest relevant time for scrolling
+    let scrollToMinutes = candidateStart || null;
+    if (!scrollToMinutes) {
+      // Find earliest enrolled event
+      let earliest = Infinity;
+      enrolledEvents.forEach(ev => {
+        const s = parseTimeToMinutes(ev.start);
+        if (s !== null && s < earliest) earliest = s;
+      });
+      if (earliest < Infinity) scrollToMinutes = earliest;
+    }
 
     // Hour lines & labels
     const hours = [];
@@ -495,7 +514,6 @@
     function renderEventsForDay(dayCode) {
       const blocks = [];
 
-      // Render enrolled events
       enrolledEvents.forEach(ev => {
         const evDays = expandDays(ev.days);
         if (!evDays.includes(dayCode)) return;
@@ -506,18 +524,18 @@
         const top = minutesToPx(evStart);
         const height = Math.max((evEnd - evStart) * PX_PER_MIN, 16);
 
-        // Does this enrolled block overlap with the candidate? (conflict case)
+        // Does this enrolled block overlap with the candidate?
         const isOverlap = isConflict
           && candidateDays.includes(dayCode)
           && candidateStart !== null && candidateEnd !== null
           && candidateStart < evEnd && evStart < candidateEnd
           && normalizeCode(ev.course) !== candidateCode;
 
-        // Is this the exact course we're hovering on (available, already enrolled)?
-        // → recolor green instead of blue, no double-draw
-        const isHighlight = !isConflict
-          && alreadyEnrolled
-          && normalizeCode(ev.course) === candidateCode;
+        // Is this the exact section being hovered (already enrolled)?
+        const isHighlight = !isConflict && alreadyEnrolled
+          && normalizeCode(ev.course) === candidateCode
+          && parseTimeToMinutes(ev.start) === candidateStart
+          && parseTimeToMinutes(ev.end) === candidateEnd;
 
         const cls = isOverlap
           ? 'pr-cal-event-conflict-overlap'
@@ -533,8 +551,7 @@
         `);
       });
 
-      // Draw candidate overlay only if NOT already enrolled
-      // If already enrolled, the enrolled block above already re-colored it green — no double-draw
+      // Draw candidate overlay (only if not already enrolled with same times)
       if (!alreadyEnrolled && candidateDays.includes(dayCode) && candidateStart !== null && candidateEnd !== null) {
         const top = minutesToPx(candidateStart);
         const height = Math.max((candidateEnd - candidateStart) * PX_PER_MIN, 16);
@@ -593,7 +610,7 @@
         ${isConflict ? `
           <div class="pr-sched-legend-item">
             <div class="pr-sched-legend-dot" style="background:#fee2e2;border:1px solid #fca5a5;"></div>
-            This section (conflict)
+            This section
           </div>
           <div class="pr-sched-legend-item">
             <div class="pr-sched-legend-dot" style="background:repeating-linear-gradient(135deg,#fee2e2,#fee2e2 4px,#fca5a5 4px,#fca5a5 8px);border:1px solid #ef4444;"></div>
@@ -602,7 +619,7 @@
         ` : alreadyEnrolled ? `
           <div class="pr-sched-legend-item">
             <div class="pr-sched-legend-dot" style="background:#d1fae5;border:1px solid #6ee7b7;"></div>
-            This section (on schedule)
+            This section
           </div>
         ` : `
           <div class="pr-sched-legend-item">
@@ -613,27 +630,28 @@
       </div>
     `;
 
-    return `
-      <div class="pr-cal-grid" style="height:${GRID_HEIGHT + 22}px;">
-        <div class="pr-cal-time-header pr-cal-day-header"></div>
-        ${DAYS.map(d => `<div class="pr-cal-day-header">${DAY_LABELS[d]}</div>`).join('')}
-        <div class="pr-cal-time-col" style="height:${GRID_HEIGHT}px;position:relative;">
-          ${timeLabelsHTML}
-        </div>
-        ${DAYS.map(d => `
-          <div class="pr-cal-day-col" style="height:${GRID_HEIGHT}px;position:relative;">
-            ${renderHourLines()}
-            ${renderEventsForDay(d)}
+    // Wrap calendar in scrollable container
+    const calendarHTML = `
+      <div class="pr-cal-scroll-wrap" data-scroll-to="${scrollToMinutes !== null ? minutesToPx(scrollToMinutes) : 0}">
+        <div class="pr-cal-grid" style="height:${GRID_HEIGHT + 22}px;">
+          <div class="pr-cal-time-header pr-cal-day-header"></div>
+          ${DAYS.map(d => `<div class="pr-cal-day-header">${DAY_LABELS[d]}</div>`).join('')}
+          <div class="pr-cal-time-col" style="height:${GRID_HEIGHT}px;position:relative;">
+            ${timeLabelsHTML}
           </div>
-        `).join('')}
+          ${DAYS.map(d => `
+            <div class="pr-cal-day-col" style="height:${GRID_HEIGHT}px;position:relative;">
+              ${renderHourLines()}
+              ${renderEventsForDay(d)}
+            </div>
+          `).join('')}
+        </div>
       </div>
       ${legendHTML}
       ${infoHTML}
     `;
-  }
 
-  function esc(str) {
-    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return calendarHTML;
   }
 
   // ==================== TOOLTIP CREATION ====================
@@ -666,7 +684,18 @@
     state.ownerBadge = badge;
 
     positionTooltip(tooltip, badge);
-    requestAnimationFrame(() => tooltip.classList.add('pr-sched-visible'));
+    requestAnimationFrame(() => {
+      tooltip.classList.add('pr-sched-visible');
+
+      // Scroll to relevant time (offset by ~60px to show some context above)
+      const scrollWrap = tooltip.querySelector('.pr-cal-scroll-wrap');
+      if (scrollWrap) {
+        const scrollTarget = parseInt(scrollWrap.getAttribute('data-scroll-to') || '0');
+        if (scrollTarget > 0) {
+          scrollWrap.scrollTop = Math.max(0, scrollTarget - 60);
+        }
+      }
+    });
 
     tooltip.querySelector('.pr-sched-close').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -751,7 +780,7 @@
   // ==================== HOVER LISTENERS ====================
 
   document.addEventListener('mouseenter', (e) => {
-    if (!e.target.closest) return;  // ← add this line 
+    if (!e.target.closest) return;
     const badge = e.target.closest('.pr-conflict-badge[data-pr-conflict]');
     if (!badge) return;
     clearTimeout(state.hideTimer);
@@ -766,16 +795,15 @@
   }, true);
 
   document.addEventListener('mouseleave', (e) => {
-    if (!e.target.closest) return;  // ← add this line
+    if (!e.target.closest) return;
     const badge = e.target.closest('.pr-conflict-badge[data-pr-conflict]');
     if (!badge) return;
     clearTimeout(state.showTimer);
     if (!state.pinned) state.hideTimer = setTimeout(() => removeTooltip(false), 200);
   }, true);
 
-  // Click badge to pin/unpin
   document.addEventListener('click', (e) => {
-    if (!e.target.closest) return;  // ← add this line
+    if (!e.target.closest) return;
     const badge = e.target.closest('.pr-conflict-badge[data-pr-conflict]');
     if (!badge) return;
     if (state.tooltip && state.ownerBadge === badge) {
@@ -784,9 +812,8 @@
     }
   }, true);
 
-  // Click outside to unpin + close
   document.addEventListener('click', (e) => {
-    if (!e.target.closest) return;  // ← add this line
+    if (!e.target.closest) return;
     if (!state.tooltip) return;
     if (state.tooltip.contains(e.target)) return;
     if (e.target.closest('.pr-conflict-badge[data-pr-conflict]')) return;
