@@ -817,7 +817,9 @@
     if (!state.tooltip) return;
     if (state.tooltip.contains(e.target)) return;
     if (e.target.closest('.pr-conflict-badge[data-pr-conflict]')) return;
-    state.pinned = false;
+    // If pinned (user dragged it), don't close on click-outside
+    // Only the X button can close a pinned tooltip
+    if (state.pinned) return;
     removeTooltip(false);
   });
 

@@ -769,3 +769,23 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+(function setupNavigationDismiss() {
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest) return;
+    const btn = e.target.closest('button');
+    if (!btn) return;
+ 
+    const label = btn.querySelector('.cx-MuiButton-label');
+    const text = (label ? label.textContent : btn.textContent).trim().toLowerCase();
+ 
+    // Match Cancel, Ok, Back, Build Schedule, Save, Delete Selected
+    if (['cancel', 'ok', 'back', 'build schedule', 'save', 'delete selected'].includes(text)) {
+      initTooltipState();
+      if (window.PRTooltipState.currentTooltip) {
+        window.PRTooltipState.isPinned = false;
+        hideProfessorTooltip(null, false); // false = fade out smoothly
+      }
+    }
+  }, true);
+})();

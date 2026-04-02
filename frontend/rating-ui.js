@@ -69,7 +69,7 @@ function createRatingElement(professor, options = { animate: false }) {
     padding: 3px 8px; border: 1px solid #7F8A9E; border-radius: 12px;
     font-size: 12px; color: #090d19; 
     transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
-    cursor: pointer; white-space: nowrap; background: rgba(255, 255, 255, 0.9);
+    cursor: default; white-space: nowrap; background: rgba(255, 255, 255, 0.9);
     box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-left: 0px;
     max-width: calc(100% - 4px); overflow: hidden; width: fit-content;
     ${
@@ -150,7 +150,7 @@ function createNotFoundBadge(professorName, options = { animate: false }) {
     background: rgba(255, 255, 255, 0.9); border: 1px solid #7F8A9E;
     border-radius: 12px; font-size: 12px; color: #090d19; text-decoration: none;
     transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
-    cursor: pointer; white-space: nowrap;
+    cursor: default; white-space: nowrap;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-left: 0px;
     max-width: calc(100% - 4px); overflow: hidden; width: fit-content; margin-top: 4px;
     ${
