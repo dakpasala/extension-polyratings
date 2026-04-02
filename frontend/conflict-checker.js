@@ -1,24 +1,16 @@
 // ==================== CONFLICT CHECKER ====================
-// Reads schedule from window.highpoint.cachedBuild (server-rendered)
-// and shows Available / Conflict badges on section rows.
+// Shows Available / Conflict badges on section rows.
+// Schedule data is read from localStorage key 'pr_schedule_map'.
+//
+// The schedule data is written by a SEPARATE file (highpoint-bridge.js)
+// that runs in the MAIN world (page context) where window.highpoint is accessible.
+// This file runs in the ISOLATED world (content script) and only reads localStorage.
+
+(function() {
 
 const SCHEDULE_STORAGE_KEY = 'pr_schedule_map';
 
 // ==================== TIME UTILITIES ====================
-
-const DAY_MAP = { mon: 'Mo', tues: 'Tu', wed: 'We', thurs: 'Th', fri: 'Fr', sat: 'Sa', sun: 'Su' };
-
-function parseApiTime(timeStr) {
-  // "13.30.00.000000" → "1:30 pm"
-  if (!timeStr) return null;
-  const parts = timeStr.split('.');
-  let hours = parseInt(parts[0]);
-  const minutes = parts[1] || '00';
-  const ampm = hours >= 12 ? 'pm' : 'am';
-  if (hours > 12) hours -= 12;
-  if (hours === 0) hours = 12;
-  return `${hours}:${minutes} ${ampm}`;
-}
 
 function parseTimeToMinutes(timeStr) {
   if (!timeStr) return null;
@@ -56,56 +48,9 @@ function timesOverlap(slot1, slot2) {
   return s1 < e2 && s2 < e1;
 }
 
-// ==================== SCHEDULE MAP FROM HIGHPOINT ====================
-
-function buildScheduleFromHighpoint() {
-  const hp = window.highpoint;
-  if (!hp?.cachedBuild?.schedules?.[0]?.classes) {
-    console.log('📅 No cachedBuild data found');
-    return {};
-  }
-
-  const map = {};
-  hp.cachedBuild.schedules[0].classes.forEach(cls => {
-    const courseCode = `${cls.subject} ${cls.catalogNbr}`;
-    const section = cls.sections?.[0]?.classSection || cls.component || '';
-
-    (cls.meetingPatterns || []).forEach(pattern => {
-      if (!pattern.startTime || !pattern.endTime || !pattern.daysScheduled?.length) return;
-
-      const days = pattern.daysScheduled.map(d => DAY_MAP[d] || '').join('');
-      const start = parseApiTime(pattern.startTime);
-      const end = parseApiTime(pattern.endTime);
-      if (!days || !start || !end) return;
-
-      if (!map[courseCode]) map[courseCode] = [];
-      // Avoid duplicates
-      const key = `${section}-${days}-${start}-${end}`;
-      if (!map[courseCode].some(s => `${s.section}-${s.days}-${s.start}-${s.end}` === key)) {
-        map[courseCode].push({ section, days, start, end });
-      }
-    });
-  });
-
-  // Only write to localStorage if we got courses with times
-  // Prevents top frame (no highpoint) or empty builds from clobbering good data
-  if (Object.keys(map).length > 0) {
-    localStorage.setItem(SCHEDULE_STORAGE_KEY, JSON.stringify(map));
-    console.log(`📅 Schedule saved: ${Object.keys(map).length} courses with times`);
-  } else {
-    console.log('📅 No courses with times found in highpoint');
-  }
-  return map;
-}
+// ==================== SCHEDULE MAP ====================
 
 function getScheduleMap() {
-  // Always rebuild fresh from highpoint if available
-  const hp = window.highpoint;
-  if (hp?.cachedBuild?.schedules?.[0]?.classes) {
-    const fresh = buildScheduleFromHighpoint();
-    if (Object.keys(fresh).length > 0) return fresh;
-  }
-  // Fall back to localStorage
   try { return JSON.parse(localStorage.getItem(SCHEDULE_STORAGE_KEY)) || {}; }
   catch (e) { return {}; }
 }
@@ -116,14 +61,12 @@ function getCourseCodeFromRow(row) {
   let el = row.parentElement;
   let depth = 0;
   while (el && depth < 30) {
-    // Check h2 headers like "CPE 470 - Selected Advanced Topics"
     const h2s = el.querySelectorAll('h2');
     for (const h2 of h2s) {
       const text = h2.textContent.trim();
       const match = text.match(/^([A-Z]{2,4}\s+\d{3})/);
       if (match) return match[1].replace(/\s+/g, ' ').trim();
     }
-    // Check buttons
     const buttons = el.querySelectorAll('button.cx-MuiLink-button, .cx-MuiLink-button');
     for (const btn of buttons) {
       const text = btn.textContent.trim();
@@ -164,14 +107,12 @@ function extractSectionFromRow(sectionRow) {
   const start = readCellText(xs4Cells[2]);
   const end = readCellText(xs4Cells[3]);
 
-  const checkbox = sectionRow.querySelector('input[type="checkbox"]');
-  const isChecked = checkbox?.getAttribute('aria-checked') === 'true';
   const courseCode = getCourseCodeFromRow(sectionRow);
 
   const hasTimes = !!(days && start && end && days !== '-' && start !== '-' && end !== '-'
     && !days.toLowerCase().includes('tba'));
 
-  return { section: sectionName, days, start, end, isChecked, courseCode, hasTimes };
+  return { section: sectionName, days, start, end, courseCode, hasTimes };
 }
 
 function getAllVisibleSectionRows() {
@@ -188,13 +129,11 @@ function findConflicts(sectionData, scheduleMap) {
     return { hasConflict: false, conflictsWith: [], noTime: true };
   }
 
-  // Normalize: "CPE  470" → "CPE 470"
   const ownCourse = (sectionData.courseCode || '').replace(/\s+/g, ' ').trim();
-
   const conflicts = [];
+
   Object.entries(scheduleMap).forEach(([courseCode, sections]) => {
     const mapCourse = courseCode.replace(/\s+/g, ' ').trim();
-    // Don't conflict with own course
     if (mapCourse === ownCourse) return;
     sections.forEach(slot => {
       if (timesOverlap(sectionData, slot)) {
@@ -242,8 +181,6 @@ function createConflictBadge(conflictResult) {
   `;
 
   if (conflictResult.hasConflict) {
-    const courses = conflictResult.conflictsWith
-      .map(c => c.course).filter((v, i, a) => a.indexOf(v) === i).join(', ');
     badge.style.cssText = baseStyle + `
       background: rgba(254, 226, 226, 0.9); color: #DC2626;
       border: 1px solid #FECACA;
@@ -263,10 +200,7 @@ function createConflictBadge(conflictResult) {
 }
 
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
-  // Remove existing badges
   sectionRow.querySelectorAll('.pr-conflict-badge-wrap').forEach(b => b.remove());
-
-  // No times = no badge
   if (!sectionData.hasTimes) return;
 
   const badge = createConflictBadge(conflictResult);
@@ -295,18 +229,11 @@ function scanAndUpdateConflicts() {
   if (sectionRows.length === 0) return;
 
   const scheduleMap = getScheduleMap();
-  if (Object.keys(scheduleMap).length === 0) {
-    console.log('📅 No schedule data available yet');
-    return;
-  }
-
-  console.log(`📅 Scanning ${sectionRows.length} sections against ${Object.keys(scheduleMap).length} courses`);
+  if (Object.keys(scheduleMap).length === 0) return;
 
   sectionRows.forEach(row => {
     const data = extractSectionFromRow(row);
     if (!data || !data.section || !data.hasTimes) return;
-
-    console.log(`📅 Section: ${data.courseCode} ${data.section} | ${data.days} ${data.start}-${data.end}`);
     const result = findConflicts(data, scheduleMap);
     injectBadgeOnRow(row, result, data);
   });
@@ -316,6 +243,7 @@ function scanAndUpdateConflicts() {
 
 function setupSelectSectionsListener() {
   document.addEventListener('click', (e) => {
+    if (!e.target.closest) return;
     const btn = e.target.closest('button');
     if (!btn) return;
     const label = btn.querySelector('.cx-MuiButton-label');
@@ -330,6 +258,7 @@ function setupSelectSectionsListener() {
 
 function setupCheckboxListeners() {
   document.addEventListener('click', (e) => {
+    if (!e.target.closest) return;
     const checkboxSpan = e.target.closest('.cx-MuiCheckbox-root');
     if (!checkboxSpan) return;
     const row = checkboxSpan.closest('[role="row"]');
@@ -339,37 +268,19 @@ function setupCheckboxListeners() {
 }
 
 function setupBuildSaveListeners() {
-  // When user clicks Build Schedule or Save, Cal Poly's app makes an API call
-  // and updates window.highpoint.cachedBuild with the response.
-  // We poll for changes by watching the schedule hash.
   document.addEventListener('click', (e) => {
+    if (!e.target.closest) return;
     const btn = e.target.closest('button');
     if (!btn) return;
     const label = btn.querySelector('.cx-MuiButton-label');
     if (!label) return;
     const text = label.textContent.trim().toLowerCase();
     if (text.includes('build schedule') || text === 'save') {
-      // Capture current hash before the API call
-      const oldHash = window.highpoint?.cachedBuild?.schedules?.[0]?.hash || '';
-      console.log('📅 Waiting for schedule update... (current hash:', oldHash, ')');
-
-      let attempts = 0;
-      const maxAttempts = 20; // 20 * 500ms = 10 seconds max wait
-      const pollInterval = setInterval(() => {
-        attempts++;
-        const newHash = window.highpoint?.cachedBuild?.schedules?.[0]?.hash || '';
-
-        if (newHash !== oldHash || attempts >= maxAttempts) {
-          clearInterval(pollInterval);
-          if (newHash !== oldHash) {
-            console.log('📅 Schedule updated! New hash:', newHash);
-          } else {
-            console.log('📅 Timed out waiting for update, refreshing anyway');
-          }
-          buildScheduleFromHighpoint();
-          scanAndUpdateConflicts();
-        }
-      }, 500);
+      // Bridge (highpoint-bridge.js) updates localStorage
+      // We re-scan after delays to pick up the changes
+      setTimeout(() => scanAndUpdateConflicts(), 2000);
+      setTimeout(() => scanAndUpdateConflicts(), 5000);
+      setTimeout(() => scanAndUpdateConflicts(), 8000);
     }
   }, true);
 }
@@ -379,31 +290,14 @@ function setupBuildSaveListeners() {
 function initConflictChecker() {
   if (window.prConflictCheckerActive) return;
   window.prConflictCheckerActive = true;
-  console.log('📅 Conflict checker initialized');
-
-  // Load schedule from highpoint — retry a few times in case it's not hydrated yet
-  let map = getScheduleMap();
-  console.log(`📅 Initial load: ${Object.keys(map).length} courses`);
-
-  // Retry loading if highpoint wasn't ready
-  if (Object.keys(map).length === 0 && window.highpoint) {
-    [1000, 2000, 4000].forEach(delay => {
-      setTimeout(() => {
-        const fresh = getScheduleMap();
-        if (Object.keys(fresh).length > 0) {
-          console.log(`📅 Retry loaded: ${Object.keys(fresh).length} courses`);
-          scanAndUpdateConflicts();
-        }
-      }, delay);
-    });
-  }
 
   setupSelectSectionsListener();
   setupCheckboxListeners();
   setupBuildSaveListeners();
 
-  // Initial scan for any already-visible sections
-  setTimeout(() => scanAndUpdateConflicts(), 1000);
+  // Initial scans — give bridge time to populate localStorage
+  setTimeout(() => scanAndUpdateConflicts(), 1500);
+  setTimeout(() => scanAndUpdateConflicts(), 3000);
 
   // Watch for DOM changes (panels expanding)
   const conflictObserver = new MutationObserver((mutations) => {
@@ -429,3 +323,5 @@ if (document.readyState === 'loading') {
 } else {
   initConflictChecker();
 }
+
+})();
