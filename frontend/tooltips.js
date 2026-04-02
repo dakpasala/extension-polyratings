@@ -9,6 +9,7 @@
 //   ✅ 150ms hide grace  (was: 100ms — less flicker on mouse movement)
 //   ✅ Styles in a <style> tag  (was: inline cssText soup)
 //   ✅ Clean minimal design  (was: gold gradient)
+//   ✅ No tooltip for Add Prof (rating === 0) — no data to show
 
 /* ─── Inject styles once ─────────────────────────────────────────────────── */
 (function injectTooltipStyles() {
@@ -339,6 +340,9 @@ function initTooltipState() {
 
 /* ─── Attach hover listeners ─────────────────────────────────────────────── */
 function addHoverTooltip(element, professor) {
+  // No tooltip for Add Prof — rating is 0, nothing meaningful to show
+  if (!professor || !professor.rating || professor.rating === 0) return;
+
   initTooltipState();
 
   element.addEventListener("mouseenter", () => {

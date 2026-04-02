@@ -200,10 +200,7 @@ function createConflictBadge(conflictResult) {
 }
 
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
-  sectionRow.querySelectorAll('.pr-conflict-badge-wrap').forEach(b => b.remove());
   if (!sectionData.hasTimes) return;
-
-  const badge = createConflictBadge(conflictResult);
 
   const xs5 = sectionRow.querySelector('.cx-MuiGrid-grid-xs-5');
   if (!xs5) return;
@@ -211,6 +208,22 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
   if (xs4Cells.length < 3) return;
 
   const startCell = xs4Cells[2];
+  const existingWrap = startCell.querySelector('.pr-conflict-badge-wrap');
+
+  // ✅ Idempotency check — if badge already shows the correct state, do nothing.
+  // This prevents the flash/glitch caused by removing and re-injecting on every scan.
+  if (existingWrap) {
+    const existingBadge = existingWrap.querySelector('.pr-conflict-badge');
+    const isCurrentlyConflict = existingBadge?.textContent.includes('Conflict');
+    const isCurrentlyAvailable = existingBadge?.textContent.includes('Available');
+    if (conflictResult.hasConflict && isCurrentlyConflict) return;
+    if (!conflictResult.hasConflict && isCurrentlyAvailable) return;
+    // State changed — remove stale badge and fall through to re-inject
+    existingWrap.remove();
+  }
+
+  const badge = createConflictBadge(conflictResult);
+
   startCell.style.display = 'flex';
   startCell.style.flexDirection = 'column';
   startCell.style.alignItems = 'flex-start';
@@ -304,9 +317,11 @@ function initConflictChecker() {
     const isRelevant = mutations.some(m => {
       for (const node of m.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        // ✅ Ignore anything our own code injected — prevents observer feedback loop
         if (node.classList?.contains('pr-conflict-badge')) continue;
         if (node.classList?.contains('pr-conflict-badge-wrap')) continue;
         if (node.getAttribute?.('data-pr-conflict') === 'true') continue;
+        if (node.closest?.('.pr-conflict-badge-wrap')) continue;
         if (node.querySelector?.('[role="rowheader"]')) return true;
         if (node.classList?.contains('cx-MuiExpansionPanelDetails-root')) return true;
       }
