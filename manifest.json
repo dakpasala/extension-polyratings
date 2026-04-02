@@ -14,6 +14,13 @@
   "content_scripts": [
     {
       "matches": ["https://cmsweb.pscs.calpoly.edu/*"],
+      "js": ["frontend/highpoint-bridge.js"],
+      "all_frames": true,
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://cmsweb.pscs.calpoly.edu/*"],
       "js": [
         "shared/constants.js",
         "shared/utils.js",
@@ -23,6 +30,8 @@
         "frontend/rating-ui.js",
         "frontend/agent.js",
         "frontend/schedule-analyzer.js",
+        "frontend/conflict-checker.js",
+        "frontend/schedule-tooltip.js",
         "frontend/observers.js",
         "frontend/content.js"
       ],

@@ -88,7 +88,9 @@ function createRatingElement(professor, options = { animate: false }) {
     ratingContainer.style.background = "rgba(255, 255, 255, 0.9)";
     ratingContainer.style.borderColor = "#7F8A9E";
   });
-  addHoverTooltip(ratingContainer, professor);
+
+  // ✅ Don't call addHoverTooltip here — element isn't in DOM yet.
+  // Caller is responsible for attaching tooltip after appending to DOM.
 
   const ratingText = document.createElement("span");
   ratingText.textContent =
@@ -181,7 +183,7 @@ function createNotFoundBadge(professorName, options = { animate: false }) {
     );
   });
   notFoundContainer.title = `Add ${professorName} to PolyRatings`;
-  addHoverTooltip(notFoundContainer, { name: professorName, rating: 0 });
+  // ✅ No tooltip for Add Prof — rating is 0, nothing to show
   return notFoundContainer;
 }
 
@@ -219,6 +221,12 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
 
   professorElement.appendChild(lineBreak);
   professorElement.appendChild(ratingElement);
+
+  // ✅ Attach hover tooltip AFTER element is in the DOM so positioning works correctly.
+  // Skip for Add Prof (rating === 0) — tooltips.js will also guard this, but being explicit.
+  if (professor.rating && professor.rating > 0) {
+    addHoverTooltip(ratingElement, professor);
+  }
 
   // Trigger animation after a frame
   requestAnimationFrame(() => {
@@ -265,11 +273,14 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   container.appendChild(ratingContainer);
   professorNameElement.innerHTML = "";
   professorNameElement.appendChild(container);
-  addHoverTooltip(professorNameElement, professor);
   container.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
 
   // Mark as processing to prevent re-injection
   professorNameElement.setAttribute("data-pr-processing", "true");
+
+  // ✅ Attach hover tooltip AFTER element is in the DOM.
+  // addHoverTooltip internally skips if rating === 0.
+  addHoverTooltip(professorNameElement, professor);
 
   // Trigger animation after a frame
   requestAnimationFrame(() => {
@@ -316,7 +327,7 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
   container.appendChild(badgeContainer);
   professorNameElement.innerHTML = "";
   professorNameElement.appendChild(container);
-  addHoverTooltip(professorNameElement, { name: professorName, rating: 0 });
+  // ✅ No tooltip for Add Prof — skip addHoverTooltip entirely
   container.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
 
   // Mark as processing to prevent re-injection
