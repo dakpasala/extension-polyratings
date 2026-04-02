@@ -524,11 +524,7 @@ function setupDragListeners(tooltip) {
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
       window.PRTooltipState.isPinned = false;
-      tooltip.remove();
-      if (window.PRTooltipState.currentTooltip === tooltip) {
-        window.PRTooltipState.currentTooltip = null;
-        window.PRTooltipState.owner = null;
-      }
+      hideProfessorTooltip(null, false);
     });
   }
 

@@ -579,14 +579,14 @@
       ).join('<br>');
       infoHTML = `
         <div class="pr-sched-info pr-sched-info-conflict">
-          <div class="pr-sched-info-title">⚠ Conflicts with enrolled class${conflictsWith.length !== 1 ? 'es' : ''}:</div>
+          <div class="pr-sched-info-title">⚠ Conflicts with selected class${conflictsWith.length !== 1 ? 'es' : ''}:</div>
           ${conflictList || 'Time overlap detected with your schedule.'}
         </div>
       `;
     } else if (alreadyEnrolled) {
       infoHTML = `
         <div class="pr-sched-info pr-sched-info-available">
-          <div class="pr-sched-info-title">✓ Already on your schedule</div>
+          <div class="pr-sched-info-title">✓ Selected</div>
           ${esc(courseCode)} ${esc(section)}: ${esc(days)} ${esc(start)}–${esc(end)}
         </div>
       `;
@@ -604,7 +604,7 @@
       <div class="pr-sched-legend">
         <div class="pr-sched-legend-item">
           <div class="pr-sched-legend-dot" style="background:#bfdbfe;border:1px solid #93c5fd;"></div>
-          Enrolled
+          Selected
         </div>
         ${isConflict ? `
           <div class="pr-sched-legend-item">
