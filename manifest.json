@@ -14,6 +14,13 @@
   "content_scripts": [
     {
       "matches": ["https://cmsweb.pscs.calpoly.edu/*"],
+      "js": ["frontend/highpoint-bridge.js"],
+      "all_frames": true,
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://cmsweb.pscs.calpoly.edu/*"],
       "js": [
         "shared/constants.js",
         "shared/utils.js",
