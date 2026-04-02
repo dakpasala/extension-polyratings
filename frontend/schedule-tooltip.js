@@ -121,7 +121,6 @@
         overflow: auto;
         padding: 10px;
         min-height: 0;
-        max-height: 380px;
       }
 
       /* Calendar wrapper — scrollable */
@@ -695,6 +694,21 @@
           scrollWrap.scrollTop = Math.max(0, scrollTarget - 60);
         }
       }
+
+      // Snap height to actual content — cap max-height so user can't resize into whitespace
+      requestAnimationFrame(() => {
+        const header = tooltip.querySelector('.pr-sched-header');
+        const body = tooltip.querySelector('.pr-sched-body');
+        if (header && body) {
+          const contentHeight = header.offsetHeight + body.scrollHeight + 2;
+          const cappedHeight = Math.min(contentHeight, window.innerHeight * 0.9);
+          tooltip.style.height = cappedHeight + 'px';
+          // KEY FIX: lock max-height to actual content so resize can't create whitespace
+          tooltip.style.maxHeight = cappedHeight + 'px';
+        }
+        // Re-position after height is set
+        positionTooltip(tooltip, badge);
+      });
     });
 
     tooltip.querySelector('.pr-sched-close').addEventListener('click', (e) => {
