@@ -159,6 +159,10 @@ function injectConflictStyles() {
     .pr-conflict-badge {
       animation: conflictFadeIn 0.3s ease-out;
     }
+    .cx-MuiGrid-grid-xs-5,
+    .cx-MuiGrid-grid-xs-4 {
+      overflow: visible !important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -177,7 +181,7 @@ function createConflictBadge(conflictResult) {
     white-space: nowrap;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     cursor: default;
-    width: fit-content;
+    max-width: calc(100% - 4px); width: fit-content;
   `;
 
   if (conflictResult.hasConflict) {
@@ -199,14 +203,6 @@ function createConflictBadge(conflictResult) {
   return badge;
 }
 
-// ==================== BADGE POSITIONING ====================
-
-function repositionBadge(badgeContainer, startCell) {
-  const rect = startCell.getBoundingClientRect();
-  badgeContainer.style.left = `${rect.left}px`;
-  badgeContainer.style.top = `${rect.bottom - 8}px`;
-}
-
 function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
   if (!sectionData.hasTimes) return;
 
@@ -217,62 +213,39 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
 
   const startCell = xs4Cells[2];
 
-  // Assign a stable ID to this row so we can find its badge later
-  const rowId = sectionRow.dataset.prBadgeId || (() => {
-    const id = Math.random().toString(36).slice(2);
-    sectionRow.dataset.prBadgeId = id;
-    return id;
-  })();
+  let el = startCell;
+  for (let i = 0; i < 6; i++) {
+    if (!el) break;
+    el.style.overflow = 'visible';
+    el = el.parentElement;
+  }
+  
+  const existingWrap = startCell.querySelector('.pr-conflict-badge-wrap');
 
-  const existingWrap = document.querySelector(`.pr-conflict-badge-wrap[data-row-id="${rowId}"]`);
+  // ✅ Idempotency check — if badge already shows the correct state, do nothing.
+  // This prevents the flash/glitch caused by removing and re-injecting on every scan.
   if (existingWrap) {
     const existingBadge = existingWrap.querySelector('.pr-conflict-badge');
     const isCurrentlyConflict = existingBadge?.textContent.includes('Conflict');
     const isCurrentlyAvailable = existingBadge?.textContent.includes('Available');
-    if (conflictResult.hasConflict && isCurrentlyConflict) {
-      repositionBadge(existingWrap, startCell);
-      return;
-    }
-    if (!conflictResult.hasConflict && isCurrentlyAvailable) {
-      repositionBadge(existingWrap, startCell);
-      return;
-    }
+    if (conflictResult.hasConflict && isCurrentlyConflict) return;
+    if (!conflictResult.hasConflict && isCurrentlyAvailable) return;
+    // State changed — remove stale badge and fall through to re-inject
     existingWrap.remove();
   }
 
   const badge = createConflictBadge(conflictResult);
 
+  startCell.style.display = 'flex';
+  startCell.style.flexDirection = 'column';
+  startCell.style.alignItems = 'flex-start';
+  startCell.style.overflow = 'visible';
+
   const badgeContainer = document.createElement('div');
   badgeContainer.className = 'pr-conflict-badge-wrap';
-  badgeContainer.dataset.rowId = rowId;
-  badgeContainer.style.cssText = `
-    position: fixed;
-    z-index: 99999;
-    pointer-events: auto;
-  `;
+  badgeContainer.style.cssText = 'margin-top: 4px; margin-left: -20px;';
   badgeContainer.appendChild(badge);
-  document.body.appendChild(badgeContainer);
-
-  repositionBadge(badgeContainer, startCell);
-}
-
-// ==================== BADGE REPOSITIONER ====================
-
-function setupBadgeRepositioner() {
-  const reposition = () => {
-    document.querySelectorAll('.pr-conflict-badge-wrap[data-row-id]').forEach(wrap => {
-      const rowId = wrap.dataset.rowId;
-      const row = document.querySelector(`[data-pr-badge-id="${rowId}"]`);
-      if (!row) { wrap.remove(); return; }
-      const xs5 = row.querySelector('.cx-MuiGrid-grid-xs-5');
-      if (!xs5) return;
-      const cells = xs5.querySelectorAll('.cx-MuiGrid-grid-xs-4');
-      if (cells.length < 3) return;
-      repositionBadge(wrap, cells[2]);
-    });
-  };
-  window.addEventListener('scroll', reposition, true);
-  window.addEventListener('resize', reposition);
+  startCell.appendChild(badgeContainer);
 }
 
 // ==================== MAIN SCANNING LOGIC ====================
@@ -347,7 +320,6 @@ function initConflictChecker() {
   setupSelectSectionsListener();
   setupCheckboxListeners();
   setupBuildSaveListeners();
-  setupBadgeRepositioner();
 
   // Initial scans — give bridge time to populate localStorage
   setTimeout(() => scanAndUpdateConflicts(), 1500);
