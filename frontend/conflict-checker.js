@@ -321,7 +321,17 @@ function initConflictChecker() {
   setupCheckboxListeners();
   setupBuildSaveListeners();
 
-  // Initial scans — give bridge time to populate localStorage
+  // ✅ Re-scan whenever rating-ui.js finishes injecting a badge.
+  // This ensures conflict badges always render AFTER rating badges settle,
+  // eliminating the race condition caused by relying on fixed timeouts alone.
+  let conflictRescanTimer = null;
+  document.addEventListener('pr-ratings-updated', () => {
+    clearTimeout(conflictRescanTimer);
+    conflictRescanTimer = setTimeout(() => scanAndUpdateConflicts(), 150);
+  });
+
+  // Fallback timeouts — covers pages where rating-ui never fires
+  // (no professors found, API error, ratings already cached, etc.)
   setTimeout(() => scanAndUpdateConflicts(), 1500);
   setTimeout(() => scanAndUpdateConflicts(), 3000);
 

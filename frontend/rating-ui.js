@@ -243,9 +243,10 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
     requestAnimationFrame(() => {
       ratingElement.style.opacity = "1";
       ratingElement.style.transform = "translateY(0) scale(1)";
-      // Remove processing flag after animation completes
+      // Remove processing flag after animation completes, then signal conflict checker
       setTimeout(() => {
         professorElement.removeAttribute("data-pr-processing");
+        document.dispatchEvent(new CustomEvent('pr-ratings-updated'));
       }, 350);
     });
   });
@@ -301,9 +302,10 @@ function injectDesktopRatingUI(professorNameElement, professor) {
     requestAnimationFrame(() => {
       ratingEl.style.opacity = "1";
       ratingEl.style.transform = "translateY(0) scale(1)";
-      // Remove processing flag after animation completes
+      // Remove processing flag after animation completes, then signal conflict checker
       setTimeout(() => {
         professorNameElement.removeAttribute("data-pr-processing");
+        document.dispatchEvent(new CustomEvent('pr-ratings-updated'));
       }, 350);
     });
   });
@@ -352,9 +354,10 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
     requestAnimationFrame(() => {
       notFoundEl.style.opacity = "1";
       notFoundEl.style.transform = "translateY(0) scale(1)";
-      // Remove processing flag after animation completes
+      // Remove processing flag after animation completes, then signal conflict checker
       setTimeout(() => {
         professorNameElement.removeAttribute("data-pr-processing");
+        document.dispatchEvent(new CustomEvent('pr-ratings-updated'));
       }, 350);
     });
   });
