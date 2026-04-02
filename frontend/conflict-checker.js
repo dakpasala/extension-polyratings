@@ -230,7 +230,7 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
 
   const badgeContainer = document.createElement('div');
   badgeContainer.className = 'pr-conflict-badge-wrap';
-  badgeContainer.style.cssText = 'margin-top: 4px;';
+  badgeContainer.style.cssText = 'margin-top: 4px; margin-left: -30px;';
   badgeContainer.appendChild(badge);
   startCell.appendChild(badgeContainer);
 }
