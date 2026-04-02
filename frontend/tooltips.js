@@ -6,10 +6,11 @@
 //   ✅ Skeleton loader  (was: "Loading..." text flash)
 //   ✅ Smooth fade + slide  (was: bouncy cubic-bezier scale)
 //   ✅ 500ms show delay  (was: 400ms — feels more intentional)
-//   ✅ 150ms hide grace  (was: 100ms — less flicker on mouse movement)
 //   ✅ Styles in a <style> tag  (was: inline cssText soup)
 //   ✅ Clean minimal design  (was: gold gradient)
-//   ✅ No tooltip for Add Prof (rating === 0) — no data to show
+//   ✅ No tooltip for Add Prof (rating === 0)
+//   ✅ Hover-to-show, leave-to-hide — move onto tooltip to keep it open
+//   ✅ Drag to pin — dragging locks tooltip open, X to close
 
 /* ─── Inject styles once ─────────────────────────────────────────────────── */
 (function injectTooltipStyles() {
@@ -333,9 +334,22 @@ function initTooltipState() {
       currentTooltip: null,
       isHovering: false,
       isDragging: false,
+      isPinned: false,   // true after user drags — tooltip stays open until X
       dragOffset: { x: 0, y: 0 },
     };
   }
+}
+
+/* ─── Shared hide helper ─────────────────────────────────────────────────── */
+// Starts a grace-period hide. If mouse re-enters the element or the tooltip
+// before it fires, it gets cancelled.
+function scheduleHide() {
+  clearTimeout(window.PRTooltipState.hideTimeout);
+  window.PRTooltipState.hideTimeout = setTimeout(() => {
+    if (!window.PRTooltipState.isPinned) {
+      hideProfessorTooltip(null, false);
+    }
+  }, 180);
 }
 
 /* ─── Attach hover listeners ─────────────────────────────────────────────── */
@@ -346,30 +360,26 @@ function addHoverTooltip(element, professor) {
   initTooltipState();
 
   element.addEventListener("mouseenter", () => {
-    window.PRTooltipState.isHovering = true;
-
+    // Cancel any pending hide
     clearTimeout(window.PRTooltipState.hideTimeout);
     window.PRTooltipState.hideTimeout = null;
     clearTimeout(window.PRTooltipState.showTimeout);
     window.PRTooltipState.showTimeout = null;
 
-    // If tooltip already showing for this professor, don't re-create it
-    if (window.PRTooltipState.currentTooltip && 
-        window.PRTooltipState.owner === element) {
-      return;  // Already showing, keep it
-    }
+    // Already showing for this element — do nothing
+    if (window.PRTooltipState.currentTooltip &&
+        window.PRTooltipState.owner === element) return;
 
-    // If a different element was active, hide it immediately
-    if (
-      window.PRTooltipState.owner &&
-      window.PRTooltipState.owner !== element
-    ) {
+    // Different element was active — hide it immediately
+    if (window.PRTooltipState.owner && window.PRTooltipState.owner !== element) {
       hideProfessorTooltip(window.PRTooltipState.owner, true);
+      window.PRTooltipState.isPinned = false;
     }
 
     window.PRTooltipState.owner = element;
+    window.PRTooltipState.isHovering = true;
 
-    // 500ms delay — feels intentional, not accidental
+    // 500ms intentional delay before showing
     window.PRTooltipState.showTimeout = setTimeout(() => {
       if (
         window.PRTooltipState.isHovering &&
@@ -382,11 +392,17 @@ function addHoverTooltip(element, professor) {
     }, 500);
   });
 
-  element.addEventListener("mouseleave", () => {
+  element.addEventListener("mouseleave", (e) => {
     window.PRTooltipState.isHovering = false;
     clearTimeout(window.PRTooltipState.showTimeout);
     window.PRTooltipState.showTimeout = null;
-    // Tooltip stays visible - user must click X to close
+
+    // If mouse moved onto the tooltip itself, don't hide
+    const tooltip = window.PRTooltipState.currentTooltip;
+    if (tooltip && tooltip.contains(e.relatedTarget)) return;
+
+    // Otherwise start grace-period hide
+    scheduleHide();
   });
 }
 
@@ -397,19 +413,18 @@ function showProfessorTooltip(element, professor) {
   if (!element || !document.contains(element)) return;
 
   const tooltip = document.createElement("div");
-  // Keep CSS_CLASSES.PROFESSOR_TOOLTIP so hideProfessorTooltip's querySelector
-  // still works — add our styling class alongside it
   tooltip.className = `${CSS_CLASSES.PROFESSOR_TOOLTIP} pr-professor-tooltip`;
   tooltip.setAttribute(CSS_CLASSES.DATA_ATTR, "true");
 
   window.PRTooltipState.currentTooltip = tooltip;
+  window.PRTooltipState.isPinned = false;
 
   // Skeleton immediately — no "Loading..." flash
   tooltip.innerHTML = buildSkeleton();
   document.body.appendChild(tooltip);
   positionTooltip(tooltip, element);
 
-  // Fade in on next two frames (one to paint, one to transition)
+  // Fade in
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       if (window.PRTooltipState.currentTooltip === tooltip) {
@@ -422,40 +437,25 @@ function showProfessorTooltip(element, professor) {
   chrome.runtime.sendMessage(
     { type: "getGeminiTooltipAnalysis", profName: professor.name },
     (response) => {
-      if (
-        !tooltip.parentNode ||
-        window.PRTooltipState.currentTooltip !== tooltip
-      ) return;
+      if (!tooltip.parentNode || window.PRTooltipState.currentTooltip !== tooltip) return;
 
       if (response?.status === "success" && response.professor) {
         const prof = response.professor;
         tooltip.innerHTML = buildContent(
-          prof.name,
-          prof.rating,
-          prof.numEvals,
-          prof.department,
-          response.analysis,
-          [] // Empty reviews initially - we'll fetch separately
+          prof.name, prof.rating, prof.numEvals, prof.department,
+          response.analysis, []
         );
-        
-        // Re-position after real content loads
         positionTooltip(tooltip, element);
-        // Re-attach drag after content rebuild
         setupDragListeners(tooltip);
 
-        // NOW fetch reviews separately (async, doesn't block tooltip)
+        // Fetch reviews separately — doesn't block tooltip display
         chrome.runtime.sendMessage(
           { type: "getProfessorReviews", profName: prof.name },
           (reviewsResponse) => {
             if (reviewsResponse?.status === "success" && reviewsResponse.reviews) {
-              // Rebuild tooltip with reviews added
               tooltip.innerHTML = buildContent(
-                prof.name,
-                prof.rating,
-                prof.numEvals,
-                prof.department,
-                response.analysis,
-                reviewsResponse.reviews
+                prof.name, prof.rating, prof.numEvals, prof.department,
+                response.analysis, reviewsResponse.reviews
               );
               positionTooltip(tooltip, element);
               setupDragListeners(tooltip);
@@ -463,14 +463,9 @@ function showProfessorTooltip(element, professor) {
           }
         );
       } else {
-        // Not found or error — show fallback with whatever analysis text exists
         tooltip.innerHTML = buildContent(
-          professor.name,
-          null,
-          null,
-          null,
-          response?.analysis || null,
-          []
+          professor.name, null, null, null,
+          response?.analysis || null, []
         );
         positionTooltip(tooltip, element);
         setupDragListeners(tooltip);
@@ -478,15 +473,15 @@ function showProfessorTooltip(element, professor) {
     }
   );
 
-  // Setup initial drag listeners
+  // Initial drag listeners
   setupDragListeners(tooltip);
-  
-  // Hovering onto the tooltip — expand and stay open
+
+  // Mouse enters tooltip — cancel hide, expand summary
   tooltip.addEventListener("mouseenter", () => {
-    window.PRTooltipState.isHovering = true;
     clearTimeout(window.PRTooltipState.hideTimeout);
     window.PRTooltipState.hideTimeout = null;
-    // Small delay before expanding — feels intentional, not jumpy
+
+    clearTimeout(window.PRTooltipState.expandTimeout);
     window.PRTooltipState.expandTimeout = setTimeout(() => {
       tooltip.classList.add("pr-tooltip-expanded");
       // Re-clamp after expansion changes height
@@ -499,19 +494,19 @@ function showProfessorTooltip(element, professor) {
           const currentTop = parseInt(tooltip.style.top);
           tooltip.style.top = `${Math.max(margin, currentTop - overflow)}px`;
         }
-      }, 500); // wait for transition
+      }, 500);
     }, 120);
   });
 
+  // Mouse leaves tooltip — start grace-period hide (unless pinned by drag)
   tooltip.addEventListener("mouseleave", (e) => {
-    // Don't hide during drag
-    if (window.PRTooltipState.isDragging || 
-        tooltip.contains(e.relatedTarget)) {
-      return;
-    }
-    window.PRTooltipState.isHovering = false;
+    if (window.PRTooltipState.isDragging || tooltip.contains(e.relatedTarget)) return;
     clearTimeout(window.PRTooltipState.expandTimeout);
-    // Tooltip stays open - user must click X to close
+
+    // If mouse moved back onto the owner element, don't hide
+    if (e.relatedTarget === element || element.contains(e.relatedTarget)) return;
+
+    scheduleHide();
   });
 }
 
@@ -522,13 +517,18 @@ function setupDragListeners(tooltip) {
   const tabs = tooltip.querySelectorAll(".pr-tooltip-tab");
   const content = tooltip.querySelector(".pr-tooltip-content");
   const closeBtn = tooltip.querySelector(".pr-tooltip-close");
-  
+
   if (!header) return;
 
-  // Close button
+  // Close button — clears pin and hides
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
+      window.PRTooltipState.isPinned = false;
       tooltip.remove();
+      if (window.PRTooltipState.currentTooltip === tooltip) {
+        window.PRTooltipState.currentTooltip = null;
+        window.PRTooltipState.owner = null;
+      }
     });
   }
 
@@ -543,71 +543,50 @@ function setupDragListeners(tooltip) {
     });
   });
 
-  // Scroll spy - highlight active tab based on scroll position
+  // Scroll spy
   if (content) {
     content.addEventListener("scroll", () => {
       const sections = tooltip.querySelectorAll(".pr-tooltip-section");
       let currentSection = null;
-
       sections.forEach(section => {
         const rect = section.getBoundingClientRect();
         const contentRect = content.getBoundingClientRect();
-        if (rect.top <= contentRect.top + 50) {
-          currentSection = section.dataset.sectionId;
-        }
+        if (rect.top <= contentRect.top + 50) currentSection = section.dataset.sectionId;
       });
-
       if (currentSection) {
         tabs.forEach(tab => {
-          if (tab.dataset.section === currentSection) {
-            tab.classList.add("active");
-          } else {
-            tab.classList.remove("active");
-          }
+          tab.classList.toggle("active", tab.dataset.section === currentSection);
         });
       }
     });
   }
 
-  // Make header draggable
+  // Drag — pinning the tooltip open once moved
   if (headerSection) {
     let startX, startY, tooltipLeft, tooltipTop;
 
     headerSection.addEventListener("mousedown", (e) => {
-      // Don't drag if clicking close button or tab
-      if (e.target.classList.contains("pr-tooltip-close") || 
+      if (e.target.classList.contains("pr-tooltip-close") ||
           e.target.classList.contains("pr-tooltip-tab")) return;
-      
+
       e.preventDefault();
       window.PRTooltipState.isDragging = true;
+      window.PRTooltipState.isPinned = true; // pinned once user drags
       tooltip.classList.add("pr-dragging");
-      
+
       startX = e.clientX;
       startY = e.clientY;
       tooltipLeft = parseInt(tooltip.style.left) || 0;
-      tooltipTop = parseInt(tooltip.style.top) || 0;
+      tooltipTop  = parseInt(tooltip.style.top)  || 0;
 
       const onMouseMove = (moveEvent) => {
         if (!window.PRTooltipState.isDragging) return;
-        
         const deltaX = moveEvent.clientX - startX;
         const deltaY = moveEvent.clientY - startY;
-        
-        let newLeft = tooltipLeft + deltaX;
-        let newTop = tooltipTop + deltaY;
-
-        // Clamp to viewport edges
-        const tipW = tooltip.offsetWidth;
-        const tipH = tooltip.offsetHeight;
-        const margin = 10;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-
-        newLeft = Math.max(margin, Math.min(newLeft, vw - tipW - margin));
-        newTop = Math.max(margin, Math.min(newTop, vh - tipH - margin));
-
-        tooltip.style.left = `${newLeft}px`;
-        tooltip.style.top = `${newTop}px`;
+        const tipW = tooltip.offsetWidth, tipH = tooltip.offsetHeight;
+        const margin = 10, vw = window.innerWidth, vh = window.innerHeight;
+        tooltip.style.left = `${Math.max(margin, Math.min(tooltipLeft + deltaX, vw - tipW - margin))}px`;
+        tooltip.style.top  = `${Math.max(margin, Math.min(tooltipTop  + deltaY, vh - tipH - margin))}px`;
       };
 
       const onMouseUp = () => {
@@ -624,30 +603,24 @@ function setupDragListeners(tooltip) {
 }
 
 /* ─── Position ───────────────────────────────────────────────────────────── */
-// Uses fixed positioning so getBoundingClientRect() coords align correctly.
-// Always clamps to viewport on all 4 edges, respecting max-height.
 function positionTooltip(tooltip, element) {
   const rect   = element.getBoundingClientRect();
   const tipW   = tooltip.offsetWidth  || 268;
-  const maxTipH = 500; // Match CSS max-height
+  const maxTipH = 500;
   const tipH   = Math.min(tooltip.offsetHeight || 200, maxTipH);
   const margin = 10;
   const vw     = window.innerWidth;
   const vh     = window.innerHeight;
 
-  // Horizontal: centre under/over element, clamped to viewport
   let left = rect.left + rect.width / 2 - tipW / 2;
   left = Math.max(margin, Math.min(left, vw - tipW - margin));
 
-  // Vertical: prefer above, flip below if not enough room
   let top;
   if (rect.top - tipH - 4 >= margin) {
-    top = rect.top - tipH - 4;   // above, only 4px gap
+    top = rect.top - tipH - 4;
   } else {
-    top = rect.bottom + 4;        // below, only 4px gap
+    top = rect.bottom + 4;
   }
-  
-  // Critical: clamp to ensure tooltip never goes off bottom
   top = Math.max(margin, Math.min(top, vh - tipH - margin));
 
   tooltip.style.left = `${left}px`;
@@ -656,22 +629,16 @@ function positionTooltip(tooltip, element) {
 
 /* ─── Hide ───────────────────────────────────────────────────────────────── */
 function hideProfessorTooltip(owner = null, immediate = false) {
-  const existingTooltip = document.querySelector(
-    `.${CSS_CLASSES.PROFESSOR_TOOLTIP}`
-  );
-
+  const existingTooltip = document.querySelector(`.${CSS_CLASSES.PROFESSOR_TOOLTIP}`);
   if (!existingTooltip) return;
   if (owner && window.PRTooltipState?.owner !== owner) return;
 
   const removeNow = () => {
     existingTooltip.parentNode?.removeChild(existingTooltip);
     if (window.PRTooltipState) {
-      if (!owner || window.PRTooltipState.owner === owner) {
-        window.PRTooltipState.owner = null;
-      }
-      if (window.PRTooltipState.currentTooltip === existingTooltip) {
-        window.PRTooltipState.currentTooltip = null;
-      }
+      if (!owner || window.PRTooltipState.owner === owner) window.PRTooltipState.owner = null;
+      if (window.PRTooltipState.currentTooltip === existingTooltip) window.PRTooltipState.currentTooltip = null;
+      window.PRTooltipState.isPinned = false;
     }
   };
 
@@ -679,7 +646,7 @@ function hideProfessorTooltip(owner = null, immediate = false) {
     removeNow();
   } else {
     existingTooltip.classList.remove("pr-tooltip-visible");
-    setTimeout(removeNow, 180); // matches transition duration
+    setTimeout(removeNow, 180);
   }
 }
 
@@ -720,45 +687,29 @@ function buildContent(name, rating, numEvals, department, analysis, reviews = []
   }
 
   const summaryText = analysis
-    ? escapeHtml(
-        analysis
-          .replace(/https?:\/\/[^\s]+/g, "")
-          .replace(/\n+/g, " ")
-          .trim()
-      )
+    ? escapeHtml(analysis.replace(/https?:\/\/[^\s]+/g, "").replace(/\n+/g, " ").trim())
     : "No summary available.";
 
-  const footerParts = [
-    department || "",
-    numEvals ? `${numEvals} reviews` : "",
-  ].filter(Boolean);
-  const footerText = footerParts.length
-    ? escapeHtml(footerParts.join(" · "))
-    : "PolyRatings";
+  const footerParts = [department || "", numEvals ? `${numEvals} reviews` : ""].filter(Boolean);
+  const footerText = footerParts.length ? escapeHtml(footerParts.join(" · ")) : "PolyRatings";
 
   // Group reviews by course
   const reviewsByCourse = {};
   (reviews || []).forEach(review => {
     const course = review.course || "Unknown Course";
-    if (!reviewsByCourse[course]) {
-      reviewsByCourse[course] = [];
-    }
+    if (!reviewsByCourse[course]) reviewsByCourse[course] = [];
     reviewsByCourse[course].push(review);
   });
 
   const courses = Object.keys(reviewsByCourse).sort();
-  
-  // Build tabs
+
   const tabs = ['<button class="pr-tooltip-tab active" data-section="overview">AI Overview</button>'];
   courses.forEach(course => {
     const count = reviewsByCourse[course].length;
     tabs.push(`<button class="pr-tooltip-tab" data-section="${escapeHtml(course)}">${escapeHtml(course)} (${count})</button>`);
   });
 
-  // Build sections
   const sections = [];
-  
-  // AI Overview section (no header in content, it's in the fixed header)
   sections.push(`
     <div class="pr-tooltip-section" data-section-id="overview">
       <div class="pr-tooltip-summary">${summaryText}</div>
@@ -766,7 +717,6 @@ function buildContent(name, rating, numEvals, department, analysis, reviews = []
     </div>
   `);
 
-  // Course review sections
   courses.forEach(course => {
     const courseReviews = reviewsByCourse[course];
     const reviewsHtml = courseReviews.map(review => {
@@ -774,11 +724,7 @@ function buildContent(name, rating, numEvals, department, analysis, reviews = []
       if (review.rating) meta.push(`★ ${review.rating.toFixed(1)}`);
       if (review.grade) meta.push(`Grade: ${review.grade}`);
       if (review.gradeLevel) meta.push(review.gradeLevel);
-      if (review.date) {
-        const date = new Date(review.date);
-        meta.push(date.getFullYear());
-      }
-
+      if (review.date) meta.push(new Date(review.date).getFullYear());
       return `
         <div class="pr-review">
           <div class="pr-review-meta">
