@@ -171,12 +171,22 @@ function renderHistoryView(messagesArea) {
     const rateBanner = popup?.querySelector('.rate-limit-banner');
     if (rateBanner) rateBanner.style.display = 'none';
 
-    // -- Top bar: back button --
+    // -- Select mode state --
+    let selectMode = false;
+    const selectedMessages = new Set(); // stores "dateKey::msgIndex" strings
+
+    // -- Top bar: back button + select button --
+    const topBar = document.createElement('div');
+    topBar.style.cssText = `
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    `;
+
     const backBtn = document.createElement('div');
     backBtn.style.cssText = `
       display: inline-flex; align-items: center; gap: 6px;
       color: #666; font-size: 13px; font-weight: 600;
-      cursor: pointer; padding: 4px 0; margin-bottom: 10px;
+      cursor: pointer; padding: 4px 0;
       transition: color 0.2s;
     `;
     backBtn.innerHTML = `← Back to chat`;
@@ -187,7 +197,6 @@ function renderHistoryView(messagesArea) {
       messagesArea.style.opacity = '0';
       setTimeout(() => {
         if (inputArea) inputArea.style.display = 'flex';
-        // Show rate limit banner again
         const rateBanner = popup?.querySelector('.rate-limit-banner');
         if (rateBanner) rateBanner.style.display = 'flex';
         messagesArea.innerHTML = '';
@@ -196,7 +205,214 @@ function renderHistoryView(messagesArea) {
         messagesArea.style.opacity = '1';
       }, 150);
     });
-    messagesArea.appendChild(backBtn);
+
+    const selectBtn = document.createElement('div');
+    selectBtn.style.cssText = `
+      font-size: 13px; font-weight: 600; color: #999;
+      cursor: pointer; padding: 4px 8px; border-radius: 6px;
+      transition: all 0.2s;
+    `;
+    selectBtn.textContent = 'Select';
+    selectBtn.addEventListener('mouseenter', () => {
+      selectBtn.style.color = '#333';
+      selectBtn.style.background = '#f0f0f0';
+    });
+    selectBtn.addEventListener('mouseleave', () => {
+      selectBtn.style.color = selectMode ? '#E6A000' : '#999';
+      selectBtn.style.background = selectMode ? '#FFF8E1' : 'transparent';
+    });
+
+    topBar.appendChild(backBtn);
+    topBar.appendChild(selectBtn);
+    messagesArea.appendChild(topBar);
+
+    // -- Delete bar (hidden until items selected) --
+    const deleteBar = document.createElement('div');
+    deleteBar.style.cssText = `
+      position: sticky; bottom: 0; left: 0; right: 0;
+      background: rgba(220, 38, 38, 0.95);
+      backdrop-filter: blur(8px);
+      padding: 10px 16px;
+      border-radius: 10px;
+      display: none;
+      align-items: center; justify-content: space-between;
+      z-index: 10;
+      animation: bannerSlideIn 0.2s ease-out;
+      margin-top: 8px;
+    `;
+
+    const deleteCount = document.createElement('span');
+    deleteCount.style.cssText = `color: white; font-size: 13px; font-weight: 500;`;
+    deleteCount.textContent = '0 selected';
+
+    const deleteActions = document.createElement('div');
+    deleteActions.style.cssText = `display: flex; gap: 8px;`;
+
+    const cancelDeleteBtn = document.createElement('button');
+    cancelDeleteBtn.style.cssText = `
+      background: rgba(255,255,255,0.2); color: white; border: none;
+      padding: 6px 14px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; cursor: pointer; transition: background 0.15s;
+    `;
+    cancelDeleteBtn.textContent = 'Cancel';
+    cancelDeleteBtn.addEventListener('mouseenter', () => cancelDeleteBtn.style.background = 'rgba(255,255,255,0.3)');
+    cancelDeleteBtn.addEventListener('mouseleave', () => cancelDeleteBtn.style.background = 'rgba(255,255,255,0.2)');
+
+    const confirmDeleteBtn = document.createElement('button');
+    confirmDeleteBtn.style.cssText = `
+      background: white; color: #DC2626; border: none;
+      padding: 6px 14px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; cursor: pointer; transition: all 0.15s;
+    `;
+    confirmDeleteBtn.textContent = 'Delete';
+    confirmDeleteBtn.addEventListener('mouseenter', () => {
+      confirmDeleteBtn.style.background = '#FEE2E2';
+    });
+    confirmDeleteBtn.addEventListener('mouseleave', () => {
+      confirmDeleteBtn.style.background = 'white';
+    });
+
+    deleteActions.appendChild(cancelDeleteBtn);
+    deleteActions.appendChild(confirmDeleteBtn);
+    deleteBar.appendChild(deleteCount);
+    deleteBar.appendChild(deleteActions);
+
+    function updateDeleteBar() {
+      const count = selectedMessages.size;
+      if (count > 0) {
+        deleteBar.style.display = 'flex';
+        deleteCount.textContent = `${count} selected`;
+        confirmDeleteBtn.textContent = `Delete (${count})`;
+      } else {
+        deleteBar.style.display = 'none';
+      }
+    }
+
+    function exitSelectMode() {
+      selectMode = false;
+      selectedMessages.clear();
+      selectBtn.textContent = 'Select';
+      selectBtn.style.color = '#999';
+      selectBtn.style.background = 'transparent';
+      deleteBar.style.display = 'none';
+      // Remove all circles and highlights
+      contentArea.querySelectorAll('.select-circle').forEach(c => c.remove());
+      contentArea.querySelectorAll('[data-select-row]').forEach(row => {
+        row.style.background = 'transparent';
+        row.style.paddingLeft = '2px';
+      });
+    }
+
+    function enterSelectMode() {
+      selectMode = true;
+      selectBtn.textContent = 'Done';
+      selectBtn.style.color = '#E6A000';
+      selectBtn.style.background = '#FFF8E1';
+      // Add circles to all message rows
+      contentArea.querySelectorAll('[data-select-row]').forEach(row => {
+        addSelectCircle(row);
+        row.style.paddingLeft = '30px';
+      });
+    }
+
+    function addSelectCircle(row) {
+      if (row.querySelector('.select-circle')) return;
+      const key = row.getAttribute('data-select-key');
+      const isUser = row.getAttribute('data-select-role') === 'user';
+
+      const circle = document.createElement('div');
+      circle.className = 'select-circle';
+      circle.style.cssText = `
+        position: absolute;
+        left: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        border: 2px solid #ccc;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        flex-shrink: 0;
+      `;
+
+      circle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (selectedMessages.has(key)) {
+          selectedMessages.delete(key);
+          circle.style.background = 'white';
+          circle.style.borderColor = '#ccc';
+          circle.innerHTML = '';
+          row.style.background = 'transparent';
+        } else {
+          selectedMessages.add(key);
+          circle.style.background = '#FFD700';
+          circle.style.borderColor = '#FFD700';
+          circle.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+          row.style.background = 'rgba(255, 215, 0, 0.08)';
+        }
+        updateDeleteBar();
+      });
+
+      row.style.position = 'relative';
+      row.appendChild(circle);
+    }
+
+    // Wire up select button
+    selectBtn.addEventListener('click', () => {
+      if (selectMode) {
+        exitSelectMode();
+      } else {
+        enterSelectMode();
+      }
+    });
+
+    // Wire up cancel delete
+    cancelDeleteBtn.addEventListener('click', () => exitSelectMode());
+
+    // Wire up confirm delete
+    confirmDeleteBtn.addEventListener('click', () => {
+      if (selectedMessages.size === 0) return;
+
+      // Parse selected keys and delete from localStorage
+      const history = getChatHistory();
+      const toDelete = {};
+      selectedMessages.forEach(key => {
+        const [dateKey, idxStr] = key.split('::');
+        if (!toDelete[dateKey]) toDelete[dateKey] = [];
+        toDelete[dateKey].push(parseInt(idxStr));
+      });
+
+      // Delete in reverse index order to preserve indices
+      Object.entries(toDelete).forEach(([dateKey, indices]) => {
+        if (!history[dateKey]) return;
+        indices.sort((a, b) => b - a).forEach(idx => {
+          history[dateKey].splice(idx, 1);
+        });
+        if (history[dateKey].length === 0) {
+          delete history[dateKey];
+        }
+      });
+
+      localStorage.setItem(CHAT_HISTORY.STORAGE_KEY, JSON.stringify(history));
+
+      // Re-render
+      exitSelectMode();
+      contentArea.style.transition = 'opacity 0.12s ease-out';
+      contentArea.style.opacity = '0';
+      setTimeout(() => {
+        contentArea.innerHTML = '';
+        const freshHistory = getChatHistory();
+        const freshDates = Object.keys(freshHistory);
+        renderFullHistory(contentArea, freshHistory, freshDates, selectMode, selectedMessages, addSelectCircle, updateDeleteBar);
+        contentArea.style.transition = 'opacity 0.15s ease-in';
+        contentArea.style.opacity = '1';
+      }, 120);
+    });
 
     // -- Search bar --
     const searchWrap = document.createElement('div');
@@ -232,6 +448,9 @@ function renderHistoryView(messagesArea) {
     contentArea.className = 'history-content-area';
     messagesArea.appendChild(contentArea);
 
+    // -- Delete bar (sticky at bottom) --
+    messagesArea.appendChild(deleteBar);
+
     // Render full history initially
     renderFullHistory(contentArea, history, dates);
 
@@ -239,10 +458,11 @@ function renderHistoryView(messagesArea) {
     let searchTimeout = null;
     searchInput.addEventListener('input', () => {
       clearTimeout(searchTimeout);
+      // Exit select mode when searching
+      if (selectMode) exitSelectMode();
       searchTimeout = setTimeout(() => {
         const term = searchInput.value.trim();
 
-        // Fade content area
         contentArea.style.transition = 'opacity 0.12s ease-out';
         contentArea.style.opacity = '0';
 
@@ -296,12 +516,16 @@ function renderFullHistory(container, history, dates) {
     messages.forEach((msg, idx) => {
       const row = document.createElement('div');
       row.id = `hist-${dateKey.replace(/\s/g, '_')}-${idx}`;
+      row.setAttribute('data-select-row', 'true');
+      row.setAttribute('data-select-key', `${dateKey}::${idx}`);
+      row.setAttribute('data-select-role', msg.role);
       const isUser = msg.role === 'user';
       row.style.cssText = `
         display: flex; flex-direction: column;
         align-items: ${isUser ? 'flex-end' : 'flex-start'};
-        margin-bottom: 8px; transition: background 0.4s;
+        margin-bottom: 8px; transition: background 0.4s, padding-left 0.2s;
         padding: 2px 4px; border-radius: 8px;
+        position: relative;
       `;
 
       const bubble = document.createElement('div');
