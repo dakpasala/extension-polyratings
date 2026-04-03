@@ -280,11 +280,26 @@ function renderHistoryView(messagesArea) {
     function updateDeleteBar() {
       const count = selectedMessages.size;
       if (count > 0) {
-        deleteBar.style.display = 'flex';
+        if (deleteBar.style.display !== 'flex') {
+          deleteBar.style.display = 'flex';
+          deleteBar.style.opacity = '0';
+          deleteBar.style.transform = 'translateY(8px)';
+          requestAnimationFrame(() => {
+            deleteBar.style.transition = 'opacity 0.2s ease-out, transform 0.2s ease-out';
+            deleteBar.style.opacity = '1';
+            deleteBar.style.transform = 'translateY(0)';
+          });
+        }
         deleteCount.textContent = `${count} selected`;
         confirmDeleteBtn.textContent = `Delete (${count})`;
       } else {
-        deleteBar.style.display = 'none';
+        // Fade out
+        deleteBar.style.transition = 'opacity 0.15s ease-in, transform 0.15s ease-in';
+        deleteBar.style.opacity = '0';
+        deleteBar.style.transform = 'translateY(8px)';
+        setTimeout(() => {
+          deleteBar.style.display = 'none';
+        }, 150);
       }
     }
 
@@ -294,7 +309,13 @@ function renderHistoryView(messagesArea) {
       selectBtn.textContent = 'Select';
       selectBtn.style.color = '#999';
       selectBtn.style.background = 'transparent';
-      deleteBar.style.display = 'none';
+      // Fade out delete bar
+      deleteBar.style.transition = 'opacity 0.15s ease-in, transform 0.15s ease-in';
+      deleteBar.style.opacity = '0';
+      deleteBar.style.transform = 'translateY(8px)';
+      setTimeout(() => {
+        deleteBar.style.display = 'none';
+      }, 150);
       // Remove all circles and highlights
       contentArea.querySelectorAll('.select-circle').forEach(c => c.remove());
       contentArea.querySelectorAll('[data-select-row]').forEach(row => {
