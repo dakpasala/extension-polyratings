@@ -1,4 +1,19 @@
 // ==================== RATING UI CREATION ====================
+
+// ✅ CSS-based hover effect — works regardless of tooltip interference
+(function injectRatingHoverStyles() {
+  if (document.getElementById('pr-rating-hover-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'pr-rating-hover-styles';
+  style.textContent = `
+    [data-polyratings]:hover .polyratings-rating-element {
+      background: rgba(21, 71, 52, 0.12) !important;
+      border-color: #154734 !important;
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
 function createLoadingSkeleton() {
   const skeleton = document.createElement("div");
   skeleton.className = CSS_CLASSES.LOADING_SKELETON;
@@ -69,7 +84,7 @@ function createRatingElement(professor, options = { animate: false }) {
     padding: 3px 8px; border: 1px solid #7F8A9E; border-radius: 12px;
     font-size: 12px; color: #090d19; 
     transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
-    cursor: pointer; white-space: nowrap; background: rgba(255, 255, 255, 0.9);
+    cursor: default !important; white-space: nowrap; background: rgba(255, 255, 255, 0.9);
     box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-left: 0px;
     max-width: calc(100% - 4px); overflow: hidden; width: fit-content;
     ${
@@ -80,14 +95,9 @@ function createRatingElement(professor, options = { animate: false }) {
   `;
   ratingContainer.title = `View ${professor.name}'s profile on PolyRatings`;
   ratingContainer.addEventListener("click", (e) => e.stopPropagation());
-  ratingContainer.addEventListener("mouseenter", () => {
-    ratingContainer.style.background = "rgba(21, 71, 52, 0.12)";
-    ratingContainer.style.borderColor = "#154734";
-  });
-  ratingContainer.addEventListener("mouseleave", () => {
-    ratingContainer.style.background = "rgba(255, 255, 255, 0.9)";
-    ratingContainer.style.borderColor = "#7F8A9E";
-  });
+
+  // ✅ No JS hover listeners — CSS handles the green hover effect via
+  // [data-polyratings]:hover .polyratings-rating-element rule above.
 
   // ✅ Don't call addHoverTooltip here — element isn't in DOM yet.
   // Caller is responsible for attaching tooltip after appending to DOM.
@@ -150,7 +160,7 @@ function createNotFoundBadge(professorName, options = { animate: false }) {
     background: rgba(255, 255, 255, 0.9); border: 1px solid #7F8A9E;
     border-radius: 12px; font-size: 12px; color: #090d19; text-decoration: none;
     transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
-    cursor: pointer; white-space: nowrap;
+    cursor: default; white-space: nowrap;
     box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-left: 0px;
     max-width: calc(100% - 4px); overflow: hidden; width: fit-content; margin-top: 4px;
     ${
@@ -233,9 +243,10 @@ function injectRatingUI(professorElement, professor, profIndex = 0) {
     requestAnimationFrame(() => {
       ratingElement.style.opacity = "1";
       ratingElement.style.transform = "translateY(0) scale(1)";
-      // Remove processing flag after animation completes
+      // Remove processing flag after animation completes, then signal conflict checker
       setTimeout(() => {
         professorElement.removeAttribute("data-pr-processing");
+        document.dispatchEvent(new CustomEvent('pr-ratings-updated'));
       }, 350);
     });
   });
@@ -282,14 +293,19 @@ function injectDesktopRatingUI(professorNameElement, professor) {
   // addHoverTooltip internally skips if rating === 0.
   addHoverTooltip(professorNameElement, professor);
 
+  // ✅ Green hover effect handled entirely by CSS rule:
+  // [data-polyratings]:hover .polyratings-rating-element { ... }
+  // No JS listeners needed — CSS :hover with !important works reliably.
+
   // Trigger animation after a frame
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       ratingEl.style.opacity = "1";
       ratingEl.style.transform = "translateY(0) scale(1)";
-      // Remove processing flag after animation completes
+      // Remove processing flag after animation completes, then signal conflict checker
       setTimeout(() => {
         professorNameElement.removeAttribute("data-pr-processing");
+        document.dispatchEvent(new CustomEvent('pr-ratings-updated'));
       }, 350);
     });
   });
@@ -338,9 +354,10 @@ function injectDesktopNotFoundUI(professorNameElement, professorName) {
     requestAnimationFrame(() => {
       notFoundEl.style.opacity = "1";
       notFoundEl.style.transform = "translateY(0) scale(1)";
-      // Remove processing flag after animation completes
+      // Remove processing flag after animation completes, then signal conflict checker
       setTimeout(() => {
         professorNameElement.removeAttribute("data-pr-processing");
+        document.dispatchEvent(new CustomEvent('pr-ratings-updated'));
       }, 350);
     });
   });

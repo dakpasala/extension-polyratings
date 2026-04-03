@@ -159,6 +159,10 @@ function injectConflictStyles() {
     .pr-conflict-badge {
       animation: conflictFadeIn 0.3s ease-out;
     }
+    .cx-MuiGrid-grid-xs-5,
+    .cx-MuiGrid-grid-xs-4 {
+      overflow: visible !important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -208,6 +212,14 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
   if (xs4Cells.length < 3) return;
 
   const startCell = xs4Cells[2];
+
+  let el = startCell;
+  for (let i = 0; i < 6; i++) {
+    if (!el) break;
+    el.style.overflow = 'visible';
+    el = el.parentElement;
+  }
+  
   const existingWrap = startCell.querySelector('.pr-conflict-badge-wrap');
 
   // ✅ Idempotency check — if badge already shows the correct state, do nothing.
@@ -227,10 +239,11 @@ function injectBadgeOnRow(sectionRow, conflictResult, sectionData) {
   startCell.style.display = 'flex';
   startCell.style.flexDirection = 'column';
   startCell.style.alignItems = 'flex-start';
+  startCell.style.overflow = 'visible';
 
   const badgeContainer = document.createElement('div');
   badgeContainer.className = 'pr-conflict-badge-wrap';
-  badgeContainer.style.cssText = 'margin-top: 4px;';
+  badgeContainer.style.cssText = 'margin-top: 4px; margin-left: -20px;';
   badgeContainer.appendChild(badge);
   startCell.appendChild(badgeContainer);
 }
@@ -308,7 +321,17 @@ function initConflictChecker() {
   setupCheckboxListeners();
   setupBuildSaveListeners();
 
-  // Initial scans — give bridge time to populate localStorage
+  // ✅ Re-scan whenever rating-ui.js finishes injecting a badge.
+  // This ensures conflict badges always render AFTER rating badges settle,
+  // eliminating the race condition caused by relying on fixed timeouts alone.
+  let conflictRescanTimer = null;
+  document.addEventListener('pr-ratings-updated', () => {
+    clearTimeout(conflictRescanTimer);
+    conflictRescanTimer = setTimeout(() => scanAndUpdateConflicts(), 150);
+  });
+
+  // Fallback timeouts — covers pages where rating-ui never fires
+  // (no professors found, API error, ratings already cached, etc.)
   setTimeout(() => scanAndUpdateConflicts(), 1500);
   setTimeout(() => scanAndUpdateConflicts(), 3000);
 

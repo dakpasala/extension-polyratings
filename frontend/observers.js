@@ -92,6 +92,15 @@ function setupMutationObserver() {
     characterData: true,
   });
 
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      clearProcessedProfessors();
+      findAndLogProfessors();
+    }, 250);
+  });
+
   // Initial load: process immediately without debounce
   findAndLogProfessors();
 }

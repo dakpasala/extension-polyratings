@@ -121,7 +121,6 @@
         overflow: auto;
         padding: 10px;
         min-height: 0;
-        max-height: 380px;
       }
 
       /* Calendar wrapper — scrollable */
@@ -580,14 +579,14 @@
       ).join('<br>');
       infoHTML = `
         <div class="pr-sched-info pr-sched-info-conflict">
-          <div class="pr-sched-info-title">⚠ Conflicts with enrolled class${conflictsWith.length !== 1 ? 'es' : ''}:</div>
+          <div class="pr-sched-info-title">⚠ Conflicts with selected class${conflictsWith.length !== 1 ? 'es' : ''}:</div>
           ${conflictList || 'Time overlap detected with your schedule.'}
         </div>
       `;
     } else if (alreadyEnrolled) {
       infoHTML = `
         <div class="pr-sched-info pr-sched-info-available">
-          <div class="pr-sched-info-title">✓ Already on your schedule</div>
+          <div class="pr-sched-info-title">✓ Selected</div>
           ${esc(courseCode)} ${esc(section)}: ${esc(days)} ${esc(start)}–${esc(end)}
         </div>
       `;
@@ -605,7 +604,7 @@
       <div class="pr-sched-legend">
         <div class="pr-sched-legend-item">
           <div class="pr-sched-legend-dot" style="background:#bfdbfe;border:1px solid #93c5fd;"></div>
-          Enrolled
+          Selected
         </div>
         ${isConflict ? `
           <div class="pr-sched-legend-item">
@@ -695,6 +694,21 @@
           scrollWrap.scrollTop = Math.max(0, scrollTarget - 60);
         }
       }
+
+      // Snap height to actual content — cap max-height so user can't resize into whitespace
+      requestAnimationFrame(() => {
+        const header = tooltip.querySelector('.pr-sched-header');
+        const body = tooltip.querySelector('.pr-sched-body');
+        if (header && body) {
+          const contentHeight = header.offsetHeight + body.scrollHeight + 2;
+          const cappedHeight = Math.min(contentHeight, window.innerHeight * 0.9);
+          tooltip.style.height = cappedHeight + 'px';
+          // KEY FIX: lock max-height to actual content so resize can't create whitespace
+          tooltip.style.maxHeight = cappedHeight + 'px';
+        }
+        // Re-position after height is set
+        positionTooltip(tooltip, badge);
+      });
     });
 
     tooltip.querySelector('.pr-sched-close').addEventListener('click', (e) => {
@@ -817,7 +831,9 @@
     if (!state.tooltip) return;
     if (state.tooltip.contains(e.target)) return;
     if (e.target.closest('.pr-conflict-badge[data-pr-conflict]')) return;
-    state.pinned = false;
+    // If pinned (user dragged it), don't close on click-outside
+    // Only the X button can close a pinned tooltip
+    if (state.pinned) return;
     removeTooltip(false);
   });
 
