@@ -994,36 +994,48 @@ function openAgentPopup(button) {
     const message = input.value.trim();
     if (!message) return;
     
+    // Client-side check first (fast feedback) — server enforces the real limit
     const rateLimit = checkRateLimit();
     if (!rateLimit.canSend) {
       showRateLimitBanner(messagesArea, 0);
       return;
     }
     
+    // Get user ID from localStorage (written by highpoint-bridge.js)
+    const userId = localStorage.getItem('pr_user_id') || null;
+    
     addUserMessage(messagesArea, message);
     input.value = "";
     const typingId = addTypingMessage(messagesArea);
     chrome.runtime.sendMessage(
-      { type: "chatbotQuery", query: message },
+      { type: "chatbotQuery", query: message, userId: userId },
       (response) => {
         const typingElement = document.getElementById(typingId);
         if (typingElement) typingElement.remove();
 
-        if (response?.status === "success") {
+        if (response?.status === "rate_limited") {
+          // Server says limit reached — update local state to match
+          const usage = JSON.parse(localStorage.getItem(RATE_LIMIT.STORAGE_KEY) || '{}');
+          usage.date = new Date().toDateString();
+          usage.count = RATE_LIMIT.MAX_MESSAGES;
+          localStorage.setItem(RATE_LIMIT.STORAGE_KEY, JSON.stringify(usage));
+          showRateLimitBanner(messagesArea, 0);
+          addBotMessage(messagesArea, "You've reached your daily message limit. Your limit will reset at 12:00 AM.");
+        } else if (response?.status === "success") {
           addBotMessage(messagesArea, response.professor.analysis);
           incrementUsage();
-          const updated = checkRateLimit();
-          showRateLimitBanner(messagesArea, updated.remaining);
+          const remaining = response.remaining != null ? response.remaining : checkRateLimit().remaining;
+          showRateLimitBanner(messagesArea, remaining);
         } else if (response?.status === "ai_analysis") {
           addBotMessage(messagesArea, response.professor.analysis);
           incrementUsage();
-          const updated = checkRateLimit();
-          showRateLimitBanner(messagesArea, updated.remaining);
+          const remaining = response.remaining != null ? response.remaining : checkRateLimit().remaining;
+          showRateLimitBanner(messagesArea, remaining);
         } else if (response?.status === "general_response") {
           addBotMessage(messagesArea, response.message);
           incrementUsage();
-          const updated = checkRateLimit();
-          showRateLimitBanner(messagesArea, updated.remaining);
+          const remaining = response.remaining != null ? response.remaining : checkRateLimit().remaining;
+          showRateLimitBanner(messagesArea, remaining);
         } else {
           addBotMessage(
             messagesArea,

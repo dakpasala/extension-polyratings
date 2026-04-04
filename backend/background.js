@@ -407,14 +407,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const query = message.query;
-        console.log(`💬 User query: "${query}"`);
+        const userId = message.userId || null;
+        console.log(`💬 User query: "${query}" (user: ${userId})`);
+        
+        // Server-side rate limit check
+        const usage = await checkAgentUsage(userId);
+        if (!usage.canSend) {
+          sendResponse({
+            status: "rate_limited",
+            remaining: 0,
+            message: "Usage limit reached — your limit will reset at 12:00 AM."
+          });
+          return;
+        }
         
         // Try RAG system for all queries
         const answer = await handleRAGQuery(query);
         
+        // Increment usage in Supabase AFTER successful response
+        await incrementAgentUsage(userId);
+        const updated = await checkAgentUsage(userId);
+        
         sendResponse({
           status: "success",
-          professor: { analysis: answer }
+          professor: { analysis: answer },
+          remaining: updated.remaining
         });
         
       } catch (error) {
@@ -427,9 +444,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             await fetchProfessorData();
             const professor = await findProfessor(professorName);
             const analysis = await callGeminiAnalysis(professorName, professor);
+            
+            // Still increment usage on fallback success
+            const userId = message.userId || null;
+            await incrementAgentUsage(userId);
+            const updated = await checkAgentUsage(userId);
+            
             sendResponse({
               status: "success",
               professor: { ...professor, analysis },
+              remaining: updated.remaining
             });
             return;
           } catch (e) {
