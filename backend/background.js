@@ -583,5 +583,23 @@ Be encouraging but realistic. No bullet points, no bold formatting, just clear s
     return true;
   }
 
+  // Check rate limit from DB
+  if (message.type === "checkRateLimit") {
+    (async () => {
+      try {
+        const usage = await checkAgentUsage(message.userId);
+        sendResponse({
+          status: "success",
+          remaining: usage.remaining,
+          canSend: usage.canSend
+        });
+      } catch (error) {
+        console.error("Rate limit check error:", error);
+        sendResponse({ status: "success", remaining: 10, canSend: true });
+      }
+    })();
+    return true;
+  }
+
   sendResponse({ status: "error", message: "Unknown message type" });
 });

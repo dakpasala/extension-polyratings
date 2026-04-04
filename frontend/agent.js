@@ -994,13 +994,6 @@ function openAgentPopup(button) {
     const message = input.value.trim();
     if (!message) return;
     
-    // Client-side check first (fast feedback) — server enforces the real limit
-    const rateLimit = checkRateLimit();
-    if (!rateLimit.canSend) {
-      showRateLimitBanner(messagesArea, 0);
-      return;
-    }
-    
     // Get user ID from localStorage (written by highpoint-bridge.js)
     const userId = localStorage.getItem('pr_user_id') || null;
     
@@ -1014,27 +1007,19 @@ function openAgentPopup(button) {
         if (typingElement) typingElement.remove();
 
         if (response?.status === "rate_limited") {
-          // Server says limit reached — update local state to match
-          const usage = JSON.parse(localStorage.getItem(RATE_LIMIT.STORAGE_KEY) || '{}');
-          usage.date = new Date().toDateString();
-          usage.count = RATE_LIMIT.MAX_MESSAGES;
-          localStorage.setItem(RATE_LIMIT.STORAGE_KEY, JSON.stringify(usage));
           showRateLimitBanner(messagesArea, 0);
           addBotMessage(messagesArea, "You've reached your daily message limit. Your limit will reset at 12:00 AM.");
         } else if (response?.status === "success") {
           addBotMessage(messagesArea, response.professor.analysis);
-          incrementUsage();
-          const remaining = response.remaining != null ? response.remaining : checkRateLimit().remaining;
+          const remaining = response.remaining != null ? response.remaining : 10;
           showRateLimitBanner(messagesArea, remaining);
         } else if (response?.status === "ai_analysis") {
           addBotMessage(messagesArea, response.professor.analysis);
-          incrementUsage();
-          const remaining = response.remaining != null ? response.remaining : checkRateLimit().remaining;
+          const remaining = response.remaining != null ? response.remaining : 10;
           showRateLimitBanner(messagesArea, remaining);
         } else if (response?.status === "general_response") {
           addBotMessage(messagesArea, response.message);
-          incrementUsage();
-          const remaining = response.remaining != null ? response.remaining : checkRateLimit().remaining;
+          const remaining = response.remaining != null ? response.remaining : 10;
           showRateLimitBanner(messagesArea, remaining);
         } else {
           addBotMessage(
@@ -1056,11 +1041,16 @@ function openAgentPopup(button) {
   chatContainer.appendChild(inputArea);
   document.body.appendChild(chatContainer);
 
-  // Check rate limit on open
-  const initialLimit = checkRateLimit();
-  if (initialLimit.remaining <= 3) {
-    showRateLimitBanner(messagesArea, initialLimit.remaining);
-  }
+  // Check rate limit on open — query the DB via background script
+  const userId = localStorage.getItem('pr_user_id') || null;
+  chrome.runtime.sendMessage(
+    { type: "checkRateLimit", userId: userId },
+    (response) => {
+      if (response?.remaining != null && response.remaining <= 3) {
+        showRateLimitBanner(messagesArea, response.remaining);
+      }
+    }
+  );
 
   setTimeout(() => input.focus(), 100);
 
