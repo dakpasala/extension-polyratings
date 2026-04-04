@@ -86,11 +86,11 @@ function createAnalyzeScheduleButton() {
   
   // Override outline color to purple
   analyzeBtn.style.cssText = `
-    border-color: #667eea;
-    color: #667eea;
+    border-color: #154734;
+    color: #154734;
   `;
   analyzeBtn.addEventListener('mouseenter', () => {
-    analyzeBtn.style.backgroundColor = 'rgba(102, 126, 234, 0.08)';
+    analyzeBtn.style.backgroundColor = 'rgba(21, 71, 52, 0.08)';
   });
   analyzeBtn.addEventListener('mouseleave', () => {
     analyzeBtn.style.backgroundColor = 'transparent';
@@ -129,8 +129,8 @@ function openAnalysisPopup(courses) {
     left: 50%;
     transform: translate(-50%, -50%);
     background: white;
-    border-radius: 16px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    border-radius: 14px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06);
     width: 500px;
     max-width: 90vw;
     height: 600px;
@@ -154,24 +154,31 @@ function openAnalysisPopup(courses) {
   // Header
   const header = document.createElement('div');
   header.style.cssText = `
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
-    padding: 16px 20px;
-    font-weight: 600;
-    font-size: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    cursor: grab;
+    cursor: default;
     user-select: none;
+    background: #fff;
+    border-radius: 14px 14px 0 0;
   `;
   header.innerHTML = `
-    <span>Schedule Analysis</span>
-    <button class="close-analysis-btn" style="
-      background: none; border: none; font-size: 20px; cursor: pointer;
-      color: white; padding: 0; width: 24px; height: 24px;
-      display: flex; align-items: center; justify-content: center;
-    ">×</button>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:28px;height:28px;border-radius:50%;background:#154734;display:flex;align-items:center;justify-content:center;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M3 3h18v18H3z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:500;color:#222;">Schedule analysis</div>
+        <div style="font-size:11px;color:#bbb;">AI-powered insights</div>
+      </div>
+    </div>
+    <div class="close-analysis-btn" style="
+      width:24px;height:24px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer;color:#ccc;transition:all 0.15s;
+    "><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
   `;
   
   // Make draggable
@@ -225,14 +232,14 @@ function openAnalysisPopup(courses) {
   // Messages area
   const messagesArea = document.createElement('div');
   messagesArea.className = 'analysis-messages';
-  messagesArea.style.cssText = 'flex: 1; padding: 20px; overflow-y: auto; background: #f8f9fa;';
+  messagesArea.style.cssText = 'flex: 1; padding: 20px; overflow-y: auto; background: #fff;';
   
   // Analyzing message
   const analyzingMsg = document.createElement('div');
   analyzingMsg.style.cssText = `
     background: white; padding: 16px; border-radius: 12px;
     margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    border-left: 4px solid #667eea;
+    border-left: 4px solid #154734;
   `;
   analyzingMsg.innerHTML = `
     <div style="font-weight: 600; margin-bottom: 8px; color: #333;">
@@ -253,9 +260,9 @@ function openAnalysisPopup(courses) {
   `;
   typingIndicator.innerHTML = `
     <div style="display: flex; gap: 4px; align-items: center;">
-      <div style="width: 8px; height: 8px; border-radius: 50%; background: #667eea; animation: bounce 1.4s infinite ease-in-out both;"></div>
-      <div style="width: 8px; height: 8px; border-radius: 50%; background: #667eea; animation: bounce 1.4s infinite ease-in-out both; animation-delay: 0.16s;"></div>
-      <div style="width: 8px; height: 8px; border-radius: 50%; background: #667eea; animation: bounce 1.4s infinite ease-in-out both; animation-delay: 0.32s;"></div>
+      <div style="width: 8px; height: 8px; border-radius: 50%; background: #154734; animation: bounce 1.4s infinite ease-in-out both;"></div>
+      <div style="width: 8px; height: 8px; border-radius: 50%; background: #154734; animation: bounce 1.4s infinite ease-in-out both; animation-delay: 0.16s;"></div>
+      <div style="width: 8px; height: 8px; border-radius: 50%; background: #154734; animation: bounce 1.4s infinite ease-in-out both; animation-delay: 0.32s;"></div>
     </div>
   `;
   messagesArea.appendChild(typingIndicator);
@@ -265,39 +272,71 @@ function openAnalysisPopup(courses) {
   document.body.appendChild(popup);
   
   // Close button handler with animation
-  header.querySelector('.close-analysis-btn').addEventListener('click', () => {
+  const closeBtn = header.querySelector('.close-analysis-btn');
+  closeBtn.addEventListener('mouseenter', function() { this.style.color = '#666'; this.style.background = '#f0f0f0'; });
+  closeBtn.addEventListener('mouseleave', function() { this.style.color = '#ccc'; this.style.background = 'transparent'; });
+  closeBtn.addEventListener('click', () => {
     popup.style.transition = 'opacity 0.2s ease-out';
     popup.style.opacity = '0';
     setTimeout(() => popup.remove(), 200);
   });
   
   // Send to background for analysis
+  const userId = localStorage.getItem('pr_user_id') || null;
   chrome.runtime.sendMessage(
     {
       type: 'analyzeSchedule',
-      courses: courses
+      courses: courses,
+      userId: userId
     },
     (response) => {
       // Remove typing indicator and analyzing message
       typingIndicator.remove();
       analyzingMsg.remove();
+
+      if (response?.status === 'rate_limited') {
+        // Show limit reached inside the popup
+        const limitMsg = document.createElement('div');
+        limitMsg.style.cssText = `
+          background: white; padding: 20px; border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          border-left: 4px solid #F59E0B;
+          text-align: center;
+          opacity: 0;
+          animation: fadeInResult 0.4s ease-out forwards;
+        `;
+        limitMsg.innerHTML = `
+          <div style="font-size: 28px; margin-bottom: 10px;">📊</div>
+          <div style="font-weight: 600; color: #333; font-size: 15px; margin-bottom: 8px;">
+            Daily Limit Reached
+          </div>
+          <div style="color: #666; font-size: 13px; line-height: 1.5;">
+            You've used all 5 schedule analyses for today.<br>
+            Your limit resets at 12:00 AM.
+          </div>
+        `;
+        messagesArea.appendChild(limitMsg);
+        return;
+      }
       
       // Show result with better formatting and smooth animation
       const resultMsg = document.createElement('div');
       resultMsg.style.cssText = `
         background: white; padding: 20px; border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        border-left: 4px solid ${response?.status === 'success' ? '#667eea' : '#f44336'};
+        border-left: 4px solid ${response?.status === 'success' ? '#154734' : '#f44336'};
         opacity: 0;
         animation: fadeInResult 0.4s ease-out forwards;
       `;
+
+      // Show remaining count
+      const remainingText = response?.remaining != null
+        ? `<div style="font-size: 11px; color: #999; margin-top: 12px; text-align: right;">${response.remaining} analysis${response.remaining === 1 ? '' : 'es'} remaining today</div>`
+        : '';
       
       if (response?.status === 'success') {
-        // Parse and format the analysis
         let formattedAnalysis = response.analysis
-          // Remove ** markdown
           .replace(/\*\*/g, '')
-          // Convert numbered lists to styled divs
           .split(/\d+\.\s+/)
           .filter(Boolean)
           .map((section, index) => {
@@ -307,7 +346,7 @@ function openAnalysisPopup(courses) {
             
             return `
               <div style="margin-bottom: 16px;">
-                <div style="font-weight: 600; color: #667eea; margin-bottom: 8px; font-size: 15px;">
+                <div style="font-weight: 600; color: #154734; margin-bottom: 8px; font-size: 15px;">
                   ${index + 1}. ${title}
                 </div>
                 <div style="color: #444; font-size: 14px; line-height: 1.6; padding-left: 20px;">
@@ -323,6 +362,7 @@ function openAnalysisPopup(courses) {
             Your Schedule Analysis
           </div>
           ${formattedAnalysis}
+          ${remainingText}
         `;
       } else {
         resultMsg.innerHTML = `
@@ -346,8 +386,77 @@ function analyzeSchedule() {
     return;
   }
   
-  // Open analysis popup (separate from agent)
-  openAnalysisPopup(courses);
+  // Check rate limit from DB before opening popup
+  const userId = localStorage.getItem('pr_user_id') || null;
+  chrome.runtime.sendMessage(
+    { type: 'checkAnalysisLimit', userId: userId },
+    (response) => {
+      if (response?.canSend === false) {
+        // Show a clean inline limit message instead of popup
+        showAnalysisLimitMessage();
+      } else {
+        openAnalysisPopup(courses);
+      }
+    }
+  );
+}
+
+function showAnalysisLimitMessage() {
+  // Close any existing
+  const existing = document.querySelector('.pr-analysis-limit-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'pr-analysis-limit-toast';
+  toast.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+    padding: 28px 32px;
+    z-index: 10001;
+    text-align: center;
+    max-width: 360px;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+  `;
+  toast.innerHTML = `
+    <div style="font-size: 32px; margin-bottom: 12px;">📊</div>
+    <div style="font-weight: 600; font-size: 16px; color: #333; margin-bottom: 8px;">
+      Daily Limit Reached
+    </div>
+    <div style="color: #666; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+      You've used all 5 schedule analyses for today. Your limit resets at 12:00 AM.
+    </div>
+    <button style="
+      background: #154734;
+      color: white; border: none; border-radius: 10px;
+      padding: 10px 28px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: transform 0.15s;
+    ">Got it</button>
+  `;
+
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => { toast.style.opacity = '1'; });
+
+  toast.querySelector('button').addEventListener('click', () => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 200);
+  });
+
+  // Also close on click outside
+  setTimeout(() => {
+    document.addEventListener('click', function handler(e) {
+      if (!toast.contains(e.target)) {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 200);
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 100);
 }
 
 // Initialize only when DOM is ready, but don't parse courses yet

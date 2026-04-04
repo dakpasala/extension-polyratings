@@ -241,3 +241,153 @@ async function getReviewsForCourses(courseCodes, limitPerCourse = 10) {
     return {};
   }
 }
+
+/* ==================== RATE LIMITING (SERVER-SIDE) ==================== */
+// Uses service role key — users cannot bypass this
+
+const SUPABASE_SERVICE_KEY = "";
+const AGENT_DAILY_LIMIT = 10;
+
+async function supabaseServiceQuery(method, path, body = null) {
+  const url = `${SUPABASE_URL}/rest/v1/${path}`;
+  const options = {
+    method: method,
+    headers: {
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': method === 'POST' ? 'return=representation,resolution=merge-duplicates' : 'return=representation'
+    }
+  };
+  if (body) options.body = JSON.stringify(body);
+
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    const error = await response.text();
+    console.error(`❌ Supabase service error (${method} ${path}):`, error);
+    throw new Error(`Service query failed: ${response.statusText}`);
+  }
+
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// Check if user can send a message today
+async function checkAgentUsage(userId) {
+  if (!userId) return { canSend: true, remaining: AGENT_DAILY_LIMIT, count: 0 };
+
+  try {
+    const today = new Date().toISOString().split('T')[0]; // "2026-04-03"
+    const data = await supabaseServiceQuery(
+      'GET',
+      `agent_usage?user_id=eq.${encodeURIComponent(userId)}&usage_date=eq.${today}&select=count`
+    );
+
+    const count = (data && data.length > 0) ? data[0].count : 0;
+    return {
+      canSend: count < AGENT_DAILY_LIMIT,
+      remaining: Math.max(0, AGENT_DAILY_LIMIT - count),
+      count: count
+    };
+  } catch (error) {
+    console.error('❌ checkAgentUsage error:', error);
+    // On error, allow the message (fail open so users aren't blocked by a DB hiccup)
+    return { canSend: true, remaining: AGENT_DAILY_LIMIT, count: 0 };
+  }
+}
+
+// Increment usage count for today
+async function incrementAgentUsage(userId) {
+  if (!userId) return;
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Upsert: insert if not exists, increment if exists
+    // First check if row exists
+    const existing = await supabaseServiceQuery(
+      'GET',
+      `agent_usage?user_id=eq.${encodeURIComponent(userId)}&usage_date=eq.${today}&select=id,count`
+    );
+
+    if (existing && existing.length > 0) {
+      // Update existing row
+      const row = existing[0];
+      await supabaseServiceQuery(
+        'PATCH',
+        `agent_usage?id=eq.${row.id}`,
+        { count: row.count + 1 }
+      );
+    } else {
+      // Insert new row
+      await supabaseServiceQuery(
+        'POST',
+        'agent_usage',
+        { user_id: userId, usage_date: today, count: 1 }
+      );
+    }
+
+    console.log(`📊 Usage incremented for ${userId}`);
+  } catch (error) {
+    console.error('❌ incrementAgentUsage error:', error);
+  }
+}
+
+/* ==================== SCHEDULE ANALYSIS RATE LIMITING ==================== */
+
+const ANALYSIS_DAILY_LIMIT = 5;
+
+async function checkAnalysisUsage(userId) {
+  if (!userId) return { canSend: true, remaining: ANALYSIS_DAILY_LIMIT, count: 0 };
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const data = await supabaseServiceQuery(
+      'GET',
+      `agent_usage?user_id=eq.${encodeURIComponent(userId + '_analysis')}&usage_date=eq.${today}&select=count`
+    );
+
+    const count = (data && data.length > 0) ? data[0].count : 0;
+    return {
+      canSend: count < ANALYSIS_DAILY_LIMIT,
+      remaining: Math.max(0, ANALYSIS_DAILY_LIMIT - count),
+      count: count
+    };
+  } catch (error) {
+    console.error('❌ checkAnalysisUsage error:', error);
+    return { canSend: true, remaining: ANALYSIS_DAILY_LIMIT, count: 0 };
+  }
+}
+
+async function incrementAnalysisUsage(userId) {
+  if (!userId) return;
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const usageId = userId + '_analysis';
+
+    const existing = await supabaseServiceQuery(
+      'GET',
+      `agent_usage?user_id=eq.${encodeURIComponent(usageId)}&usage_date=eq.${today}&select=id,count`
+    );
+
+    if (existing && existing.length > 0) {
+      const row = existing[0];
+      await supabaseServiceQuery(
+        'PATCH',
+        `agent_usage?id=eq.${row.id}`,
+        { count: row.count + 1 }
+      );
+    } else {
+      await supabaseServiceQuery(
+        'POST',
+        'agent_usage',
+        { user_id: usageId, usage_date: today, count: 1 }
+      );
+    }
+
+    console.log(`📊 Analysis usage incremented for ${userId}`);
+  } catch (error) {
+    console.error('❌ incrementAnalysisUsage error:', error);
+  }
+}

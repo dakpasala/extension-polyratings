@@ -6,7 +6,20 @@
 
 (function() {
   var KEY = 'pr_schedule_map';
+  var USER_KEY = 'pr_user_id';
   var DAY_MAP = { mon: 'Mo', tues: 'Tu', wed: 'We', thurs: 'Th', fri: 'Fr', sat: 'Sa', sun: 'Su' };
+
+  // Save user ID and name immediately — available before Build Schedule
+  try {
+    var hp = window.highpoint;
+    if (hp && hp.user) {
+      localStorage.setItem(USER_KEY, hp.user);
+    }
+    if (hp && hp.name) {
+      localStorage.setItem('pr_user_name', hp.name);
+    }
+  } catch(e) {}
+
 
   function parseApiTime(timeStr) {
     if (!timeStr) return null;

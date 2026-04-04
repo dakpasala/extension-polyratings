@@ -48,7 +48,7 @@ Examples:
 
   try {
     const response = await callGroqAPI([
-      { role: "system", content: "You extract structured data from queries. Return only valid JSON." },
+      { role: "system", content: "You extract Cal Poly course codes and professor names from queries. Ignore any non-academic content (coding questions, math problems, general trivia). Return only valid JSON." },
       { role: "user", content: prompt }
     ]);
     
@@ -187,7 +187,7 @@ async function handleRAGQuery(query) {
     }
     
     if (Object.keys(reviewData).length === 0 && Object.keys(professorData).length === 0) {
-      return "I couldn't find any review data for that query. Try asking about a specific Cal Poly professor or course!";
+      return "I'm focused on helping with your Cal Poly schedule and professors! Try asking me about a specific course (like CSC 307) or professor (like Professor Oliver).";
     }
     
     // Step 4: Let the model figure out what to do with the data
@@ -203,7 +203,23 @@ Answer the user's question based on the review data above. Guidelines:
 - Reference professor names when relevant`;
 
     const answer = await callGroqAPI([
-      { role: "system", content: "You are a Cal Poly academic advisor helping students choose courses and professors. Be helpful and specific based on the student review data provided." },
+      { role: "system", content: `You are the PolyRatings Agent — a Cal Poly SLO schedule and professor assistant.
+
+You ONLY help with:
+- Professor ratings, reviews, and teaching style from PolyRatings data
+- Course recommendations, comparisons, and difficulty
+- Schedule building advice (conflicts, workload balance, timing)
+- Cal Poly academic info related to course selection
+
+STRICT RULES:
+- NEVER answer coding questions, solve homework, write code, or explain algorithms
+- NEVER answer general knowledge questions unrelated to Cal Poly courses/professors
+- If the user asks something off-topic (coding, math problems, trivia, etc.), respond ONLY with: "I'm focused on helping with your Cal Poly schedule and professors! Try asking me about a course or professor instead."
+- If a query mixes on-topic and off-topic parts, ONLY answer the on-topic part and ignore the rest
+- Be conversational and helpful (3-4 sentences for on-topic answers)
+- Reference professor names and specific student feedback when relevant
+- DON'T calculate or mention overall course averages (the sample is biased)
+- DO mention what students say about difficulty, workload, teaching style, grading` },
       { role: "user", content: answerPrompt }
     ]);
     
@@ -391,14 +407,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const query = message.query;
-        console.log(`💬 User query: "${query}"`);
+        const userId = message.userId || null;
+        console.log(`💬 User query: "${query}" (user: ${userId})`);
+        
+        // Server-side rate limit check
+        const usage = await checkAgentUsage(userId);
+        if (!usage.canSend) {
+          sendResponse({
+            status: "rate_limited",
+            remaining: 0,
+            message: "Usage limit reached — your limit will reset at 12:00 AM."
+          });
+          return;
+        }
         
         // Try RAG system for all queries
         const answer = await handleRAGQuery(query);
         
+        // Increment usage in Supabase AFTER successful response
+        await incrementAgentUsage(userId);
+        const updated = await checkAgentUsage(userId);
+        
         sendResponse({
           status: "success",
-          professor: { analysis: answer }
+          professor: { analysis: answer },
+          remaining: updated.remaining
         });
         
       } catch (error) {
@@ -411,9 +444,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             await fetchProfessorData();
             const professor = await findProfessor(professorName);
             const analysis = await callGeminiAnalysis(professorName, professor);
+            
+            // Still increment usage on fallback success
+            const userId = message.userId || null;
+            await incrementAgentUsage(userId);
+            const updated = await checkAgentUsage(userId);
+            
             sendResponse({
               status: "success",
               professor: { ...professor, analysis },
+              remaining: updated.remaining
             });
             return;
           } catch (e) {
@@ -496,7 +536,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const courses = message.courses;
-        console.log(`📊 Analyzing schedule with ${courses.length} courses:`, courses);
+        const userId = message.userId || null;
+        console.log(`📊 Analyzing schedule with ${courses.length} courses (user: ${userId}):`, courses);
+        
+        // Server-side rate limit check
+        const usage = await checkAnalysisUsage(userId);
+        if (!usage.canSend) {
+          sendResponse({
+            status: "rate_limited",
+            remaining: 0,
+            message: "You've reached your daily schedule analysis limit (5/day). Try again tomorrow!"
+          });
+          return;
+        }
         
         // Build analysis prompt
         const courseList = courses.map(c => `${c.code} - ${c.title} (${c.units} units)`).join('\n');
@@ -519,17 +571,20 @@ Provide a concise analysis with these 4 sections (use this exact format):
 
 Be encouraging but realistic. No bullet points, no bold formatting, just clear sentences.`;
         
-        // Use correct GROQ API format with messages array
         const messages = [
           { role: "user", content: prompt }
         ];
         
-        // callGroqAPI already returns the content directly (not the full response object)
         const analysis = await callGroqAPI(messages);
+        
+        // Increment usage after successful analysis
+        await incrementAnalysisUsage(userId);
+        const updated = await checkAnalysisUsage(userId);
         
         sendResponse({
           status: "success",
-          analysis: analysis
+          analysis: analysis,
+          remaining: updated.remaining
         });
         
       } catch (error) {
@@ -538,6 +593,41 @@ Be encouraging but realistic. No bullet points, no bold formatting, just clear s
           status: "error",
           message: "Sorry, I couldn't analyze your schedule. Please try again."
         });
+      }
+    })();
+    return true;
+  }
+
+  // Check analysis rate limit
+  if (message.type === "checkAnalysisLimit") {
+    (async () => {
+      try {
+        const usage = await checkAnalysisUsage(message.userId);
+        sendResponse({
+          status: "success",
+          remaining: usage.remaining,
+          canSend: usage.canSend
+        });
+      } catch (error) {
+        sendResponse({ status: "success", remaining: 5, canSend: true });
+      }
+    })();
+    return true;
+  }
+
+  // Check rate limit from DB
+  if (message.type === "checkRateLimit") {
+    (async () => {
+      try {
+        const usage = await checkAgentUsage(message.userId);
+        sendResponse({
+          status: "success",
+          remaining: usage.remaining,
+          canSend: usage.canSend
+        });
+      } catch (error) {
+        console.error("Rate limit check error:", error);
+        sendResponse({ status: "success", remaining: 10, canSend: true });
       }
     })();
     return true;
