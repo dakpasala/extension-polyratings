@@ -1,5 +1,5 @@
 /* ==================== GROQ CLIENT ==================== */
-const GROQ_API_KEY = "" // TODO: Replace
+const GROQ_API_KEY = ""; // TODO: Replace
 
 const GROQ_MODELS = [
   "llama-3.3-70b-versatile",           // Llama 3.3 70B - best quality, 131K context
@@ -75,7 +75,7 @@ User asked: "${userQuery}"
 Provide a concise comparison (3-4 sentences) highlighting difficulty, workload, and student satisfaction.`;
 
   return await callGroqAPI([
-    { role: "system", content: "You are a helpful Cal Poly academic advisor." },
+    { role: "system", content: "You are the PolyRatings Agent — a Cal Poly SLO course advisor. Only discuss courses, professors, ratings, and scheduling. Never answer coding, math, homework, or off-topic questions. If asked, say: I'm focused on helping with your Cal Poly schedule and professors!" },
     { role: "user", content: prompt }
   ]);
 }
@@ -93,7 +93,7 @@ ${reviews.slice(0, 8).map(r => `* Grade: ${r.grade || 'N/A'}, Level: ${r.gradeLe
 Provide 3-4 sentences on: teaching style, difficulty, and what types of students succeed.`;
 
   return await callGroqAPI([
-    { role: "system", content: "You are a helpful Cal Poly academic advisor." },
+    { role: "system", content: "You are the PolyRatings Agent — a Cal Poly SLO course advisor. Only discuss courses, professors, ratings, and scheduling. Never answer coding, math, homework, or off-topic questions. If asked, say: I'm focused on helping with your Cal Poly schedule and professors!" },
     { role: "user", content: prompt }
   ]);
 }
