@@ -536,7 +536,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const courses = message.courses;
-        console.log(`📊 Analyzing schedule with ${courses.length} courses:`, courses);
+        const userId = message.userId || null;
+        console.log(`📊 Analyzing schedule with ${courses.length} courses (user: ${userId}):`, courses);
+        
+        // Server-side rate limit check
+        const usage = await checkAnalysisUsage(userId);
+        if (!usage.canSend) {
+          sendResponse({
+            status: "rate_limited",
+            remaining: 0,
+            message: "You've reached your daily schedule analysis limit (5/day). Try again tomorrow!"
+          });
+          return;
+        }
         
         // Build analysis prompt
         const courseList = courses.map(c => `${c.code} - ${c.title} (${c.units} units)`).join('\n');
@@ -559,17 +571,20 @@ Provide a concise analysis with these 4 sections (use this exact format):
 
 Be encouraging but realistic. No bullet points, no bold formatting, just clear sentences.`;
         
-        // Use correct GROQ API format with messages array
         const messages = [
           { role: "user", content: prompt }
         ];
         
-        // callGroqAPI already returns the content directly (not the full response object)
         const analysis = await callGroqAPI(messages);
+        
+        // Increment usage after successful analysis
+        await incrementAnalysisUsage(userId);
+        const updated = await checkAnalysisUsage(userId);
         
         sendResponse({
           status: "success",
-          analysis: analysis
+          analysis: analysis,
+          remaining: updated.remaining
         });
         
       } catch (error) {
@@ -578,6 +593,23 @@ Be encouraging but realistic. No bullet points, no bold formatting, just clear s
           status: "error",
           message: "Sorry, I couldn't analyze your schedule. Please try again."
         });
+      }
+    })();
+    return true;
+  }
+
+  // Check analysis rate limit
+  if (message.type === "checkAnalysisLimit") {
+    (async () => {
+      try {
+        const usage = await checkAnalysisUsage(message.userId);
+        sendResponse({
+          status: "success",
+          remaining: usage.remaining,
+          canSend: usage.canSend
+        });
+      } catch (error) {
+        sendResponse({ status: "success", remaining: 5, canSend: true });
       }
     })();
     return true;
