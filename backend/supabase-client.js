@@ -330,6 +330,64 @@ async function incrementAgentUsage(userId) {
     console.log(`📊 Usage incremented for ${userId}`);
   } catch (error) {
     console.error('❌ incrementAgentUsage error:', error);
-    // Don't block the user if increment fails
+  }
+}
+
+/* ==================== SCHEDULE ANALYSIS RATE LIMITING ==================== */
+
+const ANALYSIS_DAILY_LIMIT = 5;
+
+async function checkAnalysisUsage(userId) {
+  if (!userId) return { canSend: true, remaining: ANALYSIS_DAILY_LIMIT, count: 0 };
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const data = await supabaseServiceQuery(
+      'GET',
+      `agent_usage?user_id=eq.${encodeURIComponent(userId + '_analysis')}&usage_date=eq.${today}&select=count`
+    );
+
+    const count = (data && data.length > 0) ? data[0].count : 0;
+    return {
+      canSend: count < ANALYSIS_DAILY_LIMIT,
+      remaining: Math.max(0, ANALYSIS_DAILY_LIMIT - count),
+      count: count
+    };
+  } catch (error) {
+    console.error('❌ checkAnalysisUsage error:', error);
+    return { canSend: true, remaining: ANALYSIS_DAILY_LIMIT, count: 0 };
+  }
+}
+
+async function incrementAnalysisUsage(userId) {
+  if (!userId) return;
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const usageId = userId + '_analysis';
+
+    const existing = await supabaseServiceQuery(
+      'GET',
+      `agent_usage?user_id=eq.${encodeURIComponent(usageId)}&usage_date=eq.${today}&select=id,count`
+    );
+
+    if (existing && existing.length > 0) {
+      const row = existing[0];
+      await supabaseServiceQuery(
+        'PATCH',
+        `agent_usage?id=eq.${row.id}`,
+        { count: row.count + 1 }
+      );
+    } else {
+      await supabaseServiceQuery(
+        'POST',
+        'agent_usage',
+        { user_id: usageId, usage_date: today, count: 1 }
+      );
+    }
+
+    console.log(`📊 Analysis usage incremented for ${userId}`);
+  } catch (error) {
+    console.error('❌ incrementAnalysisUsage error:', error);
   }
 }
