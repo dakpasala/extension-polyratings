@@ -272,15 +272,42 @@ function openAnalysisPopup(courses) {
   });
   
   // Send to background for analysis
+  const userId = localStorage.getItem('pr_user_id') || null;
   chrome.runtime.sendMessage(
     {
       type: 'analyzeSchedule',
-      courses: courses
+      courses: courses,
+      userId: userId
     },
     (response) => {
       // Remove typing indicator and analyzing message
       typingIndicator.remove();
       analyzingMsg.remove();
+
+      if (response?.status === 'rate_limited') {
+        // Show limit reached inside the popup
+        const limitMsg = document.createElement('div');
+        limitMsg.style.cssText = `
+          background: white; padding: 20px; border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          border-left: 4px solid #F59E0B;
+          text-align: center;
+          opacity: 0;
+          animation: fadeInResult 0.4s ease-out forwards;
+        `;
+        limitMsg.innerHTML = `
+          <div style="font-size: 28px; margin-bottom: 10px;">📊</div>
+          <div style="font-weight: 600; color: #333; font-size: 15px; margin-bottom: 8px;">
+            Daily Limit Reached
+          </div>
+          <div style="color: #666; font-size: 13px; line-height: 1.5;">
+            You've used all 5 schedule analyses for today.<br>
+            Your limit resets at 12:00 AM.
+          </div>
+        `;
+        messagesArea.appendChild(limitMsg);
+        return;
+      }
       
       // Show result with better formatting and smooth animation
       const resultMsg = document.createElement('div');
@@ -291,13 +318,15 @@ function openAnalysisPopup(courses) {
         opacity: 0;
         animation: fadeInResult 0.4s ease-out forwards;
       `;
+
+      // Show remaining count
+      const remainingText = response?.remaining != null
+        ? `<div style="font-size: 11px; color: #999; margin-top: 12px; text-align: right;">${response.remaining} analysis${response.remaining === 1 ? '' : 'es'} remaining today</div>`
+        : '';
       
       if (response?.status === 'success') {
-        // Parse and format the analysis
         let formattedAnalysis = response.analysis
-          // Remove ** markdown
           .replace(/\*\*/g, '')
-          // Convert numbered lists to styled divs
           .split(/\d+\.\s+/)
           .filter(Boolean)
           .map((section, index) => {
@@ -323,6 +352,7 @@ function openAnalysisPopup(courses) {
             Your Schedule Analysis
           </div>
           ${formattedAnalysis}
+          ${remainingText}
         `;
       } else {
         resultMsg.innerHTML = `
@@ -346,8 +376,77 @@ function analyzeSchedule() {
     return;
   }
   
-  // Open analysis popup (separate from agent)
-  openAnalysisPopup(courses);
+  // Check rate limit from DB before opening popup
+  const userId = localStorage.getItem('pr_user_id') || null;
+  chrome.runtime.sendMessage(
+    { type: 'checkAnalysisLimit', userId: userId },
+    (response) => {
+      if (response?.canSend === false) {
+        // Show a clean inline limit message instead of popup
+        showAnalysisLimitMessage();
+      } else {
+        openAnalysisPopup(courses);
+      }
+    }
+  );
+}
+
+function showAnalysisLimitMessage() {
+  // Close any existing
+  const existing = document.querySelector('.pr-analysis-limit-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'pr-analysis-limit-toast';
+  toast.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+    padding: 28px 32px;
+    z-index: 10001;
+    text-align: center;
+    max-width: 360px;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+  `;
+  toast.innerHTML = `
+    <div style="font-size: 32px; margin-bottom: 12px;">📊</div>
+    <div style="font-weight: 600; font-size: 16px; color: #333; margin-bottom: 8px;">
+      Daily Limit Reached
+    </div>
+    <div style="color: #666; font-size: 14px; line-height: 1.5; margin-bottom: 16px;">
+      You've used all 5 schedule analyses for today. Your limit resets at 12:00 AM.
+    </div>
+    <button style="
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white; border: none; border-radius: 10px;
+      padding: 10px 28px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: transform 0.15s;
+    ">Got it</button>
+  `;
+
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => { toast.style.opacity = '1'; });
+
+  toast.querySelector('button').addEventListener('click', () => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 200);
+  });
+
+  // Also close on click outside
+  setTimeout(() => {
+    document.addEventListener('click', function handler(e) {
+      if (!toast.contains(e.target)) {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 200);
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 100);
 }
 
 // Initialize only when DOM is ready, but don't parse courses yet
