@@ -366,21 +366,36 @@ function renderHistoryView(messagesArea) {
     backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
     backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
     backBtn.addEventListener('click', () => {
-      // Remove sticky header before going back
+      // Fade out both the sticky header and messages together, then swap
       const existingHeader = popup.querySelector('.pr-history-sticky-header');
-      if (existingHeader) existingHeader.remove();
-      if (backToTop && backToTop.parentNode === popup) backToTop.remove();
-      messagesArea.style.transition = 'opacity 0.15s ease-out';
-      messagesArea.style.opacity = '0';
+      const fadeTargets = [messagesArea];
+      if (existingHeader) fadeTargets.push(existingHeader);
+
+      fadeTargets.forEach(el => {
+        el.style.transition = 'opacity 0.18s ease-out';
+        el.style.opacity = '0';
+      });
+
       setTimeout(() => {
+        // Clean up history UI
+        if (existingHeader) existingHeader.remove();
+        if (backToTop && backToTop.parentNode === popup) backToTop.remove();
+
+        // Restore chat view
         if (inputArea) inputArea.style.display = 'flex';
         if (limitBanner) limitBanner.style.display = 'flex';
         messagesArea.innerHTML = '';
-        messagesArea.style.paddingTop = "16px";
+        messagesArea.style.paddingTop = '16px';
+        messagesArea.style.transition = 'none';
+        messagesArea.style.opacity = '0';
         renderWelcomeState(messagesArea);
-        messagesArea.style.transition = 'opacity 0.2s ease-in';
-        messagesArea.style.opacity = '1';
-      }, 150);
+
+        // Fade in cleanly on next frame
+        requestAnimationFrame(() => {
+          messagesArea.style.transition = 'opacity 0.22s ease-in';
+          messagesArea.style.opacity = '1';
+        });
+      }, 180);
     });
 
     const selectBtn = document.createElement('div');
@@ -395,7 +410,7 @@ function renderHistoryView(messagesArea) {
 
     // Search bar
     const searchWrap = document.createElement('div');
-    searchWrap.style.cssText = 'position:relative;margin-bottom:10px;';
+    searchWrap.style.cssText = 'position:relative;margin-bottom:10px;transform-origin:top center;';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.placeholder = 'Search messages…';
@@ -547,17 +562,20 @@ function renderHistoryView(messagesArea) {
       // Fade search bar
       if (scrolled && !searchCollapsed) {
         searchCollapsed = true;
-        searchWrap.style.transition = 'opacity 0.2s, max-height 0.25s ease, margin-bottom 0.25s ease';
+        searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
         searchWrap.style.opacity = '0';
         searchWrap.style.maxHeight = '0';
         searchWrap.style.marginBottom = '0';
-        searchWrap.style.overflow = 'hidden';
+        searchWrap.style.transform = 'translateY(-4px) scaleY(0.95)';
         searchWrap.style.pointerEvents = 'none';
       } else if (!scrolled && searchCollapsed) {
         searchCollapsed = false;
+        searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
         searchWrap.style.opacity = '1';
-        searchWrap.style.maxHeight = '50px';
+        searchWrap.style.maxHeight = "50px";
+    searchWrap.style.transform = "translateY(0) scaleY(1)";
         searchWrap.style.marginBottom = '10px';
+        searchWrap.style.transform = 'translateY(0) scaleY(1)';
         searchWrap.style.pointerEvents = '';
       }
 
@@ -574,7 +592,8 @@ function renderHistoryView(messagesArea) {
     });
 
     // Set initial max-height so the collapse transition works
-    searchWrap.style.maxHeight = '50px';
+    searchWrap.style.maxHeight = "50px";
+    searchWrap.style.transform = "translateY(0) scaleY(1)";
     searchWrap.style.overflow = 'hidden';
 
     messagesArea.style.transition = 'opacity 0.2s ease-in';
