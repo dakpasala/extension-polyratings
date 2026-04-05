@@ -291,41 +291,46 @@ async function findProfessor(profName) {
   return await findProfessorByName(profName);
 }
 
-/* ==================== AI SUMMARIES (GITHUB) ==================== */
-
-const AI_SUMMARIES_URL =
-  "https://raw.githubusercontent.com/dakpasala/polyratings-ai-generator/main/summaries/ai_summaries.json";
-
-let aiSummariesCache = null;
-
-async function fetchAISummaries() {
-  if (aiSummariesCache) return aiSummariesCache;
-  try {
-    console.log("🌐 Fetching AI summaries...");
-    const res = await fetch(AI_SUMMARIES_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    aiSummariesCache = await res.json();
-    console.log(`✅ Loaded ${Object.keys(aiSummariesCache).length} summaries`);
-    return aiSummariesCache;
-  } catch (err) {
-    console.error("❌ Failed to fetch summaries:", err);
-    aiSummariesCache = {};
-    return {};
-  }
-}
+/* ==================== AI SUMMARIES (SUPABASE) ==================== */
 
 function noRatingsMessage(profName) {
   return `No PolyRatings found. Try asking classmates or other professors for insights.\n\nhttps://polyratings.dev/new-professor`;
 }
 
-async function callGeminiTooltipAnalysis(profName) {
-  const summaries = await fetchAISummaries();
-  const key = Object.keys(summaries).find(
-    (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
-  );
+// Write a newly generated summary back to the DB so we don't re-generate next time
+async function saveSummaryToDB(profName, summary, link = null) {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/ai_summaries`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({
+        professor_name: profName,
+        summary: summary,
+        polyratings_link: link || null
+      })
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      console.error(`❌ Failed to save summary for ${profName}:`, err);
+    } else {
+      console.log(`💾 Saved summary to DB for ${profName}`);
+    }
+  } catch (error) {
+    console.error(`❌ saveSummaryToDB error for ${profName}:`, error);
+  }
+}
 
-  if (key) {
-    let summary = summaries[key];
+async function callGeminiTooltipAnalysis(profName) {
+  // Step 1: Check precomputed AI summaries from Supabase DB
+  const precomputed = await getPrecomputedSummary(profName);
+  if (precomputed?.summary) {
+    let summary = precomputed.summary;
     if (summary.includes("\n\nProfessor")) {
       summary = "Professor" + summary.split("\n\nProfessor")[1];
     }
@@ -334,23 +339,79 @@ async function callGeminiTooltipAnalysis(profName) {
     return summary;
   }
 
-  return "No PolyRatings found. Try asking classmates for insights.";
+  // Step 2: No precomputed summary — generate from DB reviews
+  console.log(`🔄 No precomputed summary for ${profName}, generating from reviews...`);
+  try {
+    const reviews = await getReviewsByProfessor(profName, 15);
+    
+    if (reviews.length === 0) {
+      return "No PolyRatings found. Try asking classmates for insights.";
+    }
+
+    const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
+    const reviewSnippets = reviews.slice(0, 8).map(r => 
+      `- "${r.text.substring(0, 150)}..." [${r.rating}/4.0, ${r.course || 'Unknown'}${r.grade ? ', Grade: ' + r.grade : ''}]`
+    ).join('\n');
+
+    const prompt = `Summarize this professor in 3-4 sentences based on student reviews. Focus on teaching style, difficulty, and what students say. Be conversational.
+
+Professor: ${profName}
+Average Rating: ${avgRating}/4.0 (${reviews.length} reviews)
+
+Reviews:
+${reviewSnippets}`;
+
+    const summary = await callGroqAPI([
+      { role: "system", content: "You summarize professor reviews concisely. 3-4 sentences max. No links, no formatting. Be helpful and specific." },
+      { role: "user", content: prompt }
+    ]);
+
+    console.log(`✅ Generated live summary for ${profName}`);
+
+    // Write back to DB so we don't regenerate next time
+    await saveSummaryToDB(profName, summary, null);
+
+    return summary;
+  } catch (error) {
+    console.error(`❌ Live summary generation failed for ${profName}:`, error);
+    return "No PolyRatings found. Try asking classmates for insights.";
+  }
 }
 
 async function callGeminiAnalysis(profName, professorData = null) {
-  const summaries = await fetchAISummaries();
-  const key = Object.keys(summaries).find(
-    (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
-  );
-
-  if (key) {
-    let summary = summaries[key];
+  // Step 1: Check precomputed AI summaries from Supabase DB
+  const precomputed = await getPrecomputedSummary(profName);
+  if (precomputed?.summary) {
+    let summary = precomputed.summary;
     if (summary.includes("\n\nProfessor")) {
       summary = "Professor" + summary.split("\n\nProfessor")[1];
     }
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
-    return `${summary}\n\n${professorData?.link || ""}`;
+    return `${summary}\n\n${precomputed.link || professorData?.link || ""}`;
+  }
+
+  // No precomputed summary — generate from DB reviews
+  try {
+    const reviews = await getReviewsByProfessor(profName, 15);
+    if (reviews.length > 0) {
+      const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
+      const reviewSnippets = reviews.slice(0, 8).map(r =>
+        `- "${r.text.substring(0, 150)}..." [${r.rating}/4.0, ${r.course || 'Unknown'}${r.grade ? ', Grade: ' + r.grade : ''}]`
+      ).join('\n');
+
+      const summary = await callGroqAPI([
+        { role: "system", content: "You summarize professor reviews concisely. 3-4 sentences max. No links, no formatting. Be helpful and specific." },
+        { role: "user", content: `Summarize this professor based on student reviews. Focus on teaching style, difficulty, and student experience.\n\nProfessor: ${profName}\nAverage Rating: ${avgRating}/4.0 (${reviews.length} reviews)\n\nReviews:\n${reviewSnippets}` }
+      ]);
+
+      // Write back to DB so we don't regenerate next time
+      await saveSummaryToDB(profName, summary, professorData?.link || null);
+
+      return `${summary}\n\n${professorData?.link || ""}`;
+    }
+  } catch (error) {
+    console.error(`❌ Live summary failed for ${profName}:`, error);
   }
 
   return noRatingsMessage(profName);

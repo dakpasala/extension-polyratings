@@ -391,3 +391,26 @@ async function incrementAnalysisUsage(userId) {
     console.error('❌ incrementAnalysisUsage error:', error);
   }
 }
+
+/* ==================== AI SUMMARY QUERIES ==================== */
+
+async function getPrecomputedSummary(profName) {
+  try {
+    // We search using ilike to handle minor casing differences
+    const data = await supabaseQuery('ai_summaries', {
+      ilike: { professor_name: profName },
+      limit: 1
+    });
+
+    if (data && data.length > 0) {
+      return {
+        summary: data[0].summary,
+        link: data[0].polyratings_link
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error(`❌ Failed to fetch summary for ${profName}:`, error);
+    return null;
+  }
+}
