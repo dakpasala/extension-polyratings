@@ -53,13 +53,15 @@ const BRAND = { green: '#154734', greenLight: 'rgba(21, 71, 52, 0.08)', greenMid
 // ==================== CHAT HISTORY (localStorage) ====================
 const CHAT_HISTORY = { STORAGE_KEY: 'pr_agent_history' };
 
-function saveChatMessage(role, text) {
+function saveChatMessage(role, text, comparisonData) {
   const now = new Date();
   const dateKey = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   let history = {};
   try { const s = localStorage.getItem(CHAT_HISTORY.STORAGE_KEY); if (s) history = JSON.parse(s); } catch(e) {}
   if (!history[dateKey]) history[dateKey] = [];
-  history[dateKey].push({ role, text, time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) });
+  const entry = { role, text, time: now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) };
+  if (comparisonData) entry.comparisonData = comparisonData;
+  history[dateKey].push(entry);
   localStorage.setItem(CHAT_HISTORY.STORAGE_KEY, JSON.stringify(history));
 }
 
@@ -181,7 +183,7 @@ function showRateLimitBanner(popup, remaining) {
 }
 
 // ==================== COMPARISON CARD ====================
-function addComparisonCard(container, data) {
+function addComparisonCard(container, data, skipSave) {
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'margin-bottom:12px;animation:agentSlideInL 0.25s ease-out;';
 
@@ -322,11 +324,11 @@ function addComparisonCard(container, data) {
   wrapper.appendChild(time);
 
   container.appendChild(wrapper);
-  container.scrollTop = container.scrollHeight;
+  if (container.scrollTop !== undefined && container.className === "agent-messages") container.scrollTop = container.scrollHeight;
 
   // Save a text summary to history
   const historyText = `[Comparison] ${data.items.map(i => `${i.name} (${i.rating}/4.0)`).join(' vs ')}. ${data.verdict || ''}`;
-  saveChatMessage('bot', historyText);
+  if (!skipSave) saveChatMessage("bot", historyText, data);
 }
 
 // ==================== HISTORY VIEW ====================
@@ -527,20 +529,40 @@ function renderFullHistory(container, history, dates) {
       const isUser = msg.role === 'user';
       row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:6px;transition:background 0.3s,padding-left 0.2s;padding:2px 4px;border-radius:8px;position:relative;`;
 
-      const bubble = document.createElement('div');
-      bubble.style.cssText = isUser
-        ? `background:${BRAND.green};color:#fff;padding:8px 14px;border-radius:14px 14px 4px 14px;max-width:80%;font-size:13px;word-wrap:break-word;line-height:1.5;`
-        : `background:#f5f5f5;color:#333;padding:8px 14px;border-radius:14px 14px 14px 4px;max-width:80%;font-size:13px;word-wrap:break-word;line-height:1.5;`;
-      if (isUser) bubble.textContent = msg.text;
-      else bubble.innerHTML = formatBotMessage(convertLinksToHTML(msg.text));
+      // If this message has stored comparison data, render the full card instead of a bubble
+      if (!isUser && msg.comparisonData) {
+        // Skip the flex row wrapper — render card directly into container so layout isn't squished
+        // Still wrap in a div that carries the select attributes for select/delete to work
+        const cardWrap = document.createElement('div');
+        cardWrap.id = row.id;
+        cardWrap.setAttribute('data-select-row', 'true');
+        cardWrap.setAttribute('data-select-key', `${dateKey}::${idx}`);
+        cardWrap.setAttribute('data-select-role', msg.role);
+        cardWrap.style.cssText = 'position:relative;margin-bottom:6px;transition:background 0.3s,padding-left 0.2s;';
+        addComparisonCard(cardWrap, msg.comparisonData, true);
+        // Fix time to use stored time — the time div is the last child of the wrapper inside cardWrap
+        const innerWrapper = cardWrap.firstChild;
+        if (innerWrapper) {
+          const cardTime = innerWrapper.lastChild;
+          if (cardTime) cardTime.textContent = msg.time;
+        }
+        container.appendChild(cardWrap);
+      } else {
+        const bubble = document.createElement('div');
+        bubble.style.cssText = isUser
+          ? `background:${BRAND.green};color:#fff;padding:8px 14px;border-radius:14px 14px 4px 14px;max-width:80%;font-size:13px;word-wrap:break-word;line-height:1.5;`
+          : `background:#f5f5f5;color:#333;padding:8px 14px;border-radius:14px 14px 14px 4px;max-width:80%;font-size:13px;word-wrap:break-word;line-height:1.5;`;
+        if (isUser) bubble.textContent = msg.text;
+        else bubble.innerHTML = formatBotMessage(convertLinksToHTML(msg.text));
 
-      const time = document.createElement('div');
-      time.style.cssText = 'font-size:10px;color:#ccc;margin-top:2px;padding:0 4px;';
-      time.textContent = msg.time;
+        const time = document.createElement('div');
+        time.style.cssText = 'font-size:10px;color:#ccc;margin-top:2px;padding:0 4px;';
+        time.textContent = msg.time;
 
-      row.appendChild(bubble);
-      row.appendChild(time);
-      container.appendChild(row);
+        row.appendChild(bubble);
+        row.appendChild(time);
+        container.appendChild(row);
+      }
     });
   });
 }
@@ -658,7 +680,7 @@ function addUserMessage(container, message) {
   wrapper.appendChild(bubble);
   wrapper.appendChild(time);
   container.appendChild(wrapper);
-  container.scrollTop = container.scrollHeight;
+  if (container.scrollTop !== undefined && container.className === "agent-messages") container.scrollTop = container.scrollHeight;
   saveChatMessage('user', message);
 }
 
@@ -674,7 +696,7 @@ function addBotMessage(container, message) {
   wrapper.appendChild(bubble);
   wrapper.appendChild(time);
   container.appendChild(wrapper);
-  container.scrollTop = container.scrollHeight;
+  if (container.scrollTop !== undefined && container.className === "agent-messages") container.scrollTop = container.scrollHeight;
   saveChatMessage('bot', message);
 }
 
@@ -685,7 +707,7 @@ function addTypingIndicator(container) {
   el.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 14px;background:#f5f5f5;border-radius:16px 16px 16px 4px;margin-right:48px;margin-bottom:10px;width:fit-content;animation:agentSlideInL 0.2s ease-out;';
   el.innerHTML = `<div style="display:flex;gap:3px;">${[0,0.15,0.3].map(d=>`<div style="width:5px;height:5px;border-radius:50%;background:#999;animation:agentTyping 1.2s infinite ease-in-out ${d}s;"></div>`).join('')}</div>`;
   container.appendChild(el);
-  container.scrollTop = container.scrollHeight;
+  if (container.scrollTop !== undefined && container.className === "agent-messages") container.scrollTop = container.scrollHeight;
   return id;
 }
 
