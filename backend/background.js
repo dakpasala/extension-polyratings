@@ -319,6 +319,7 @@ function noRatingsMessage(profName) {
 }
 
 async function callGeminiTooltipAnalysis(profName) {
+  // Step 1: Check precomputed AI summaries first (fast)
   const summaries = await fetchAISummaries();
   const key = Object.keys(summaries).find(
     (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
@@ -334,7 +335,40 @@ async function callGeminiTooltipAnalysis(profName) {
     return summary;
   }
 
-  return "No PolyRatings found. Try asking classmates for insights.";
+  // Step 2: No precomputed summary — try generating one from DB reviews
+  console.log(`🔄 No precomputed summary for ${profName}, generating from reviews...`);
+  try {
+    const reviews = await getReviewsByProfessor(profName, 15);
+    
+    if (reviews.length === 0) {
+      return "No PolyRatings found. Try asking classmates for insights.";
+    }
+
+    // Build a concise prompt from the reviews
+    const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
+    const reviewSnippets = reviews.slice(0, 8).map(r => 
+      `- "${r.text.substring(0, 150)}..." [${r.rating}/4.0, ${r.course || 'Unknown'}${r.grade ? ', Grade: ' + r.grade : ''}]`
+    ).join('\n');
+
+    const prompt = `Summarize this professor in 3-4 sentences based on student reviews. Focus on teaching style, difficulty, and what students say. Be conversational.
+
+Professor: ${profName}
+Average Rating: ${avgRating}/4.0 (${reviews.length} reviews)
+
+Reviews:
+${reviewSnippets}`;
+
+    const summary = await callGroqAPI([
+      { role: "system", content: "You summarize professor reviews concisely. 3-4 sentences max. No links, no formatting. Be helpful and specific." },
+      { role: "user", content: prompt }
+    ]);
+
+    console.log(`✅ Generated live summary for ${profName}`);
+    return summary;
+  } catch (error) {
+    console.error(`❌ Live summary generation failed for ${profName}:`, error);
+    return "No PolyRatings found. Try asking classmates for insights.";
+  }
 }
 
 async function callGeminiAnalysis(profName, professorData = null) {
@@ -351,6 +385,25 @@ async function callGeminiAnalysis(profName, professorData = null) {
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
     return `${summary}\n\n${professorData?.link || ""}`;
+  }
+
+  // No precomputed summary — try generating from DB reviews
+  try {
+    const reviews = await getReviewsByProfessor(profName, 15);
+    if (reviews.length > 0) {
+      const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
+      const reviewSnippets = reviews.slice(0, 8).map(r =>
+        `- "${r.text.substring(0, 150)}..." [${r.rating}/4.0, ${r.course || 'Unknown'}${r.grade ? ', Grade: ' + r.grade : ''}]`
+      ).join('\n');
+
+      const summary = await callGroqAPI([
+        { role: "system", content: "You summarize professor reviews concisely. 3-4 sentences max. No links, no formatting. Be helpful and specific." },
+        { role: "user", content: `Summarize this professor based on student reviews. Focus on teaching style, difficulty, and student experience.\n\nProfessor: ${profName}\nAverage Rating: ${avgRating}/4.0 (${reviews.length} reviews)\n\nReviews:\n${reviewSnippets}` }
+      ]);
+      return `${summary}\n\n${professorData?.link || ""}`;
+    }
+  } catch (error) {
+    console.error(`❌ Live summary failed for ${profName}:`, error);
   }
 
   return noRatingsMessage(profName);
