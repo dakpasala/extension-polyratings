@@ -180,6 +180,155 @@ function showRateLimitBanner(popup, remaining) {
   }
 }
 
+// ==================== COMPARISON CARD ====================
+function addComparisonCard(container, data) {
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'margin-bottom:12px;animation:agentSlideInL 0.25s ease-out;';
+
+  // Find the winner by rating
+  const sorted = [...data.items].sort((a, b) => b.rating - a.rating);
+  const winnerId = sorted[0]?.name;
+
+  // Rating star helper
+  function ratingDots(rating) {
+    const max = 4;
+    const filled = Math.round(rating);
+    let html = '<div style="display:flex;gap:3px;align-items:center;">';
+    for (let i = 1; i <= max; i++) {
+      html += `<div style="width:7px;height:7px;border-radius:50%;background:${i <= filled ? BRAND.green : '#e0e0e0'};"></div>`;
+    }
+    html += `<span style="font-size:11px;color:#888;margin-left:4px;">${parseFloat(rating).toFixed(1)}</span>`;
+    html += '</div>';
+    return html;
+  }
+
+  // Difficulty badge color
+  function diffColor(diff) {
+    if (!diff) return '#999';
+    const d = diff.toLowerCase();
+    if (d === 'easy') return '#16a34a';
+    if (d === 'medium') return '#d97706';
+    if (d === 'hard') return '#dc2626';
+    return '#888';
+  }
+
+  // Cards grid
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;';
+
+  data.items.forEach(item => {
+    const isWinner = item.name === winnerId;
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background:#fafafa;
+      border:1.5px solid ${isWinner ? BRAND.green : '#ebebeb'};
+      border-radius:12px;
+      padding:12px;
+      position:relative;
+      transition:border-color 0.15s;
+    `;
+
+    // Winner badge
+    if (isWinner) {
+      const badge = document.createElement('div');
+      badge.style.cssText = `
+        position:absolute;top:-1px;right:10px;
+        background:${BRAND.green};color:white;
+        font-size:9px;font-weight:600;letter-spacing:0.04em;
+        padding:2px 7px;border-radius:0 0 6px 6px;
+        text-transform:uppercase;
+      `;
+      badge.textContent = 'Top pick';
+      card.appendChild(badge);
+    }
+
+    // Name
+    const name = document.createElement('div');
+    name.style.cssText = 'font-size:13px;font-weight:600;color:#222;margin-bottom:6px;line-height:1.3;padding-right:4px;';
+    name.textContent = item.name;
+    card.appendChild(name);
+
+    // Rating dots
+    const ratingEl = document.createElement('div');
+    ratingEl.style.cssText = 'margin-bottom:5px;';
+    ratingEl.innerHTML = ratingDots(item.rating);
+    card.appendChild(ratingEl);
+
+    // Review count
+    if (item.reviewCount) {
+      const reviewCount = document.createElement('div');
+      reviewCount.style.cssText = 'font-size:10px;color:#bbb;margin-bottom:6px;';
+      reviewCount.textContent = `${item.reviewCount} review${item.reviewCount === 1 ? '' : 's'}`;
+      card.appendChild(reviewCount);
+    }
+
+    // Difficulty badge
+    if (item.difficulty) {
+      const diff = document.createElement('div');
+      diff.style.cssText = `
+        display:inline-block;font-size:10px;font-weight:600;
+        color:${diffColor(item.difficulty)};
+        background:${diffColor(item.difficulty)}18;
+        padding:2px 7px;border-radius:20px;margin-bottom:7px;
+      `;
+      diff.textContent = item.difficulty;
+      card.appendChild(diff);
+    }
+
+    // Tags
+    if (item.tags && item.tags.length > 0) {
+      const tagsEl = document.createElement('div');
+      tagsEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px;';
+      item.tags.slice(0, 3).forEach(tag => {
+        const t = document.createElement('div');
+        t.style.cssText = 'font-size:10px;color:#666;background:#f0f0f0;padding:2px 6px;border-radius:10px;';
+        t.textContent = tag;
+        tagsEl.appendChild(t);
+      });
+      card.appendChild(tagsEl);
+    }
+
+    // Summary
+    if (item.summary) {
+      const summary = document.createElement('div');
+      summary.style.cssText = 'font-size:11px;color:#777;line-height:1.5;border-top:1px solid #f0f0f0;padding-top:7px;margin-top:2px;';
+      summary.textContent = item.summary;
+      card.appendChild(summary);
+    }
+
+    grid.appendChild(card);
+  });
+
+  wrapper.appendChild(grid);
+
+  // Verdict bar
+  if (data.verdict) {
+    const verdict = document.createElement('div');
+    verdict.style.cssText = `
+      background:${BRAND.greenLight};
+      border-left:3px solid ${BRAND.green};
+      border-radius:0 8px 8px 0;
+      padding:9px 12px;
+      font-size:12px;color:#333;line-height:1.5;
+    `;
+    verdict.innerHTML = `<span style="font-weight:600;color:${BRAND.green};">Verdict: </span>${data.verdict}`;
+    wrapper.appendChild(verdict);
+  }
+
+  // Timestamp
+  const time = document.createElement('div');
+  time.style.cssText = 'font-size:10px;color:#ccc;margin-top:4px;padding:0 2px;';
+  time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  wrapper.appendChild(time);
+
+  container.appendChild(wrapper);
+  container.scrollTop = container.scrollHeight;
+
+  // Save a text summary to history
+  const historyText = `[Comparison] ${data.items.map(i => `${i.name} (${i.rating}/4.0)`).join(' vs ')}. ${data.verdict || ''}`;
+  saveChatMessage('bot', historyText);
+}
+
 // ==================== HISTORY VIEW ====================
 function renderHistoryView(messagesArea) {
   const history = getChatHistory();
@@ -463,7 +612,6 @@ function renderSearchResults(container, term, messagesArea) {
 
 // ==================== WELCOME STATE ====================
 function renderWelcomeState(messagesArea) {
-  // Get user name from localStorage (set by highpoint bridge)
   const userName = localStorage.getItem('pr_user_name') || '';
   const firstName = userName.split(' ')[0] || '';
   const greeting = firstName ? `Hi ${firstName}` : 'Hi there';
@@ -478,7 +626,7 @@ function renderWelcomeState(messagesArea) {
   `;
   messagesArea.appendChild(welcome);
 
-  // Suggestion chips — updated labels
+  // Suggestion chips
   const chips = document.createElement('div');
   chips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;';
   ['Compare professors', 'Compare classes', 'Who is the best professor?', 'Course difficulty'].forEach(label => {
@@ -634,17 +782,29 @@ function openAgentPopup(button) {
     chrome.runtime.sendMessage({ type: 'chatbotQuery', query: msg, userId }, (response) => {
       const typing = document.getElementById(typingId);
       if (typing) typing.remove();
+
       if (response?.status === 'rate_limited') {
         showRateLimitBanner(popup, 0);
         addBotMessage(messagesArea, "You've reached your daily limit. It resets at 12:00 AM.");
+
       } else if (response?.status === 'success' || response?.status === 'ai_analysis') {
-        addBotMessage(messagesArea, response.professor.analysis);
+        const result = response.professor.analysis;
+        // Check if backend returned structured comparison JSON
+        if (result && typeof result === 'object' && result.type === 'comparison') {
+          addComparisonCard(messagesArea, result.data);
+        } else {
+          // Plain text response (string or { type: 'text', data: '...' })
+          const text = (result && typeof result === 'object' && result.data) ? result.data : result;
+          addBotMessage(messagesArea, text);
+        }
         const rem = response.remaining != null ? response.remaining : 10;
         showRateLimitBanner(popup, rem);
+
       } else if (response?.status === 'general_response') {
         addBotMessage(messagesArea, response.message);
         const rem = response.remaining != null ? response.remaining : 10;
         showRateLimitBanner(popup, rem);
+
       } else {
         addBotMessage(messagesArea, "Sorry, I couldn't process that. Try asking about a course or professor.");
       }
