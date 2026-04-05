@@ -351,6 +351,11 @@ function renderHistoryView(messagesArea) {
     let selectMode = false;
     const selectedMessages = new Set();
 
+    // ── Sticky header injected into popup above messagesArea ──
+    const stickyHeader = document.createElement('div');
+    stickyHeader.className = 'pr-history-sticky-header';
+    stickyHeader.style.cssText = 'background:#fff;padding:10px 16px 0;border-bottom:1px solid #f0f0f0;flex-shrink:0;';
+
     // Top bar
     const topBar = document.createElement('div');
     topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
@@ -361,12 +366,17 @@ function renderHistoryView(messagesArea) {
     backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
     backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
     backBtn.addEventListener('click', () => {
+      // Remove sticky header before going back
+      const existingHeader = popup.querySelector('.pr-history-sticky-header');
+      if (existingHeader) existingHeader.remove();
+      if (backToTop && backToTop.parentNode === popup) backToTop.remove();
       messagesArea.style.transition = 'opacity 0.15s ease-out';
       messagesArea.style.opacity = '0';
       setTimeout(() => {
         if (inputArea) inputArea.style.display = 'flex';
         if (limitBanner) limitBanner.style.display = 'flex';
         messagesArea.innerHTML = '';
+        messagesArea.style.paddingTop = "16px";
         renderWelcomeState(messagesArea);
         messagesArea.style.transition = 'opacity 0.2s ease-in';
         messagesArea.style.opacity = '1';
@@ -381,11 +391,11 @@ function renderHistoryView(messagesArea) {
 
     topBar.appendChild(backBtn);
     topBar.appendChild(selectBtn);
-    messagesArea.appendChild(topBar);
+    stickyHeader.appendChild(topBar);
 
     // Search bar
     const searchWrap = document.createElement('div');
-    searchWrap.style.cssText = 'position:relative;margin-bottom:12px;';
+    searchWrap.style.cssText = 'position:relative;margin-bottom:10px;';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.placeholder = 'Search messages…';
@@ -397,9 +407,13 @@ function renderHistoryView(messagesArea) {
     searchIcon.style.cssText = 'position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;';
     searchWrap.appendChild(searchIcon);
     searchWrap.appendChild(searchInput);
-    messagesArea.appendChild(searchWrap);
+    stickyHeader.appendChild(searchWrap);
 
-    // Content area
+    // Insert sticky header into popup above the messagesArea
+    popup.insertBefore(stickyHeader, messagesArea);
+    messagesArea.style.paddingTop = "8px";
+
+    // Content area (this is all that scrolls now)
     const contentArea = document.createElement('div');
     contentArea.className = 'history-content-area';
     messagesArea.appendChild(contentArea);
@@ -502,6 +516,66 @@ function renderHistoryView(messagesArea) {
         }, 120);
       }, 200);
     });
+
+    // ── "Back to top" pill — pinned to popup bottom center ──
+    const backToTop = document.createElement('div');
+    backToTop.style.cssText = `
+      position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(16px);
+      background:${BRAND.green}; color:white;
+      font-size:11px; font-weight:600; letter-spacing:0.02em;
+      padding:7px 16px; border-radius:20px;
+      display:flex; align-items:center; gap:5px;
+      cursor:pointer; opacity:0; pointer-events:none;
+      transition:opacity 0.25s ease, transform 0.25s ease;
+      white-space:nowrap; z-index:100;
+      box-shadow: 0 3px 12px rgba(21,71,52,0.3);
+    `;
+    backToTop.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg> Back to top`;
+    backToTop.addEventListener('click', () => {
+      messagesArea.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    // Pin to popup so it stays at the bottom regardless of scroll
+    popup.style.position = 'fixed'; // already fixed, but ensure
+    popup.appendChild(backToTop);
+
+    // ── Scroll listener: fade search, show back-to-top ──
+    const SCROLL_THRESHOLD = 150;
+    let searchCollapsed = false;
+    messagesArea.addEventListener('scroll', () => {
+      const scrolled = messagesArea.scrollTop > SCROLL_THRESHOLD;
+
+      // Fade search bar
+      if (scrolled && !searchCollapsed) {
+        searchCollapsed = true;
+        searchWrap.style.transition = 'opacity 0.2s, max-height 0.25s ease, margin-bottom 0.25s ease';
+        searchWrap.style.opacity = '0';
+        searchWrap.style.maxHeight = '0';
+        searchWrap.style.marginBottom = '0';
+        searchWrap.style.overflow = 'hidden';
+        searchWrap.style.pointerEvents = 'none';
+      } else if (!scrolled && searchCollapsed) {
+        searchCollapsed = false;
+        searchWrap.style.opacity = '1';
+        searchWrap.style.maxHeight = '50px';
+        searchWrap.style.marginBottom = '10px';
+        searchWrap.style.pointerEvents = '';
+      }
+
+      // Show/hide back to top pill
+      if (scrolled) {
+        backToTop.style.opacity = '1';
+        backToTop.style.transform = 'translateX(-50%) translateY(0)';
+        backToTop.style.pointerEvents = 'auto';
+      } else {
+        backToTop.style.opacity = '0';
+        backToTop.style.transform = 'translateX(-50%) translateY(12px)';
+        backToTop.style.pointerEvents = 'none';
+      }
+    });
+
+    // Set initial max-height so the collapse transition works
+    searchWrap.style.maxHeight = '50px';
+    searchWrap.style.overflow = 'hidden';
 
     messagesArea.style.transition = 'opacity 0.2s ease-in';
     messagesArea.style.opacity = '1';
