@@ -291,42 +291,17 @@ async function findProfessor(profName) {
   return await findProfessorByName(profName);
 }
 
-/* ==================== AI SUMMARIES (GITHUB) ==================== */
-
-const AI_SUMMARIES_URL =
-  "https://raw.githubusercontent.com/dakpasala/polyratings-ai-generator/main/summaries/ai_summaries.json";
-
-let aiSummariesCache = null;
-
-async function fetchAISummaries() {
-  if (aiSummariesCache) return aiSummariesCache;
-  try {
-    console.log("🌐 Fetching AI summaries...");
-    const res = await fetch(AI_SUMMARIES_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    aiSummariesCache = await res.json();
-    console.log(`✅ Loaded ${Object.keys(aiSummariesCache).length} summaries`);
-    return aiSummariesCache;
-  } catch (err) {
-    console.error("❌ Failed to fetch summaries:", err);
-    aiSummariesCache = {};
-    return {};
-  }
-}
+/* ==================== AI SUMMARIES (SUPABASE) ==================== */
 
 function noRatingsMessage(profName) {
   return `No PolyRatings found. Try asking classmates or other professors for insights.\n\nhttps://polyratings.dev/new-professor`;
 }
 
 async function callGeminiTooltipAnalysis(profName) {
-  // Step 1: Check precomputed AI summaries first (fast)
-  const summaries = await fetchAISummaries();
-  const key = Object.keys(summaries).find(
-    (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
-  );
-
-  if (key) {
-    let summary = summaries[key];
+  // Step 1: Check precomputed AI summaries from Supabase DB
+  const precomputed = await getPrecomputedSummary(profName);
+  if (precomputed?.summary) {
+    let summary = precomputed.summary;
     if (summary.includes("\n\nProfessor")) {
       summary = "Professor" + summary.split("\n\nProfessor")[1];
     }
@@ -372,19 +347,16 @@ ${reviewSnippets}`;
 }
 
 async function callGeminiAnalysis(profName, professorData = null) {
-  const summaries = await fetchAISummaries();
-  const key = Object.keys(summaries).find(
-    (k) => k.toLowerCase().trim() === profName.toLowerCase().trim()
-  );
-
-  if (key) {
-    let summary = summaries[key];
+  // Step 1: Check precomputed AI summaries from Supabase DB
+  const precomputed = await getPrecomputedSummary(profName);
+  if (precomputed?.summary) {
+    let summary = precomputed.summary;
     if (summary.includes("\n\nProfessor")) {
       summary = "Professor" + summary.split("\n\nProfessor")[1];
     }
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
-    return `${summary}\n\n${professorData?.link || ""}`;
+    return `${summary}\n\n${precomputed.link || professorData?.link || ""}`;
   }
 
   // No precomputed summary — try generating from DB reviews
