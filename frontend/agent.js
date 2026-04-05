@@ -232,10 +232,10 @@ function addComparisonCard(container, data) {
     if (isWinner) {
       const badge = document.createElement('div');
       badge.style.cssText = `
-        position:absolute;top:-1px;right:10px;
+        position:absolute;top:-1px;right:8px;
         background:${BRAND.green};color:white;
-        font-size:9px;font-weight:600;letter-spacing:0.04em;
-        padding:2px 7px;border-radius:0 0 6px 6px;
+        font-size:8px;font-weight:600;letter-spacing:0.05em;
+        padding:2px 6px;border-radius:0 0 5px 5px;
         text-transform:uppercase;
       `;
       badge.textContent = 'Top pick';
@@ -244,7 +244,7 @@ function addComparisonCard(container, data) {
 
     // Name
     const name = document.createElement('div');
-    name.style.cssText = 'font-size:13px;font-weight:600;color:#222;margin-bottom:6px;line-height:1.3;padding-right:4px;';
+    name.style.cssText = `font-size:13px;font-weight:600;color:#222;margin-bottom:6px;line-height:1.3;padding-right:4px;${isWinner ? 'margin-top:14px;' : ''}`;
     name.textContent = item.name;
     card.appendChild(name);
 
