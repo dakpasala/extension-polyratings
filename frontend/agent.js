@@ -470,10 +470,10 @@ function renderWelcomeState(messagesArea) {
   `;
   messagesArea.appendChild(welcome);
 
-  // Suggestion chips
+  // Suggestion chips — updated labels
   const chips = document.createElement('div');
   chips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;';
-  ['Compare professors', 'Course difficulty', 'Best electives', 'Schedule help'].forEach(label => {
+  ['Compare professors', 'Compare classes', 'Who is the best professor?', 'Course difficulty'].forEach(label => {
     const chip = document.createElement('div');
     chip.style.cssText = `font-size:12px;color:#777;padding:6px 12px;border-radius:20px;border:1px solid #e8e8e8;cursor:pointer;transition:all 0.15s;`;
     chip.textContent = label;
@@ -487,30 +487,6 @@ function renderWelcomeState(messagesArea) {
     chips.appendChild(chip);
   });
   messagesArea.appendChild(chips);
-
-  // Spacer
-  const spacer = document.createElement('div');
-  spacer.style.cssText = 'flex:1;';
-  messagesArea.appendChild(spacer);
-
-  // History button
-  const history = getChatHistory();
-  const totalMsgs = Object.values(history).reduce((s,m) => s+m.length, 0);
-
-  const histBtn = document.createElement('div');
-  histBtn.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fafafa;border-radius:10px;cursor:pointer;border:1px solid #f0f0f0;transition:all 0.15s;';
-  histBtn.innerHTML = `
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
-    <div style="flex:1;">
-      <div style="font-size:12px;font-weight:500;color:#666;">Past messages</div>
-      <div style="font-size:11px;color:#bbb;">${totalMsgs > 0 ? `${totalMsgs} saved` : 'None yet'}</div>
-    </div>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-  `;
-  histBtn.addEventListener('mouseenter', () => { histBtn.style.borderColor = BRAND.green; histBtn.style.background = BRAND.greenLight; });
-  histBtn.addEventListener('mouseleave', () => { histBtn.style.borderColor = '#f0f0f0'; histBtn.style.background = '#fafafa'; });
-  histBtn.addEventListener('click', () => renderHistoryView(messagesArea));
-  messagesArea.appendChild(histBtn);
 }
 
 // ==================== CHAT MESSAGES ====================
@@ -566,7 +542,7 @@ function openAgentPopup(button) {
   const popup = document.createElement('div');
   popup.className = 'pr-agent-popup';
 
-  // Header
+  // Header — history icon button added next to close
   const header = document.createElement('div');
   header.style.cssText = `padding:12px 16px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;cursor:default;user-select:none;background:#fff;border-radius:14px 14px 0 0;`;
   header.innerHTML = `
@@ -579,15 +555,20 @@ function openAgentPopup(button) {
         <div style="font-size:11px;color:#bbb;">Cal Poly schedule assistant</div>
       </div>
     </div>
-    <div class="pr-agent-close" style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ccc;transition:all 0.15s;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="pr-agent-history-btn" style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ccc;transition:all 0.15s;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+      </div>
+      <div class="pr-agent-close" style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ccc;transition:all 0.15s;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </div>
     </div>
   `;
 
   // Drag
   let isDragging = false, startX, startY, initLeft, initTop;
   header.addEventListener('mousedown', (e) => {
-    if (e.target.closest('.pr-agent-close')) return;
+    if (e.target.closest('.pr-agent-close') || e.target.closest('.pr-agent-history-btn')) return;
     isDragging = true; header.style.cursor = 'grabbing';
     const r = popup.getBoundingClientRect();
     startX = e.clientX; startY = e.clientY; initLeft = r.left; initTop = r.top;
@@ -623,10 +604,16 @@ function openAgentPopup(button) {
   sendBtn.addEventListener('mouseenter', () => sendBtn.style.transform = 'scale(1.08)');
   sendBtn.addEventListener('mouseleave', () => sendBtn.style.transform = 'scale(1)');
 
-  // Close
+  // Close button
   header.querySelector('.pr-agent-close').addEventListener('mouseenter', function() { this.style.color = '#666'; this.style.background = '#f0f0f0'; });
   header.querySelector('.pr-agent-close').addEventListener('mouseleave', function() { this.style.color = '#ccc'; this.style.background = 'transparent'; });
   header.querySelector('.pr-agent-close').addEventListener('click', closeAgentPopup);
+
+  // History button in header
+  const historyBtn = header.querySelector('.pr-agent-history-btn');
+  historyBtn.addEventListener('mouseenter', () => { historyBtn.style.color = '#666'; historyBtn.style.background = '#f0f0f0'; });
+  historyBtn.addEventListener('mouseleave', () => { historyBtn.style.color = '#ccc'; historyBtn.style.background = 'transparent'; });
+  historyBtn.addEventListener('click', () => renderHistoryView(messagesArea));
 
   // Send logic
   function sendMessage() {
