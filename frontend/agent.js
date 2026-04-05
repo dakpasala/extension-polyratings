@@ -47,10 +47,16 @@ const BRAND = { green: '#154734', greenLight: 'rgba(21, 71, 52, 0.08)', greenMid
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes prPinPop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.5); }
+      70%  { transform: scale(0.88); }
+      100% { transform: scale(1); }
+    }
 
     .pr-pin-btn {
       opacity: 0;
-      transition: opacity 0.15s;
+      transition: opacity 0.18s ease, color 0.18s ease;
       background: none;
       border: none;
       cursor: pointer;
@@ -61,9 +67,21 @@ const BRAND = { green: '#154734', greenLight: 'rgba(21, 71, 52, 0.08)', greenMid
       color: #ccc;
       flex-shrink: 0;
     }
-    .pr-pin-btn:hover { color: #154734 !important; }
+    .pr-pin-btn:hover { color: #154734 !important; opacity: 1 !important; }
     .pr-pin-btn.pinned { opacity: 1 !important; color: #154734 !important; }
+    .pr-pin-btn.pin-pop svg { animation: prPinPop 0.32s cubic-bezier(0.34,1.56,0.64,1) forwards; }
     .pr-msg-wrapper:hover .pr-pin-btn { opacity: 1; }
+
+    /* Sub-view header slides in from top */
+    .pr-history-sticky-header {
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity 0.22s ease, transform 0.22s ease;
+    }
+    .pr-history-sticky-header.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
   `;
   document.head.appendChild(s);
 })();
@@ -71,6 +89,18 @@ const BRAND = { green: '#154734', greenLight: 'rgba(21, 71, 52, 0.08)', greenMid
 // ==================== CHAT HISTORY (localStorage) ====================
 const CHAT_HISTORY = { STORAGE_KEY: 'pr_agent_history' };
 const PINNED_STORAGE_KEY = 'pr_agent_pinned';
+
+// Registry of all live pin buttons in the DOM keyed by their pinKey.
+// Allows us to sync the pair's button UI when one is toggled.
+const PIN_BTN_REGISTRY = {};
+
+function registerPinBtn(key, btn) {
+  if (!PIN_BTN_REGISTRY[key]) PIN_BTN_REGISTRY[key] = new Set();
+  PIN_BTN_REGISTRY[key].add(btn);
+}
+function unregisterPinBtn(key, btn) {
+  if (PIN_BTN_REGISTRY[key]) PIN_BTN_REGISTRY[key].delete(btn);
+}
 
 function getPinnedSet() {
   try { const s = localStorage.getItem(PINNED_STORAGE_KEY); return s ? new Set(JSON.parse(s)) : new Set(); } catch(e) { return new Set(); }
@@ -80,20 +110,15 @@ function setPinnedSet(set) {
   localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...set]));
 }
 
-// Pin a key AND its conversation pair (user msg → next bot msg, or bot msg → prev user msg)
-// History is sequential: user at idx N, bot at idx N+1 (or vice versa).
-// We always pin both indices together so they stay as a pair.
 function getPairKey(dateKey, idx) {
   const history = getChatHistory();
   const msgs = history[dateKey] || [];
   const msg = msgs[idx];
   if (!msg) return null;
   if (msg.role === 'user') {
-    // pair is the next message if it's a bot message
     const next = msgs[idx + 1];
     if (next && next.role !== 'user') return `${dateKey}::${idx + 1}`;
   } else {
-    // pair is the previous message if it's a user message
     const prev = msgs[idx - 1];
     if (prev && prev.role === 'user') return `${dateKey}::${idx - 1}`;
   }
@@ -114,7 +139,44 @@ function togglePin(key) {
     if (pairKey) pins.add(pairKey);
   }
   setPinnedSet(pins);
-  return pins.has(key);
+
+  // Sync all live buttons for both this key and its pair
+  const nowPinned = pins.has(key);
+  syncPinBtnUI(key, nowPinned, true);
+  if (pairKey) syncPinBtnUI(pairKey, pins.has(pairKey), true);
+
+  return nowPinned;
+}
+
+// Update every registered button for a key to reflect pinned state.
+// skipAnimation = true means the triggering button already ran its own animation.
+function syncPinBtnUI(key, isPinned, animate) {
+  const btns = PIN_BTN_REGISTRY[key];
+  if (!btns) return;
+  btns.forEach(btn => {
+    applyPinBtnState(btn, isPinned, animate);
+  });
+}
+
+function applyPinBtnState(btn, isPinned, animate) {
+  btn.innerHTML = isPinned
+    ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`
+    : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`;
+  btn.title = isPinned ? 'Unpin' : 'Pin';
+  if (isPinned) {
+    btn.classList.add('pinned');
+    if (animate) {
+      btn.classList.remove('pin-pop');
+      // Force reflow to restart animation
+      void btn.offsetWidth;
+      btn.classList.add('pin-pop');
+      btn.addEventListener('animationend', () => btn.classList.remove('pin-pop'), { once: true });
+    }
+  } else {
+    btn.classList.remove('pinned');
+  }
+  // Override inline opacity set in history view so CSS classes control it properly
+  btn.style.opacity = '';
 }
 
 function saveChatMessage(role, text, comparisonData) {
@@ -169,6 +231,24 @@ function searchHistory(term) {
       const nm = normalizeText(msg.text).toLowerCase();
       if (nm.includes(nq) || dateKey.toLowerCase().includes(nq)) results.push({dateKey,msgIndex:i,msg});
     });
+  });
+  return results;
+}
+
+function searchPinned(term) {
+  const pins = getPinnedSet();
+  const history = getChatHistory();
+  const results = [];
+  const nq = normalizeText(term).toLowerCase();
+  pins.forEach(key => {
+    const [dateKey, idxStr] = key.split('::');
+    const idx = parseInt(idxStr);
+    const msg = history[dateKey]?.[idx];
+    if (!msg) return;
+    const nm = normalizeText(msg.text).toLowerCase();
+    if (nm.includes(nq) || dateKey.toLowerCase().includes(nq)) {
+      results.push({ key, dateKey, idx, msg });
+    }
   });
   return results;
 }
@@ -248,30 +328,32 @@ function showRateLimitBanner(popup, remaining) {
 }
 
 // ==================== PIN BUTTON HELPER ====================
-function makePinButton(key, onToggle) {
+function makePinButton(key) {
   const pins = getPinnedSet();
   const isPinned = pins.has(key);
 
   const btn = document.createElement('button');
   btn.className = 'pr-pin-btn' + (isPinned ? ' pinned' : '');
   btn.title = isPinned ? 'Unpin' : 'Pin';
+  btn.innerHTML = isPinned
+    ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`
+    : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`;
 
-  function renderIcon(filled) {
-    btn.innerHTML = filled
-      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`
-      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`;
-  }
+  registerPinBtn(key, btn);
 
-  renderIcon(isPinned);
+  // Clean up registry when element is removed from DOM
+  const observer = new MutationObserver(() => {
+    if (!document.contains(btn)) {
+      unregisterPinBtn(key, btn);
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const nowPinned = togglePin(key);
-    renderIcon(nowPinned);
-    if (nowPinned) btn.classList.add('pinned');
-    else btn.classList.remove('pinned');
-    btn.title = nowPinned ? 'Unpin' : 'Pin';
-    if (onToggle) onToggle(nowPinned);
+    // togglePin now handles syncing ALL registered buttons for key + pair
+    togglePin(key);
   });
 
   return btn;
@@ -400,7 +482,6 @@ function addComparisonCard(container, data, skipSave, pinKey) {
     wrapper.appendChild(verdict);
   }
 
-  // Timestamp + pin row
   const metaRow = document.createElement('div');
   metaRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:0 2px;';
   const time = document.createElement('div');
@@ -421,23 +502,40 @@ function addComparisonCard(container, data, skipSave, pinKey) {
   if (!skipSave) saveChatMessage("bot", historyText, data);
 }
 
-// ==================== SHARED BACK-NAV HELPER ====================
-// Cleans up any history/pinned sticky header + backToTop pill, then restores chat view.
-function navigateBackToChat(popup, messagesArea) {
-  const existingHeader = popup.querySelector('.pr-history-sticky-header');
-  const backToTopEl = popup.querySelector('.pr-back-to-top-pill');
-  const inputArea = popup.querySelector('.pr-agent-input');
-  const limitBanner = popup.querySelector('.pr-agent-limit-banner');
+// ==================== SHARED TRANSITIONS ====================
+// Unified fade helper: fade messagesArea + sticky header out, then call fn, then fade in.
+function fadeTransition(messagesArea, popup, outDuration, inDuration, fn) {
+  const stickyHeader = popup.querySelector('.pr-history-sticky-header');
+  const targets = [messagesArea];
+  if (stickyHeader) targets.push(stickyHeader);
 
-  const fadeTargets = [messagesArea];
-  if (existingHeader) fadeTargets.push(existingHeader);
-
-  fadeTargets.forEach(el => {
-    el.style.transition = 'opacity 0.18s ease-out';
+  targets.forEach(el => {
+    el.style.transition = `opacity ${outDuration}ms ease-out, transform ${outDuration}ms ease-out`;
     el.style.opacity = '0';
+    if (el === messagesArea) el.style.transform = 'translateY(4px)';
+    if (el === stickyHeader) el.style.transform = 'translateY(-4px)';
   });
 
   setTimeout(() => {
+    fn();
+    // Fade in — done after fn() sets up new DOM
+    requestAnimationFrame(() => {
+      messagesArea.style.transition = `opacity ${inDuration}ms ease-out, transform ${inDuration}ms ease-out`;
+      messagesArea.style.opacity = '1';
+      messagesArea.style.transform = 'translateY(0)';
+    });
+  }, outDuration);
+}
+
+// Navigate back to chat from any sub-view
+function navigateBackToChat(popup, messagesArea) {
+  const inputArea = popup.querySelector('.pr-agent-input');
+  const limitBanner = popup.querySelector('.pr-agent-limit-banner');
+
+  fadeTransition(messagesArea, popup, 160, 220, () => {
+    // Clean up sub-view chrome
+    const existingHeader = popup.querySelector('.pr-history-sticky-header');
+    const backToTopEl = popup.querySelector('.pr-back-to-top-pill');
     if (existingHeader) existingHeader.remove();
     if (backToTopEl) backToTopEl.remove();
 
@@ -445,93 +543,127 @@ function navigateBackToChat(popup, messagesArea) {
     if (limitBanner) limitBanner.style.display = 'flex';
     messagesArea.innerHTML = '';
     messagesArea.style.paddingTop = '16px';
-    messagesArea.style.transition = 'none';
-    messagesArea.style.opacity = '0';
     renderWelcomeState(messagesArea);
+  });
+}
 
-    requestAnimationFrame(() => {
-      messagesArea.style.transition = 'opacity 0.22s ease-in';
-      messagesArea.style.opacity = '1';
-    });
-  }, 180);
+// Fade content area only (used for search/filter swaps inside a view)
+function fadeContent(contentArea, fn) {
+  contentArea.style.transition = 'opacity 0.12s ease-out';
+  contentArea.style.opacity = '0';
+  setTimeout(() => {
+    fn();
+    contentArea.style.transition = 'opacity 0.15s ease-in';
+    contentArea.style.opacity = '1';
+  }, 120);
+}
+
+// Build and attach the back-to-top pill, return it.
+function makeBackToTopPill(popup, messagesArea) {
+  const pill = document.createElement('div');
+  pill.className = 'pr-back-to-top-pill';
+  pill.style.cssText = `
+    position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(16px);
+    background:${BRAND.green}; color:white;
+    font-size:11px; font-weight:600; letter-spacing:0.02em;
+    padding:7px 16px; border-radius:20px;
+    display:flex; align-items:center; gap:5px;
+    cursor:pointer; opacity:0; pointer-events:none;
+    transition:opacity 0.25s ease, transform 0.25s ease;
+    white-space:nowrap; z-index:100;
+    box-shadow: 0 3px 12px rgba(21,71,52,0.3);
+  `;
+  pill.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg> Back to top`;
+  pill.addEventListener('click', () => messagesArea.scrollTo({ top: 0, behavior: 'smooth' }));
+  popup.appendChild(pill);
+  return pill;
+}
+
+function showPill(pill) {
+  pill.style.opacity = '1';
+  pill.style.transform = 'translateX(-50%) translateY(0)';
+  pill.style.pointerEvents = 'auto';
+}
+function hidePill(pill) {
+  pill.style.opacity = '0';
+  pill.style.transform = 'translateX(-50%) translateY(12px)';
+  pill.style.pointerEvents = 'none';
 }
 
 // ==================== HISTORY VIEW ====================
 function renderHistoryView(messagesArea) {
-  // If already in a sub-view (history/pinned), clean up first before re-entering
   const popup = messagesArea.closest('.pr-agent-popup');
+  // Clean up any existing sub-view chrome instantly (switching between sub-views)
   const existingHeader = popup.querySelector('.pr-history-sticky-header');
   if (existingHeader) existingHeader.remove();
   const existingPill = popup.querySelector('.pr-back-to-top-pill');
   if (existingPill) existingPill.remove();
 
-  const history = getChatHistory();
-  const dates = Object.keys(history);
   const inputArea = popup?.querySelector('.pr-agent-input');
   const limitBanner = popup?.querySelector('.pr-agent-limit-banner');
 
-  messagesArea.style.transition = 'opacity 0.15s ease-out';
-  messagesArea.style.opacity = '0';
+  const history = getChatHistory();
+  const dates = Object.keys(history);
 
-  setTimeout(() => {
+  // Build sticky header element (inserted into DOM inside the fade callback)
+  const stickyHeader = document.createElement('div');
+  stickyHeader.className = 'pr-history-sticky-header';
+  stickyHeader.style.cssText = 'background:#fff;padding:10px 16px 0;border-bottom:1px solid #f0f0f0;flex-shrink:0;';
+
+  const topBar = document.createElement('div');
+  topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+
+  const backBtn = document.createElement('div');
+  backBtn.style.cssText = 'display:inline-flex;align-items:center;gap:5px;color:#999;font-size:13px;font-weight:500;cursor:pointer;transition:color 0.15s;';
+  backBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg> Back`;
+  backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
+  backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
+  backBtn.addEventListener('click', () => navigateBackToChat(popup, messagesArea));
+
+  let selectMode = false;
+  const selectedMessages = new Set();
+
+  const selectBtn = document.createElement('div');
+  selectBtn.style.cssText = 'font-size:12px;font-weight:500;color:#999;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s;';
+  selectBtn.textContent = 'Select';
+  selectBtn.addEventListener('mouseenter', () => { selectBtn.style.color = '#333'; selectBtn.style.background = '#f0f0f0'; });
+  selectBtn.addEventListener('mouseleave', () => { selectBtn.style.color = selectMode ? BRAND.green : '#999'; selectBtn.style.background = selectMode ? BRAND.greenLight : 'transparent'; });
+
+  topBar.appendChild(backBtn);
+  topBar.appendChild(selectBtn);
+  stickyHeader.appendChild(topBar);
+
+  // Search bar
+  const searchWrap = document.createElement('div');
+  searchWrap.style.cssText = 'position:relative;margin-bottom:10px;transform-origin:top center;overflow:hidden;max-height:50px;';
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search messages…';
+  searchInput.style.cssText = `width:100%;padding:9px 12px 9px 32px;border:1px solid #e8e8e8;border-radius:10px;font-size:13px;outline:none;background:#fafafa;transition:all 0.15s;box-sizing:border-box;`;
+  searchInput.addEventListener('focus', () => { searchInput.style.borderColor = BRAND.green; searchInput.style.background = '#fff'; });
+  searchInput.addEventListener('blur', () => { if (!searchInput.value) { searchInput.style.borderColor = '#e8e8e8'; searchInput.style.background = '#fafafa'; }});
+  const searchIcon = document.createElement('div');
+  searchIcon.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+  searchIcon.style.cssText = 'position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;';
+  searchWrap.appendChild(searchIcon);
+  searchWrap.appendChild(searchInput);
+  stickyHeader.appendChild(searchWrap);
+
+  fadeTransition(messagesArea, popup, 150, 200, () => {
     messagesArea.innerHTML = '';
     if (inputArea) inputArea.style.display = 'none';
     if (limitBanner) limitBanner.style.display = 'none';
+    messagesArea.style.paddingTop = '8px';
+    messagesArea.style.transform = 'translateY(0)';
 
-    // Select mode state
-    let selectMode = false;
-    const selectedMessages = new Set();
-
-    // ── Sticky header ──
-    const stickyHeader = document.createElement('div');
-    stickyHeader.className = 'pr-history-sticky-header';
-    stickyHeader.style.cssText = 'background:#fff;padding:10px 16px 0;border-bottom:1px solid #f0f0f0;flex-shrink:0;';
-
-    const topBar = document.createElement('div');
-    topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
-
-    const backBtn = document.createElement('div');
-    backBtn.style.cssText = 'display:inline-flex;align-items:center;gap:5px;color:#999;font-size:13px;font-weight:500;cursor:pointer;transition:color 0.15s;';
-    backBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg> Back`;
-    backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
-    backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
-    backBtn.addEventListener('click', () => navigateBackToChat(popup, messagesArea));
-
-    const selectBtn = document.createElement('div');
-    selectBtn.style.cssText = 'font-size:12px;font-weight:500;color:#999;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s;';
-    selectBtn.textContent = 'Select';
-    selectBtn.addEventListener('mouseenter', () => { selectBtn.style.color = '#333'; selectBtn.style.background = '#f0f0f0'; });
-    selectBtn.addEventListener('mouseleave', () => { selectBtn.style.color = selectMode ? BRAND.green : '#999'; selectBtn.style.background = selectMode ? BRAND.greenLight : 'transparent'; });
-
-    topBar.appendChild(backBtn);
-    topBar.appendChild(selectBtn);
-    stickyHeader.appendChild(topBar);
-
-    // Search bar
-    const searchWrap = document.createElement('div');
-    searchWrap.style.cssText = 'position:relative;margin-bottom:10px;transform-origin:top center;';
-    const searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.placeholder = 'Search messages…';
-    searchInput.style.cssText = `width:100%;padding:9px 12px 9px 32px;border:1px solid #e8e8e8;border-radius:10px;font-size:13px;outline:none;background:#fafafa;transition:all 0.15s;box-sizing:border-box;`;
-    searchInput.addEventListener('focus', () => { searchInput.style.borderColor = BRAND.green; searchInput.style.background = '#fff'; });
-    searchInput.addEventListener('blur', () => { if (!searchInput.value) { searchInput.style.borderColor = '#e8e8e8'; searchInput.style.background = '#fafafa'; }});
-    const searchIcon = document.createElement('div');
-    searchIcon.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
-    searchIcon.style.cssText = 'position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;';
-    searchWrap.appendChild(searchIcon);
-    searchWrap.appendChild(searchInput);
-    stickyHeader.appendChild(searchWrap);
-
+    // Insert header now — after old content is gone
     popup.insertBefore(stickyHeader, messagesArea);
-    messagesArea.style.paddingTop = "8px";
 
     const contentArea = document.createElement('div');
     contentArea.className = 'history-content-area';
     messagesArea.appendChild(contentArea);
 
-    // ── Action bar (replaces old red delete bar) ──
-    // Slate/neutral dark background — not red, shows Pin + Delete
+    // Action bar
     const actionBar = document.createElement('div');
     actionBar.style.cssText = `position:sticky;bottom:0;background:rgba(30,30,35,0.96);backdrop-filter:blur(8px);padding:8px 12px;border-radius:10px;display:none;align-items:center;justify-content:space-between;margin-top:8px;gap:8px;`;
 
@@ -560,6 +692,8 @@ function renderHistoryView(messagesArea) {
     actionBar.appendChild(actionBtns);
     messagesArea.appendChild(actionBar);
 
+    const backToTop = makeBackToTopPill(popup, messagesArea);
+
     function updateActionBar() {
       const count = selectedMessages.size;
       if (count > 0) {
@@ -570,6 +704,7 @@ function renderHistoryView(messagesArea) {
         actionCount.textContent = `${count} selected`;
         pinSelBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pin (${count})`;
         deleteSelBtn.textContent = `Delete (${count})`;
+        hidePill(backToTop);
       } else {
         actionBar.style.transition = 'opacity 0.15s,transform 0.15s'; actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
         setTimeout(() => { actionBar.style.display = 'none'; }, 150);
@@ -613,11 +748,9 @@ function renderHistoryView(messagesArea) {
     selectBtn.addEventListener('click', () => { if (selectMode) exitSelectMode(); else enterSelectMode(); });
     cancelSelBtn.addEventListener('click', () => exitSelectMode());
 
-    // Pin selected
     pinSelBtn.addEventListener('click', () => {
       if (selectedMessages.size === 0) return;
       const pins = getPinnedSet();
-      // Determine if majority are already pinned — if so, unpin; else pin
       const alreadyPinned = [...selectedMessages].filter(k => pins.has(k)).length;
       const shouldPin = alreadyPinned < selectedMessages.size / 2;
       selectedMessages.forEach(key => {
@@ -626,14 +759,13 @@ function renderHistoryView(messagesArea) {
         const pairKey = getPairKey(dk, idx);
         if (shouldPin) { pins.add(key); if (pairKey) pins.add(pairKey); }
         else { pins.delete(key); if (pairKey) pins.delete(pairKey); }
+        syncPinBtnUI(key, pins.has(key), true);
+        if (pairKey) syncPinBtnUI(pairKey, pins.has(pairKey), true);
       });
       setPinnedSet(pins);
       exitSelectMode();
-      contentArea.style.transition = 'opacity 0.12s'; contentArea.style.opacity = '0';
-      setTimeout(() => { contentArea.innerHTML = ''; renderFullHistory(contentArea, getChatHistory(), Object.keys(getChatHistory())); contentArea.style.transition = 'opacity 0.15s'; contentArea.style.opacity = '1'; }, 120);
     });
 
-    // Delete selected
     deleteSelBtn.addEventListener('click', () => {
       if (selectedMessages.size === 0) return;
       const hist = getChatHistory(), toDelete = {};
@@ -644,8 +776,7 @@ function renderHistoryView(messagesArea) {
       selectedMessages.forEach(key => pins.delete(key));
       setPinnedSet(pins);
       exitSelectMode();
-      contentArea.style.transition = 'opacity 0.12s'; contentArea.style.opacity = '0';
-      setTimeout(() => { contentArea.innerHTML = ''; renderFullHistory(contentArea, getChatHistory(), Object.keys(getChatHistory())); contentArea.style.transition = 'opacity 0.15s'; contentArea.style.opacity = '1'; }, 120);
+      fadeContent(contentArea, () => { contentArea.innerHTML = ''; renderFullHistory(contentArea, getChatHistory(), Object.keys(getChatHistory())); });
     });
 
     renderFullHistory(contentArea, history, dates);
@@ -656,34 +787,13 @@ function renderHistoryView(messagesArea) {
       if (selectMode) exitSelectMode();
       searchTimeout = setTimeout(() => {
         const term = searchInput.value.trim();
-        contentArea.style.transition = 'opacity 0.12s'; contentArea.style.opacity = '0';
-        setTimeout(() => {
+        fadeContent(contentArea, () => {
           contentArea.innerHTML = '';
           if (!term) renderFullHistory(contentArea, history, dates);
           else renderSearchResults(contentArea, term, messagesArea);
-          contentArea.style.transition = 'opacity 0.15s'; contentArea.style.opacity = '1';
-        }, 120);
+        });
       }, 200);
     });
-
-    // ── "Back to top" pill — only visible in history/pinned, not agent chat ──
-    // Uses class pr-back-to-top-pill so navigateBackToChat can cleanly remove it
-    const backToTop = document.createElement('div');
-    backToTop.className = 'pr-back-to-top-pill';
-    backToTop.style.cssText = `
-      position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(16px);
-      background:${BRAND.green}; color:white;
-      font-size:11px; font-weight:600; letter-spacing:0.02em;
-      padding:7px 16px; border-radius:20px;
-      display:flex; align-items:center; gap:5px;
-      cursor:pointer; opacity:0; pointer-events:none;
-      transition:opacity 0.25s ease, transform 0.25s ease;
-      white-space:nowrap; z-index:100;
-      box-shadow: 0 3px 12px rgba(21,71,52,0.3);
-    `;
-    backToTop.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg> Back to top`;
-    backToTop.addEventListener('click', () => messagesArea.scrollTo({ top: 0, behavior: 'smooth' }));
-    popup.appendChild(backToTop);
 
     const SCROLL_THRESHOLD = 150;
     let searchCollapsed = false;
@@ -693,71 +803,27 @@ function renderHistoryView(messagesArea) {
       if (scrolled && !searchCollapsed) {
         searchCollapsed = true;
         searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
-        searchWrap.style.opacity = '0';
-        searchWrap.style.maxHeight = '0';
-        searchWrap.style.marginBottom = '0';
-        searchWrap.style.transform = 'translateY(-4px) scaleY(0.95)';
-        searchWrap.style.pointerEvents = 'none';
+        searchWrap.style.opacity = '0'; searchWrap.style.maxHeight = '0'; searchWrap.style.marginBottom = '0';
+        searchWrap.style.transform = 'translateY(-4px) scaleY(0.95)'; searchWrap.style.pointerEvents = 'none';
       } else if (!scrolled && searchCollapsed) {
         searchCollapsed = false;
         searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
-        searchWrap.style.opacity = '1';
-        searchWrap.style.maxHeight = "50px";
-        searchWrap.style.marginBottom = '10px';
-        searchWrap.style.transform = 'translateY(0) scaleY(1)';
-        searchWrap.style.pointerEvents = '';
+        searchWrap.style.opacity = '1'; searchWrap.style.maxHeight = '50px'; searchWrap.style.marginBottom = '10px';
+        searchWrap.style.transform = 'translateY(0) scaleY(1)'; searchWrap.style.pointerEvents = '';
       }
 
-      // Back-to-top hides if action bar is visible so they don't overlap
       const actionBarVisible = actionBar.style.display === 'flex';
-      if (scrolled && !actionBarVisible) {
-        backToTop.style.opacity = '1';
-        backToTop.style.transform = 'translateX(-50%) translateY(0)';
-        backToTop.style.pointerEvents = 'auto';
-      } else {
-        backToTop.style.opacity = '0';
-        backToTop.style.transform = 'translateX(-50%) translateY(12px)';
-        backToTop.style.pointerEvents = 'none';
-      }
+      if (scrolled && !actionBarVisible) showPill(backToTop);
+      else hidePill(backToTop);
     });
 
-    // Also hide back-to-top when action bar appears/disappears
-    const origUpdateActionBar = updateActionBar;
-    function updateActionBarWrapped() {
-      origUpdateActionBar();
-      // After a tick, re-evaluate back-to-top visibility
-      setTimeout(() => {
-        const actionBarVisible = actionBar.style.display === 'flex';
-        if (actionBarVisible) {
-          backToTop.style.opacity = '0';
-          backToTop.style.transform = 'translateX(-50%) translateY(12px)';
-          backToTop.style.pointerEvents = 'none';
-        }
-      }, 10);
-    }
-    // Patch all callers of updateActionBar within this scope to use the wrapped version
-    // (We redefine it here since JS closures capture by reference for let/var but not const reassignment)
-    // Instead, patch the circle click and bar logic inline:
-    contentArea.addEventListener('click', () => {
-      // After any click that might toggle selection, check overlap
-      setTimeout(() => {
-        const actionBarVisible = actionBar.style.display === 'flex';
-        if (actionBarVisible) {
-          backToTop.style.opacity = '0';
-          backToTop.style.transform = 'translateX(-50%) translateY(12px)';
-          backToTop.style.pointerEvents = 'none';
-        }
-      }, 50);
+    // Animate header in after a tiny delay
+    requestAnimationFrame(() => {
+      setTimeout(() => stickyHeader.classList.add('visible'), 40);
     });
 
-    searchWrap.style.maxHeight = "50px";
-    searchWrap.style.transform = "translateY(0) scaleY(1)";
-    searchWrap.style.overflow = 'hidden';
-
-    messagesArea.style.transition = 'opacity 0.2s ease-in';
-    messagesArea.style.opacity = '1';
-    setTimeout(() => searchInput.focus(), 220);
-  }, 150);
+    setTimeout(() => searchInput.focus(), 260);
+  });
 }
 
 function renderFullHistory(container, history, dates) {
@@ -793,10 +859,7 @@ function renderFullHistory(container, history, dates) {
         const innerWrapper = cardWrap.firstChild;
         if (innerWrapper) {
           const metaRow = innerWrapper.lastChild;
-          if (metaRow) {
-            const timeEl = metaRow.firstChild;
-            if (timeEl) timeEl.textContent = msg.time;
-          }
+          if (metaRow) { const timeEl = metaRow.firstChild; if (timeEl) timeEl.textContent = msg.time; }
         }
         container.appendChild(cardWrap);
       } else {
@@ -814,17 +877,11 @@ function renderFullHistory(container, history, dates) {
         time.textContent = msg.time;
 
         const pinBtn = makePinButton(key);
-        pinBtn.style.opacity = pins.has(key) ? '1' : '0.4';
-        pinBtn.addEventListener('mouseenter', () => { pinBtn.style.opacity = '1'; });
-        pinBtn.addEventListener('mouseleave', () => { pinBtn.style.opacity = getPinnedSet().has(key) ? '1' : '0.4'; });
+        // In history, pins are always dimly visible; CSS class will handle pinned=full
+        if (!pins.has(key)) pinBtn.style.opacity = '0.35';
 
-        if (isUser) {
-          metaRow.appendChild(pinBtn);
-          metaRow.appendChild(time);
-        } else {
-          metaRow.appendChild(time);
-          metaRow.appendChild(pinBtn);
-        }
+        if (isUser) { metaRow.appendChild(pinBtn); metaRow.appendChild(time); }
+        else { metaRow.appendChild(time); metaRow.appendChild(pinBtn); }
 
         row.appendChild(bubble);
         row.appendChild(metaRow);
@@ -872,7 +929,7 @@ function renderSearchResults(container, term, messagesArea) {
       timeLabel.style.cssText = 'font-size:10px;color:#ccc;';
       timeLabel.textContent = msg.time;
       const pinBtn = makePinButton(key);
-      pinBtn.style.opacity = getPinnedSet().has(key) ? '1' : '0.4';
+      if (!getPinnedSet().has(key)) pinBtn.style.opacity = '0.35';
       rightMeta.appendChild(timeLabel);
       rightMeta.appendChild(pinBtn);
       topRow.appendChild(roleLabel);
@@ -887,11 +944,9 @@ function renderSearchResults(container, term, messagesArea) {
       card.addEventListener('mouseenter', () => { card.style.borderColor = BRAND.green; card.style.background = BRAND.greenLight; });
       card.addEventListener('mouseleave', () => { card.style.borderColor = '#f0f0f0'; card.style.background = '#fafafa'; });
       card.addEventListener('click', () => {
-        container.style.transition = 'opacity 0.12s'; container.style.opacity = '0';
-        setTimeout(() => {
+        fadeContent(container, () => {
           container.innerHTML = '';
           renderFullHistory(container, getChatHistory(), Object.keys(getChatHistory()));
-          container.style.transition = 'opacity 0.15s'; container.style.opacity = '1';
           const targetId = `hist-${dateKey.replace(/\s/g,'_')}-${msgIndex}`;
           setTimeout(() => {
             const target = container.querySelector(`#${CSS.escape(targetId)}`);
@@ -899,7 +954,7 @@ function renderSearchResults(container, term, messagesArea) {
           }, 80);
           const si = messagesArea.querySelector('input[type="text"]');
           if (si) si.value = '';
-        }, 120);
+        });
       });
       container.appendChild(card);
     });
@@ -908,7 +963,6 @@ function renderSearchResults(container, term, messagesArea) {
 
 // ==================== PINNED VIEW ====================
 function renderPinnedView(messagesArea) {
-  // If already in a sub-view (history/pinned), clean up first
   const popup = messagesArea.closest('.pr-agent-popup');
   const existingHeader = popup.querySelector('.pr-history-sticky-header');
   if (existingHeader) existingHeader.remove();
@@ -918,76 +972,176 @@ function renderPinnedView(messagesArea) {
   const inputArea = popup?.querySelector('.pr-agent-input');
   const limitBanner = popup?.querySelector('.pr-agent-limit-banner');
 
-  messagesArea.style.transition = 'opacity 0.15s ease-out';
-  messagesArea.style.opacity = '0';
+  // Build sticky header
+  const stickyHeader = document.createElement('div');
+  stickyHeader.className = 'pr-history-sticky-header';
+  stickyHeader.style.cssText = 'background:#fff;padding:10px 16px 0;border-bottom:1px solid #f0f0f0;flex-shrink:0;';
 
-  setTimeout(() => {
+  const topBar = document.createElement('div');
+  topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+
+  const backBtn = document.createElement('div');
+  backBtn.style.cssText = 'display:inline-flex;align-items:center;gap:5px;color:#999;font-size:13px;font-weight:500;cursor:pointer;transition:color 0.15s;';
+  backBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg> Back`;
+  backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
+  backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
+  backBtn.addEventListener('click', () => navigateBackToChat(popup, messagesArea));
+
+  const titleEl = document.createElement('div');
+  titleEl.style.cssText = `font-size:12px;font-weight:600;color:${BRAND.green};display:flex;align-items:center;gap:5px;`;
+  titleEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pinned`;
+
+  topBar.appendChild(backBtn);
+  topBar.appendChild(titleEl);
+  stickyHeader.appendChild(topBar);
+
+  // Search bar for pinned view
+  const searchWrap = document.createElement('div');
+  searchWrap.style.cssText = 'position:relative;margin-bottom:10px;transform-origin:top center;overflow:hidden;max-height:50px;';
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search pinned…';
+  searchInput.style.cssText = `width:100%;padding:9px 12px 9px 32px;border:1px solid #e8e8e8;border-radius:10px;font-size:13px;outline:none;background:#fafafa;transition:all 0.15s;box-sizing:border-box;`;
+  searchInput.addEventListener('focus', () => { searchInput.style.borderColor = BRAND.green; searchInput.style.background = '#fff'; });
+  searchInput.addEventListener('blur', () => { if (!searchInput.value) { searchInput.style.borderColor = '#e8e8e8'; searchInput.style.background = '#fafafa'; }});
+  const searchIcon = document.createElement('div');
+  searchIcon.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#bbb" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+  searchIcon.style.cssText = 'position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;';
+  searchWrap.appendChild(searchIcon);
+  searchWrap.appendChild(searchInput);
+  stickyHeader.appendChild(searchWrap);
+
+  fadeTransition(messagesArea, popup, 150, 200, () => {
     messagesArea.innerHTML = '';
     if (inputArea) inputArea.style.display = 'none';
     if (limitBanner) limitBanner.style.display = 'none';
-
-    // ── Sticky header ──
-    const stickyHeader = document.createElement('div');
-    stickyHeader.className = 'pr-history-sticky-header';
-    stickyHeader.style.cssText = 'background:#fff;padding:10px 16px 10px;border-bottom:1px solid #f0f0f0;flex-shrink:0;';
-
-    const topBar = document.createElement('div');
-    topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
-
-    const backBtn = document.createElement('div');
-    backBtn.style.cssText = 'display:inline-flex;align-items:center;gap:5px;color:#999;font-size:13px;font-weight:500;cursor:pointer;transition:color 0.15s;';
-    backBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg> Back`;
-    backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
-    backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
-    // Always go back to chat — never loop into another sub-view
-    backBtn.addEventListener('click', () => navigateBackToChat(popup, messagesArea));
-
-    const titleEl = document.createElement('div');
-    titleEl.style.cssText = `font-size:12px;font-weight:600;color:${BRAND.green};display:flex;align-items:center;gap:5px;`;
-    titleEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pinned`;
-
-    topBar.appendChild(backBtn);
-    topBar.appendChild(titleEl);
-    stickyHeader.appendChild(topBar);
-    popup.insertBefore(stickyHeader, messagesArea);
     messagesArea.style.paddingTop = '8px';
+    messagesArea.style.transform = 'translateY(0)';
+
+    // Insert header now — after old content is gone
+    popup.insertBefore(stickyHeader, messagesArea);
 
     const contentArea = document.createElement('div');
     messagesArea.appendChild(contentArea);
 
-    // Back to top pill for pinned view too
-    const backToTop = document.createElement('div');
-    backToTop.className = 'pr-back-to-top-pill';
-    backToTop.style.cssText = `
-      position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(16px);
-      background:${BRAND.green}; color:white;
-      font-size:11px; font-weight:600; letter-spacing:0.02em;
-      padding:7px 16px; border-radius:20px;
-      display:flex; align-items:center; gap:5px;
-      cursor:pointer; opacity:0; pointer-events:none;
-      transition:opacity 0.25s ease, transform 0.25s ease;
-      white-space:nowrap; z-index:100;
-      box-shadow: 0 3px 12px rgba(21,71,52,0.3);
-    `;
-    backToTop.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg> Back to top`;
-    backToTop.addEventListener('click', () => messagesArea.scrollTo({ top: 0, behavior: 'smooth' }));
-    popup.appendChild(backToTop);
+    const backToTop = makeBackToTopPill(popup, messagesArea);
 
+    const SCROLL_THRESHOLD = 150;
+    let searchCollapsed = false;
     messagesArea.addEventListener('scroll', () => {
-      const scrolled = messagesArea.scrollTop > 150;
-      if (scrolled) {
-        backToTop.style.opacity = '1';
-        backToTop.style.transform = 'translateX(-50%) translateY(0)';
-        backToTop.style.pointerEvents = 'auto';
-      } else {
-        backToTop.style.opacity = '0';
-        backToTop.style.transform = 'translateX(-50%) translateY(12px)';
-        backToTop.style.pointerEvents = 'none';
+      const scrolled = messagesArea.scrollTop > SCROLL_THRESHOLD;
+      if (scrolled && !searchCollapsed) {
+        searchCollapsed = true;
+        searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
+        searchWrap.style.opacity = '0'; searchWrap.style.maxHeight = '0'; searchWrap.style.marginBottom = '0';
+        searchWrap.style.transform = 'translateY(-4px) scaleY(0.95)'; searchWrap.style.pointerEvents = 'none';
+      } else if (!scrolled && searchCollapsed) {
+        searchCollapsed = false;
+        searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
+        searchWrap.style.opacity = '1'; searchWrap.style.maxHeight = '50px'; searchWrap.style.marginBottom = '10px';
+        searchWrap.style.transform = 'translateY(0) scaleY(1)'; searchWrap.style.pointerEvents = '';
       }
+      if (scrolled) showPill(backToTop); else hidePill(backToTop);
     });
 
-    function renderPinnedContent() {
-      contentArea.innerHTML = '';
+    function renderPinnedContent(filteredKeys) {
+      fadeContent(contentArea, () => {
+        contentArea.innerHTML = '';
+        const pins = filteredKeys || getPinnedSet();
+
+        if (pins.size === 0 && !filteredKeys) {
+          contentArea.innerHTML = `
+            <div style="text-align:center;padding:50px 20px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ddd" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px;"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>
+              <div style="color:#bbb;font-size:13px;margin-top:4px;">No pinned messages yet</div>
+              <div style="color:#ccc;font-size:12px;margin-top:6px;line-height:1.5;">Hover over any message<br>and tap the pin icon to save it here.</div>
+            </div>`;
+          return;
+        }
+
+        const history = getChatHistory();
+        const byDate = {};
+
+        // If filteredKeys is a Set of key strings from search, use those; else all pins
+        const keySet = filteredKeys instanceof Set ? filteredKeys : getPinnedSet();
+        keySet.forEach(key => {
+          const [dateKey, idxStr] = key.split('::');
+          const idx = parseInt(idxStr);
+          if (history[dateKey] && history[dateKey][idx]) {
+            if (!byDate[dateKey]) byDate[dateKey] = [];
+            if (!byDate[dateKey].find(e => e.key === key)) {
+              byDate[dateKey].push({ key, idx, msg: history[dateKey][idx] });
+            }
+          }
+        });
+
+        const sortedDates = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a));
+
+        if (sortedDates.length === 0) {
+          contentArea.innerHTML = `<div style="text-align:center;color:#bbb;font-size:13px;padding:40px 20px;">No results found</div>`;
+          return;
+        }
+
+        sortedDates.forEach(dateKey => {
+          const dateHeader = document.createElement('div');
+          dateHeader.style.cssText = 'font-size:11px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:0.05em;padding:6px 0 4px;margin-top:6px;border-bottom:1px solid #f0f0f0;margin-bottom:8px;';
+          dateHeader.textContent = dateKey;
+          contentArea.appendChild(dateHeader);
+
+          byDate[dateKey].sort((a, b) => a.idx - b.idx).forEach(({ key, msg }) => {
+            const isUser = msg.role === 'user';
+
+            if (!isUser && msg.comparisonData) {
+              const cardWrap = document.createElement('div');
+              cardWrap.style.cssText = 'position:relative;margin-bottom:6px;';
+              addComparisonCard(cardWrap, msg.comparisonData, true, null);
+              const innerWrapper = cardWrap.firstChild;
+              if (innerWrapper) {
+                const metaRow = innerWrapper.lastChild;
+                if (metaRow) {
+                  const timeEl = metaRow.firstChild;
+                  if (timeEl) timeEl.textContent = msg.time;
+                  const existingPin = metaRow.querySelector('.pr-pin-btn');
+                  if (existingPin) existingPin.remove();
+                  const unpinBtn = makeUnpinButton(key, () => renderPinnedContent());
+                  metaRow.appendChild(unpinBtn);
+                }
+              }
+              contentArea.appendChild(cardWrap);
+            } else {
+              const row = document.createElement('div');
+              row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;`;
+
+              const bubble = document.createElement('div');
+              bubble.style.cssText = isUser
+                ? `background:${BRAND.green};color:#fff;padding:8px 14px;border-radius:14px 14px 4px 14px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`
+                : `background:#f5f5f5;color:#333;padding:8px 14px;border-radius:14px 14px 14px 4px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`;
+              if (isUser) bubble.textContent = msg.text;
+              else bubble.innerHTML = formatBotMessage(convertLinksToHTML(msg.text));
+
+              const metaRow = document.createElement('div');
+              metaRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;padding:0 4px;';
+              const time = document.createElement('div');
+              time.style.cssText = 'font-size:10px;color:#ccc;';
+              time.textContent = msg.time;
+
+              const unpinBtn = makeUnpinButton(key, () => renderPinnedContent());
+
+              if (isUser) { metaRow.appendChild(unpinBtn); metaRow.appendChild(time); }
+              else { metaRow.appendChild(time); metaRow.appendChild(unpinBtn); }
+
+              row.appendChild(bubble);
+              row.appendChild(metaRow);
+              contentArea.appendChild(row);
+            }
+          });
+        });
+      });
+    }
+
+    // Initial render — not through fadeContent since we're already fading in the whole view
+    contentArea.innerHTML = '';
+    (() => {
       const pins = getPinnedSet();
       if (pins.size === 0) {
         contentArea.innerHTML = `
@@ -998,7 +1152,6 @@ function renderPinnedView(messagesArea) {
           </div>`;
         return;
       }
-
       const history = getChatHistory();
       const byDate = {};
       pins.forEach(key => {
@@ -1006,89 +1159,111 @@ function renderPinnedView(messagesArea) {
         const idx = parseInt(idxStr);
         if (history[dateKey] && history[dateKey][idx]) {
           if (!byDate[dateKey]) byDate[dateKey] = [];
-          // Avoid duplicate entries for same key
-          if (!byDate[dateKey].find(e => e.key === key)) {
-            byDate[dateKey].push({ key, idx, msg: history[dateKey][idx] });
-          }
+          if (!byDate[dateKey].find(e => e.key === key)) byDate[dateKey].push({ key, idx, msg: history[dateKey][idx] });
         }
       });
-
       const sortedDates = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a));
-
-      if (sortedDates.length === 0) {
-        contentArea.innerHTML = `<div style="text-align:center;color:#bbb;font-size:13px;padding:40px 20px;">No pinned messages found</div>`;
-        return;
-      }
-
       sortedDates.forEach(dateKey => {
         const dateHeader = document.createElement('div');
         dateHeader.style.cssText = 'font-size:11px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:0.05em;padding:6px 0 4px;margin-top:6px;border-bottom:1px solid #f0f0f0;margin-bottom:8px;';
         dateHeader.textContent = dateKey;
         contentArea.appendChild(dateHeader);
-
         byDate[dateKey].sort((a, b) => a.idx - b.idx).forEach(({ key, msg }) => {
           const isUser = msg.role === 'user';
-
-          if (!isUser && msg.comparisonData) {
-            const cardWrap = document.createElement('div');
-            cardWrap.style.cssText = 'position:relative;margin-bottom:6px;';
-            addComparisonCard(cardWrap, msg.comparisonData, true, null);
-            const innerWrapper = cardWrap.firstChild;
-            if (innerWrapper) {
-              const metaRow = innerWrapper.lastChild;
-              if (metaRow) {
-                const timeEl = metaRow.firstChild;
-                if (timeEl) timeEl.textContent = msg.time;
-                const existingPin = metaRow.querySelector('.pr-pin-btn');
-                if (existingPin) existingPin.remove();
-                const unpinBtn = makeUnpinButton(key, () => renderPinnedContent());
-                metaRow.appendChild(unpinBtn);
-              }
-            }
-            contentArea.appendChild(cardWrap);
-          } else {
-            const row = document.createElement('div');
-            row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;`;
-
-            const bubble = document.createElement('div');
-            bubble.style.cssText = isUser
-              ? `background:${BRAND.green};color:#fff;padding:8px 14px;border-radius:14px 14px 4px 14px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`
-              : `background:#f5f5f5;color:#333;padding:8px 14px;border-radius:14px 14px 14px 4px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`;
-            if (isUser) bubble.textContent = msg.text;
-            else bubble.innerHTML = formatBotMessage(convertLinksToHTML(msg.text));
-
-            const metaRow = document.createElement('div');
-            metaRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;padding:0 4px;';
-            const time = document.createElement('div');
-            time.style.cssText = 'font-size:10px;color:#ccc;';
-            time.textContent = msg.time;
-
-            const unpinBtn = makeUnpinButton(key, () => renderPinnedContent());
-
-            if (isUser) {
-              metaRow.appendChild(unpinBtn);
-              metaRow.appendChild(time);
-            } else {
-              metaRow.appendChild(time);
-              metaRow.appendChild(unpinBtn);
-            }
-
-            row.appendChild(bubble);
-            row.appendChild(metaRow);
-            contentArea.appendChild(row);
-          }
+          const row = document.createElement('div');
+          row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;`;
+          const bubble = document.createElement('div');
+          bubble.style.cssText = isUser
+            ? `background:${BRAND.green};color:#fff;padding:8px 14px;border-radius:14px 14px 4px 14px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`
+            : `background:#f5f5f5;color:#333;padding:8px 14px;border-radius:14px 14px 14px 4px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`;
+          if (isUser) bubble.textContent = msg.text;
+          else bubble.innerHTML = formatBotMessage(convertLinksToHTML(msg.text));
+          const metaRow = document.createElement('div');
+          metaRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;padding:0 4px;';
+          const time = document.createElement('div');
+          time.style.cssText = 'font-size:10px;color:#ccc;';
+          time.textContent = msg.time;
+          const unpinBtn = makeUnpinButton(key, () => renderPinnedContent());
+          if (isUser) { metaRow.appendChild(unpinBtn); metaRow.appendChild(time); }
+          else { metaRow.appendChild(time); metaRow.appendChild(unpinBtn); }
+          row.appendChild(bubble);
+          row.appendChild(metaRow);
+          contentArea.appendChild(row);
         });
       });
-    }
+    })();
 
-    renderPinnedContent();
+    // Search
+    let searchTimeout = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const term = searchInput.value.trim();
+        if (!term) {
+          renderPinnedContent(); // re-render all pinned with fade
+        } else {
+          const results = searchPinned(term);
+          const filteredKeys = new Set(results.map(r => r.key));
+          // Render filtered — use a local fade without the outer fadeContent wrapper
+          contentArea.style.transition = 'opacity 0.12s ease-out';
+          contentArea.style.opacity = '0';
+          setTimeout(() => {
+            contentArea.innerHTML = '';
+            if (results.length === 0) {
+              contentArea.innerHTML = `<div style="text-align:center;color:#bbb;font-size:13px;padding:40px 20px;">No pinned results for "${term.replace(/</g,'&lt;')}"</div>`;
+            } else {
+              // Group by date
+              const byDate = {};
+              results.forEach(r => {
+                if (!byDate[r.dateKey]) byDate[r.dateKey] = [];
+                if (!byDate[r.dateKey].find(e => e.key === r.key)) byDate[r.dateKey].push(r);
+              });
+              const history = getChatHistory();
+              Object.keys(byDate).sort((a,b)=>new Date(b)-new Date(a)).forEach(dateKey => {
+                const dh = document.createElement('div');
+                dh.style.cssText = 'font-size:11px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:0.05em;padding:6px 0 4px;margin-top:6px;border-bottom:1px solid #f0f0f0;margin-bottom:8px;';
+                dh.textContent = dateKey;
+                contentArea.appendChild(dh);
+                byDate[dateKey].sort((a,b)=>a.idx-b.idx).forEach(({ key, idx, msg }) => {
+                  const isUser = msg.role === 'user';
+                  const card = document.createElement('div');
+                  card.style.cssText = 'background:#fafafa;border-radius:8px;padding:8px 12px;margin-bottom:4px;border:1px solid #f0f0f0;';
+                  const topRow = document.createElement('div');
+                  topRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+                  const roleLabel = document.createElement('span');
+                  roleLabel.style.cssText = `font-size:10px;font-weight:700;color:${isUser?BRAND.green:'#888'};text-transform:uppercase;letter-spacing:0.03em;`;
+                  roleLabel.textContent = isUser ? 'You' : 'Agent';
+                  const timeLabel = document.createElement('span');
+                  timeLabel.style.cssText = 'font-size:10px;color:#ccc;';
+                  timeLabel.textContent = msg.time;
+                  topRow.appendChild(roleLabel);
+                  topRow.appendChild(timeLabel);
+                  const snippetEl = document.createElement('div');
+                  snippetEl.style.cssText = 'font-size:12px;color:#555;line-height:1.4;margin-top:3px;';
+                  snippetEl.innerHTML = highlightTerm(getSnippet(normalizeText(msg.text), term, 90), term);
+                  card.appendChild(topRow);
+                  card.appendChild(snippetEl);
+                  contentArea.appendChild(card);
+                });
+              });
+            }
+            contentArea.style.transition = 'opacity 0.15s ease-in';
+            contentArea.style.opacity = '1';
+          }, 120);
+        }
+      }, 200);
+    });
 
-    messagesArea.style.transition = 'opacity 0.2s ease-in';
-    messagesArea.style.opacity = '1';
-  }, 150);
+    // Animate header in
+    requestAnimationFrame(() => {
+      setTimeout(() => stickyHeader.classList.add('visible'), 40);
+    });
+
+    setTimeout(() => searchInput.focus(), 260);
+  });
 }
 
-// A dedicated unpin button used inside the pinned view
+// Unpin button used inside the pinned view
 function makeUnpinButton(key, onUnpin) {
   const btn = document.createElement('button');
   btn.className = 'pr-pin-btn pinned';
@@ -1104,6 +1279,9 @@ function makeUnpinButton(key, onUnpin) {
     pins.delete(key);
     if (pairKey) pins.delete(pairKey);
     setPinnedSet(pins);
+    // Sync all live pin buttons for this key and pair
+    syncPinBtnUI(key, false, false);
+    if (pairKey) syncPinBtnUI(pairKey, false, false);
     if (onUnpin) onUnpin();
   });
   return btn;
@@ -1224,7 +1402,6 @@ function openAgentPopup(button) {
   const popup = document.createElement('div');
   popup.className = 'pr-agent-popup';
 
-  // Header — pin icon + history icon + close
   const header = document.createElement('div');
   header.style.cssText = `padding:12px 16px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;cursor:default;user-select:none;background:#fff;border-radius:14px 14px 0 0;`;
   header.innerHTML = `
@@ -1268,13 +1445,11 @@ function openAgentPopup(button) {
     document.addEventListener('mouseup', onUp);
   });
 
-  // Messages area
   const messagesArea = document.createElement('div');
   messagesArea.className = 'agent-messages';
   messagesArea.style.cssText = 'flex:1;padding:16px;overflow-y:auto;background:#fff;display:flex;flex-direction:column;';
   renderWelcomeState(messagesArea);
 
-  // Input area
   const inputArea = document.createElement('div');
   inputArea.className = 'pr-agent-input';
   inputArea.style.cssText = 'padding:10px 14px;border-top:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;background:#fff;border-radius:0 0 14px 14px;';
@@ -1289,7 +1464,6 @@ function openAgentPopup(button) {
   sendBtn.addEventListener('mouseenter', () => sendBtn.style.transform = 'scale(1.08)');
   sendBtn.addEventListener('mouseleave', () => sendBtn.style.transform = 'scale(1)');
 
-  // Header button hover states
   const closeBtn = header.querySelector('.pr-agent-close');
   closeBtn.addEventListener('mouseenter', function() { this.style.color = '#666'; this.style.background = '#f0f0f0'; });
   closeBtn.addEventListener('mouseleave', function() { this.style.color = '#ccc'; this.style.background = 'transparent'; });
@@ -1305,7 +1479,6 @@ function openAgentPopup(button) {
   pinnedBtn.addEventListener('mouseleave', () => { pinnedBtn.style.color = '#ccc'; pinnedBtn.style.background = 'transparent'; });
   pinnedBtn.addEventListener('click', () => renderPinnedView(messagesArea));
 
-  // Send logic
   function sendMessage() {
     const msg = input.value.trim();
     if (!msg) return;
@@ -1415,7 +1588,6 @@ function injectAskAgentButton() {
     }
   }
 
-  // Fallback
   const selectors = ['button[type="button"]', '.MuiButton-root', 'button', '[role="button"]'];
   let found = [];
   selectors.forEach(sel => {
