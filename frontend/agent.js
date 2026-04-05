@@ -145,14 +145,18 @@ function showRateLimitBanner(popup, remaining) {
   if (existing) existing.remove();
   if (remaining > 3) return;
 
+  const bannerWrap = document.createElement('div');
+  bannerWrap.className = 'pr-agent-limit-banner';
+  bannerWrap.style.cssText = 'padding: 0 12px 8px; background: #fff;';
+
   const banner = document.createElement('div');
-  banner.className = 'pr-agent-limit-banner';
   const isOut = remaining === 0;
   banner.style.cssText = `
-    padding: 8px 16px; margin: 0;
+    padding: 10px 16px;
     background: ${isOut ? 'rgba(180,30,30,0.95)' : 'rgba(45,35,55,0.95)'};
     color: rgba(255,255,255,0.9); font-size: 12px; font-weight: 500;
     display: flex; align-items: center; gap: 8px;
+    border-radius: 10px;
     animation: agentBannerIn 0.2s ease-out;
   `;
   if (isOut) {
@@ -160,9 +164,10 @@ function showRateLimitBanner(popup, remaining) {
   } else {
     banner.innerHTML = `<div style="width:5px;height:5px;border-radius:50%;background:${remaining===1?'#F59E0B':'#A78BFA'};"></div>${remaining} message${remaining===1?'':'s'} remaining today`;
   }
+  bannerWrap.appendChild(banner);
 
   const inputArea = popup.querySelector('.pr-agent-input');
-  if (inputArea) popup.insertBefore(banner, inputArea);
+  if (inputArea) popup.insertBefore(bannerWrap, inputArea);
 
   if (isOut) {
     const input = inputArea?.querySelector('input');
