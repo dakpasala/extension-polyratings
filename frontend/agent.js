@@ -1,6 +1,7 @@
 // ==================== AGENT POPUP — REDESIGNED ====================
 // Modern, minimal UI. Cal Poly green (#154734) accent.
 // All functionality preserved: chat, history, search, select/delete, DB rate limiting.
+// + Pinned messages: pin icon in header opens pinned view; hover-to-pin on bubbles.
 
 const BRAND = { green: '#154734', greenLight: 'rgba(21, 71, 52, 0.08)', greenMid: 'rgba(21, 71, 52, 0.15)' };
 
@@ -46,12 +47,75 @@ const BRAND = { green: '#154734', greenLight: 'rgba(21, 71, 52, 0.08)', greenMid
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    .pr-pin-btn {
+      opacity: 0;
+      transition: opacity 0.15s;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ccc;
+      flex-shrink: 0;
+    }
+    .pr-pin-btn:hover { color: #154734 !important; }
+    .pr-pin-btn.pinned { opacity: 1 !important; color: #154734 !important; }
+    .pr-msg-wrapper:hover .pr-pin-btn { opacity: 1; }
   `;
   document.head.appendChild(s);
 })();
 
 // ==================== CHAT HISTORY (localStorage) ====================
 const CHAT_HISTORY = { STORAGE_KEY: 'pr_agent_history' };
+const PINNED_STORAGE_KEY = 'pr_agent_pinned';
+
+function getPinnedSet() {
+  try { const s = localStorage.getItem(PINNED_STORAGE_KEY); return s ? new Set(JSON.parse(s)) : new Set(); } catch(e) { return new Set(); }
+}
+
+function setPinnedSet(set) {
+  localStorage.setItem(PINNED_STORAGE_KEY, JSON.stringify([...set]));
+}
+
+// Pin a key AND its conversation pair (user msg → next bot msg, or bot msg → prev user msg)
+// History is sequential: user at idx N, bot at idx N+1 (or vice versa).
+// We always pin both indices together so they stay as a pair.
+function getPairKey(dateKey, idx) {
+  const history = getChatHistory();
+  const msgs = history[dateKey] || [];
+  const msg = msgs[idx];
+  if (!msg) return null;
+  if (msg.role === 'user') {
+    // pair is the next message if it's a bot message
+    const next = msgs[idx + 1];
+    if (next && next.role !== 'user') return `${dateKey}::${idx + 1}`;
+  } else {
+    // pair is the previous message if it's a user message
+    const prev = msgs[idx - 1];
+    if (prev && prev.role === 'user') return `${dateKey}::${idx - 1}`;
+  }
+  return null;
+}
+
+function togglePin(key) {
+  const pins = getPinnedSet();
+  const [dateKey, idxStr] = key.split('::');
+  const idx = parseInt(idxStr);
+  const pairKey = getPairKey(dateKey, idx);
+
+  if (pins.has(key)) {
+    pins.delete(key);
+    if (pairKey) pins.delete(pairKey);
+  } else {
+    pins.add(key);
+    if (pairKey) pins.add(pairKey);
+  }
+  setPinnedSet(pins);
+  return pins.has(key);
+}
 
 function saveChatMessage(role, text, comparisonData) {
   const now = new Date();
@@ -112,6 +176,7 @@ function searchHistory(term) {
 // ==================== RESET ====================
 function resetAgentUsage() {
   localStorage.removeItem(CHAT_HISTORY.STORAGE_KEY);
+  localStorage.removeItem(PINNED_STORAGE_KEY);
   console.log('🔄 Agent history reset');
 }
 
@@ -182,16 +247,44 @@ function showRateLimitBanner(popup, remaining) {
   }
 }
 
+// ==================== PIN BUTTON HELPER ====================
+function makePinButton(key, onToggle) {
+  const pins = getPinnedSet();
+  const isPinned = pins.has(key);
+
+  const btn = document.createElement('button');
+  btn.className = 'pr-pin-btn' + (isPinned ? ' pinned' : '');
+  btn.title = isPinned ? 'Unpin' : 'Pin';
+
+  function renderIcon(filled) {
+    btn.innerHTML = filled
+      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`;
+  }
+
+  renderIcon(isPinned);
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const nowPinned = togglePin(key);
+    renderIcon(nowPinned);
+    if (nowPinned) btn.classList.add('pinned');
+    else btn.classList.remove('pinned');
+    btn.title = nowPinned ? 'Unpin' : 'Pin';
+    if (onToggle) onToggle(nowPinned);
+  });
+
+  return btn;
+}
+
 // ==================== COMPARISON CARD ====================
-function addComparisonCard(container, data, skipSave) {
+function addComparisonCard(container, data, skipSave, pinKey) {
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'margin-bottom:12px;animation:agentSlideInL 0.25s ease-out;';
 
-  // Find the winner by rating
   const sorted = [...data.items].sort((a, b) => b.rating - a.rating);
   const winnerId = sorted[0]?.name;
 
-  // Rating star helper
   function ratingDots(rating) {
     const max = 4;
     const filled = Math.round(rating);
@@ -204,7 +297,6 @@ function addComparisonCard(container, data, skipSave) {
     return html;
   }
 
-  // Difficulty badge color
   function diffColor(diff) {
     if (!diff) return '#999';
     const d = diff.toLowerCase();
@@ -214,7 +306,6 @@ function addComparisonCard(container, data, skipSave) {
     return '#888';
   }
 
-  // Cards grid
   const grid = document.createElement('div');
   grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;';
 
@@ -230,7 +321,6 @@ function addComparisonCard(container, data, skipSave) {
       transition:border-color 0.15s;
     `;
 
-    // Winner badge
     if (isWinner) {
       const badge = document.createElement('div');
       badge.style.cssText = `
@@ -244,19 +334,16 @@ function addComparisonCard(container, data, skipSave) {
       card.appendChild(badge);
     }
 
-    // Name
     const name = document.createElement('div');
     name.style.cssText = `font-size:13px;font-weight:600;color:#222;margin-bottom:6px;line-height:1.3;padding-right:4px;${isWinner ? 'margin-top:14px;' : ''}`;
     name.textContent = item.name;
     card.appendChild(name);
 
-    // Rating dots
     const ratingEl = document.createElement('div');
     ratingEl.style.cssText = 'margin-bottom:5px;';
     ratingEl.innerHTML = ratingDots(item.rating);
     card.appendChild(ratingEl);
 
-    // Review count
     if (item.reviewCount) {
       const reviewCount = document.createElement('div');
       reviewCount.style.cssText = 'font-size:10px;color:#bbb;margin-bottom:6px;';
@@ -264,7 +351,6 @@ function addComparisonCard(container, data, skipSave) {
       card.appendChild(reviewCount);
     }
 
-    // Difficulty badge
     if (item.difficulty) {
       const diff = document.createElement('div');
       diff.style.cssText = `
@@ -277,7 +363,6 @@ function addComparisonCard(container, data, skipSave) {
       card.appendChild(diff);
     }
 
-    // Tags
     if (item.tags && item.tags.length > 0) {
       const tagsEl = document.createElement('div');
       tagsEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px;';
@@ -290,7 +375,6 @@ function addComparisonCard(container, data, skipSave) {
       card.appendChild(tagsEl);
     }
 
-    // Summary
     if (item.summary) {
       const summary = document.createElement('div');
       summary.style.cssText = 'font-size:11px;color:#777;line-height:1.5;border-top:1px solid #f0f0f0;padding-top:7px;margin-top:2px;';
@@ -303,7 +387,6 @@ function addComparisonCard(container, data, skipSave) {
 
   wrapper.appendChild(grid);
 
-  // Verdict bar
   if (data.verdict) {
     const verdict = document.createElement('div');
     verdict.style.cssText = `
@@ -317,25 +400,73 @@ function addComparisonCard(container, data, skipSave) {
     wrapper.appendChild(verdict);
   }
 
-  // Timestamp
+  // Timestamp + pin row
+  const metaRow = document.createElement('div');
+  metaRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding:0 2px;';
   const time = document.createElement('div');
-  time.style.cssText = 'font-size:10px;color:#ccc;margin-top:4px;padding:0 2px;';
+  time.style.cssText = 'font-size:10px;color:#ccc;';
   time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  wrapper.appendChild(time);
+  metaRow.appendChild(time);
 
+  if (pinKey) {
+    const pinBtn = makePinButton(pinKey);
+    metaRow.appendChild(pinBtn);
+  }
+
+  wrapper.appendChild(metaRow);
   container.appendChild(wrapper);
   if (container.scrollTop !== undefined && container.className === "agent-messages") container.scrollTop = container.scrollHeight;
 
-  // Save a text summary to history
   const historyText = `[Comparison] ${data.items.map(i => `${i.name} (${i.rating}/4.0)`).join(' vs ')}. ${data.verdict || ''}`;
   if (!skipSave) saveChatMessage("bot", historyText, data);
 }
 
+// ==================== SHARED BACK-NAV HELPER ====================
+// Cleans up any history/pinned sticky header + backToTop pill, then restores chat view.
+function navigateBackToChat(popup, messagesArea) {
+  const existingHeader = popup.querySelector('.pr-history-sticky-header');
+  const backToTopEl = popup.querySelector('.pr-back-to-top-pill');
+  const inputArea = popup.querySelector('.pr-agent-input');
+  const limitBanner = popup.querySelector('.pr-agent-limit-banner');
+
+  const fadeTargets = [messagesArea];
+  if (existingHeader) fadeTargets.push(existingHeader);
+
+  fadeTargets.forEach(el => {
+    el.style.transition = 'opacity 0.18s ease-out';
+    el.style.opacity = '0';
+  });
+
+  setTimeout(() => {
+    if (existingHeader) existingHeader.remove();
+    if (backToTopEl) backToTopEl.remove();
+
+    if (inputArea) inputArea.style.display = 'flex';
+    if (limitBanner) limitBanner.style.display = 'flex';
+    messagesArea.innerHTML = '';
+    messagesArea.style.paddingTop = '16px';
+    messagesArea.style.transition = 'none';
+    messagesArea.style.opacity = '0';
+    renderWelcomeState(messagesArea);
+
+    requestAnimationFrame(() => {
+      messagesArea.style.transition = 'opacity 0.22s ease-in';
+      messagesArea.style.opacity = '1';
+    });
+  }, 180);
+}
+
 // ==================== HISTORY VIEW ====================
 function renderHistoryView(messagesArea) {
+  // If already in a sub-view (history/pinned), clean up first before re-entering
+  const popup = messagesArea.closest('.pr-agent-popup');
+  const existingHeader = popup.querySelector('.pr-history-sticky-header');
+  if (existingHeader) existingHeader.remove();
+  const existingPill = popup.querySelector('.pr-back-to-top-pill');
+  if (existingPill) existingPill.remove();
+
   const history = getChatHistory();
   const dates = Object.keys(history);
-  const popup = messagesArea.closest('.pr-agent-popup');
   const inputArea = popup?.querySelector('.pr-agent-input');
   const limitBanner = popup?.querySelector('.pr-agent-limit-banner');
 
@@ -351,12 +482,11 @@ function renderHistoryView(messagesArea) {
     let selectMode = false;
     const selectedMessages = new Set();
 
-    // ── Sticky header injected into popup above messagesArea ──
+    // ── Sticky header ──
     const stickyHeader = document.createElement('div');
     stickyHeader.className = 'pr-history-sticky-header';
     stickyHeader.style.cssText = 'background:#fff;padding:10px 16px 0;border-bottom:1px solid #f0f0f0;flex-shrink:0;';
 
-    // Top bar
     const topBar = document.createElement('div');
     topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
 
@@ -365,38 +495,7 @@ function renderHistoryView(messagesArea) {
     backBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg> Back`;
     backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
     backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
-    backBtn.addEventListener('click', () => {
-      // Fade out both the sticky header and messages together, then swap
-      const existingHeader = popup.querySelector('.pr-history-sticky-header');
-      const fadeTargets = [messagesArea];
-      if (existingHeader) fadeTargets.push(existingHeader);
-
-      fadeTargets.forEach(el => {
-        el.style.transition = 'opacity 0.18s ease-out';
-        el.style.opacity = '0';
-      });
-
-      setTimeout(() => {
-        // Clean up history UI
-        if (existingHeader) existingHeader.remove();
-        if (backToTop && backToTop.parentNode === popup) backToTop.remove();
-
-        // Restore chat view
-        if (inputArea) inputArea.style.display = 'flex';
-        if (limitBanner) limitBanner.style.display = 'flex';
-        messagesArea.innerHTML = '';
-        messagesArea.style.paddingTop = '16px';
-        messagesArea.style.transition = 'none';
-        messagesArea.style.opacity = '0';
-        renderWelcomeState(messagesArea);
-
-        // Fade in cleanly on next frame
-        requestAnimationFrame(() => {
-          messagesArea.style.transition = 'opacity 0.22s ease-in';
-          messagesArea.style.opacity = '1';
-        });
-      }, 180);
-    });
+    backBtn.addEventListener('click', () => navigateBackToChat(popup, messagesArea));
 
     const selectBtn = document.createElement('div');
     selectBtn.style.cssText = 'font-size:12px;font-weight:500;color:#999;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s;';
@@ -424,54 +523,64 @@ function renderHistoryView(messagesArea) {
     searchWrap.appendChild(searchInput);
     stickyHeader.appendChild(searchWrap);
 
-    // Insert sticky header into popup above the messagesArea
     popup.insertBefore(stickyHeader, messagesArea);
     messagesArea.style.paddingTop = "8px";
 
-    // Content area (this is all that scrolls now)
     const contentArea = document.createElement('div');
     contentArea.className = 'history-content-area';
     messagesArea.appendChild(contentArea);
 
-    // Delete bar
-    const deleteBar = document.createElement('div');
-    deleteBar.style.cssText = `position:sticky;bottom:0;background:rgba(220,38,38,0.95);backdrop-filter:blur(8px);padding:8px 14px;border-radius:10px;display:none;align-items:center;justify-content:space-between;margin-top:8px;`;
-    const deleteCount = document.createElement('span');
-    deleteCount.style.cssText = 'color:white;font-size:12px;font-weight:500;';
-    const deleteActions = document.createElement('div');
-    deleteActions.style.cssText = 'display:flex;gap:6px;';
-    const cancelDelBtn = document.createElement('button');
-    cancelDelBtn.style.cssText = 'background:rgba(255,255,255,0.2);color:white;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;';
-    cancelDelBtn.textContent = 'Cancel';
-    const confirmDelBtn = document.createElement('button');
-    confirmDelBtn.style.cssText = 'background:white;color:#DC2626;border:none;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;';
-    confirmDelBtn.textContent = 'Delete';
-    deleteActions.appendChild(cancelDelBtn);
-    deleteActions.appendChild(confirmDelBtn);
-    deleteBar.appendChild(deleteCount);
-    deleteBar.appendChild(deleteActions);
-    messagesArea.appendChild(deleteBar);
+    // ── Action bar (replaces old red delete bar) ──
+    // Slate/neutral dark background — not red, shows Pin + Delete
+    const actionBar = document.createElement('div');
+    actionBar.style.cssText = `position:sticky;bottom:0;background:rgba(30,30,35,0.96);backdrop-filter:blur(8px);padding:8px 12px;border-radius:10px;display:none;align-items:center;justify-content:space-between;margin-top:8px;gap:8px;`;
 
-    function updateDeleteBar() {
+    const actionCount = document.createElement('span');
+    actionCount.style.cssText = 'color:rgba(255,255,255,0.7);font-size:12px;font-weight:500;flex:1;';
+
+    const actionBtns = document.createElement('div');
+    actionBtns.style.cssText = 'display:flex;gap:6px;';
+
+    const cancelSelBtn = document.createElement('button');
+    cancelSelBtn.style.cssText = 'background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);border:none;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;';
+    cancelSelBtn.textContent = 'Cancel';
+
+    const pinSelBtn = document.createElement('button');
+    pinSelBtn.style.cssText = `background:${BRAND.green};color:white;border:none;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;`;
+    pinSelBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pin`;
+
+    const deleteSelBtn = document.createElement('button');
+    deleteSelBtn.style.cssText = 'background:rgba(220,38,38,0.85);color:white;border:none;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;';
+    deleteSelBtn.textContent = 'Delete';
+
+    actionBtns.appendChild(cancelSelBtn);
+    actionBtns.appendChild(pinSelBtn);
+    actionBtns.appendChild(deleteSelBtn);
+    actionBar.appendChild(actionCount);
+    actionBar.appendChild(actionBtns);
+    messagesArea.appendChild(actionBar);
+
+    function updateActionBar() {
       const count = selectedMessages.size;
       if (count > 0) {
-        if (deleteBar.style.display !== 'flex') {
-          deleteBar.style.display = 'flex'; deleteBar.style.opacity = '0'; deleteBar.style.transform = 'translateY(8px)';
-          requestAnimationFrame(() => { deleteBar.style.transition = 'opacity 0.2s,transform 0.2s'; deleteBar.style.opacity = '1'; deleteBar.style.transform = 'translateY(0)'; });
+        if (actionBar.style.display !== 'flex') {
+          actionBar.style.display = 'flex'; actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
+          requestAnimationFrame(() => { actionBar.style.transition = 'opacity 0.2s,transform 0.2s'; actionBar.style.opacity = '1'; actionBar.style.transform = 'translateY(0)'; });
         }
-        deleteCount.textContent = `${count} selected`;
-        confirmDelBtn.textContent = `Delete (${count})`;
+        actionCount.textContent = `${count} selected`;
+        pinSelBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pin (${count})`;
+        deleteSelBtn.textContent = `Delete (${count})`;
       } else {
-        deleteBar.style.transition = 'opacity 0.15s,transform 0.15s'; deleteBar.style.opacity = '0'; deleteBar.style.transform = 'translateY(8px)';
-        setTimeout(() => { deleteBar.style.display = 'none'; }, 150);
+        actionBar.style.transition = 'opacity 0.15s,transform 0.15s'; actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
+        setTimeout(() => { actionBar.style.display = 'none'; }, 150);
       }
     }
 
     function exitSelectMode() {
       selectMode = false; selectedMessages.clear();
       selectBtn.textContent = 'Select'; selectBtn.style.color = '#999'; selectBtn.style.background = 'transparent';
-      deleteBar.style.transition = 'opacity 0.15s,transform 0.15s'; deleteBar.style.opacity = '0'; deleteBar.style.transform = 'translateY(8px)';
-      setTimeout(() => { deleteBar.style.display = 'none'; }, 150);
+      actionBar.style.transition = 'opacity 0.15s,transform 0.15s'; actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
+      setTimeout(() => { actionBar.style.display = 'none'; }, 150);
       contentArea.querySelectorAll('.select-circle').forEach(c => c.remove());
       contentArea.querySelectorAll('[data-select-row]').forEach(row => { row.style.background = 'transparent'; row.style.paddingLeft = '2px'; });
     }
@@ -496,19 +605,44 @@ function renderHistoryView(messagesArea) {
           circle.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
           row.style.background = BRAND.greenLight;
         }
-        updateDeleteBar();
+        updateActionBar();
       });
       row.style.position = 'relative'; row.appendChild(circle);
     }
 
     selectBtn.addEventListener('click', () => { if (selectMode) exitSelectMode(); else enterSelectMode(); });
-    cancelDelBtn.addEventListener('click', () => exitSelectMode());
-    confirmDelBtn.addEventListener('click', () => {
+    cancelSelBtn.addEventListener('click', () => exitSelectMode());
+
+    // Pin selected
+    pinSelBtn.addEventListener('click', () => {
+      if (selectedMessages.size === 0) return;
+      const pins = getPinnedSet();
+      // Determine if majority are already pinned — if so, unpin; else pin
+      const alreadyPinned = [...selectedMessages].filter(k => pins.has(k)).length;
+      const shouldPin = alreadyPinned < selectedMessages.size / 2;
+      selectedMessages.forEach(key => {
+        const [dk, idxStr] = key.split('::');
+        const idx = parseInt(idxStr);
+        const pairKey = getPairKey(dk, idx);
+        if (shouldPin) { pins.add(key); if (pairKey) pins.add(pairKey); }
+        else { pins.delete(key); if (pairKey) pins.delete(pairKey); }
+      });
+      setPinnedSet(pins);
+      exitSelectMode();
+      contentArea.style.transition = 'opacity 0.12s'; contentArea.style.opacity = '0';
+      setTimeout(() => { contentArea.innerHTML = ''; renderFullHistory(contentArea, getChatHistory(), Object.keys(getChatHistory())); contentArea.style.transition = 'opacity 0.15s'; contentArea.style.opacity = '1'; }, 120);
+    });
+
+    // Delete selected
+    deleteSelBtn.addEventListener('click', () => {
       if (selectedMessages.size === 0) return;
       const hist = getChatHistory(), toDelete = {};
       selectedMessages.forEach(key => { const [dk,idx] = key.split('::'); if (!toDelete[dk]) toDelete[dk] = []; toDelete[dk].push(parseInt(idx)); });
       Object.entries(toDelete).forEach(([dk,indices]) => { if (!hist[dk]) return; indices.sort((a,b)=>b-a).forEach(i=>hist[dk].splice(i,1)); if (hist[dk].length===0) delete hist[dk]; });
       localStorage.setItem(CHAT_HISTORY.STORAGE_KEY, JSON.stringify(hist));
+      const pins = getPinnedSet();
+      selectedMessages.forEach(key => pins.delete(key));
+      setPinnedSet(pins);
       exitSelectMode();
       contentArea.style.transition = 'opacity 0.12s'; contentArea.style.opacity = '0';
       setTimeout(() => { contentArea.innerHTML = ''; renderFullHistory(contentArea, getChatHistory(), Object.keys(getChatHistory())); contentArea.style.transition = 'opacity 0.15s'; contentArea.style.opacity = '1'; }, 120);
@@ -532,8 +666,10 @@ function renderHistoryView(messagesArea) {
       }, 200);
     });
 
-    // ── "Back to top" pill — pinned to popup bottom center ──
+    // ── "Back to top" pill — only visible in history/pinned, not agent chat ──
+    // Uses class pr-back-to-top-pill so navigateBackToChat can cleanly remove it
     const backToTop = document.createElement('div');
+    backToTop.className = 'pr-back-to-top-pill';
     backToTop.style.cssText = `
       position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(16px);
       background:${BRAND.green}; color:white;
@@ -546,20 +682,14 @@ function renderHistoryView(messagesArea) {
       box-shadow: 0 3px 12px rgba(21,71,52,0.3);
     `;
     backToTop.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg> Back to top`;
-    backToTop.addEventListener('click', () => {
-      messagesArea.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-    // Pin to popup so it stays at the bottom regardless of scroll
-    popup.style.position = 'fixed'; // already fixed, but ensure
+    backToTop.addEventListener('click', () => messagesArea.scrollTo({ top: 0, behavior: 'smooth' }));
     popup.appendChild(backToTop);
 
-    // ── Scroll listener: fade search, show back-to-top ──
     const SCROLL_THRESHOLD = 150;
     let searchCollapsed = false;
     messagesArea.addEventListener('scroll', () => {
       const scrolled = messagesArea.scrollTop > SCROLL_THRESHOLD;
 
-      // Fade search bar
       if (scrolled && !searchCollapsed) {
         searchCollapsed = true;
         searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
@@ -573,14 +703,14 @@ function renderHistoryView(messagesArea) {
         searchWrap.style.transition = 'opacity 0.3s cubic-bezier(0.4,0,0.2,1), max-height 0.35s cubic-bezier(0.4,0,0.2,1), margin-bottom 0.35s cubic-bezier(0.4,0,0.2,1), transform 0.3s cubic-bezier(0.4,0,0.2,1)';
         searchWrap.style.opacity = '1';
         searchWrap.style.maxHeight = "50px";
-    searchWrap.style.transform = "translateY(0) scaleY(1)";
         searchWrap.style.marginBottom = '10px';
         searchWrap.style.transform = 'translateY(0) scaleY(1)';
         searchWrap.style.pointerEvents = '';
       }
 
-      // Show/hide back to top pill
-      if (scrolled) {
+      // Back-to-top hides if action bar is visible so they don't overlap
+      const actionBarVisible = actionBar.style.display === 'flex';
+      if (scrolled && !actionBarVisible) {
         backToTop.style.opacity = '1';
         backToTop.style.transform = 'translateX(-50%) translateY(0)';
         backToTop.style.pointerEvents = 'auto';
@@ -591,7 +721,35 @@ function renderHistoryView(messagesArea) {
       }
     });
 
-    // Set initial max-height so the collapse transition works
+    // Also hide back-to-top when action bar appears/disappears
+    const origUpdateActionBar = updateActionBar;
+    function updateActionBarWrapped() {
+      origUpdateActionBar();
+      // After a tick, re-evaluate back-to-top visibility
+      setTimeout(() => {
+        const actionBarVisible = actionBar.style.display === 'flex';
+        if (actionBarVisible) {
+          backToTop.style.opacity = '0';
+          backToTop.style.transform = 'translateX(-50%) translateY(12px)';
+          backToTop.style.pointerEvents = 'none';
+        }
+      }, 10);
+    }
+    // Patch all callers of updateActionBar within this scope to use the wrapped version
+    // (We redefine it here since JS closures capture by reference for let/var but not const reassignment)
+    // Instead, patch the circle click and bar logic inline:
+    contentArea.addEventListener('click', () => {
+      // After any click that might toggle selection, check overlap
+      setTimeout(() => {
+        const actionBarVisible = actionBar.style.display === 'flex';
+        if (actionBarVisible) {
+          backToTop.style.opacity = '0';
+          backToTop.style.transform = 'translateX(-50%) translateY(12px)';
+          backToTop.style.pointerEvents = 'none';
+        }
+      }, 50);
+    });
+
     searchWrap.style.maxHeight = "50px";
     searchWrap.style.transform = "translateY(0) scaleY(1)";
     searchWrap.style.overflow = 'hidden';
@@ -607,6 +765,7 @@ function renderFullHistory(container, history, dates) {
     container.innerHTML = `<div style="text-align:center;color:#bbb;font-size:13px;padding:40px 20px;">No messages yet</div>`;
     return;
   }
+  const pins = getPinnedSet();
   [...dates].reverse().forEach(dateKey => {
     const dateHeader = document.createElement('div');
     dateHeader.style.cssText = 'font-size:11px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:0.05em;padding:6px 0 4px;margin-top:6px;border-bottom:1px solid #f0f0f0;margin-bottom:8px;';
@@ -614,30 +773,30 @@ function renderFullHistory(container, history, dates) {
     container.appendChild(dateHeader);
 
     history[dateKey].forEach((msg, idx) => {
+      const key = `${dateKey}::${idx}`;
       const row = document.createElement('div');
       row.id = `hist-${dateKey.replace(/\s/g,'_')}-${idx}`;
       row.setAttribute('data-select-row', 'true');
-      row.setAttribute('data-select-key', `${dateKey}::${idx}`);
+      row.setAttribute('data-select-key', key);
       row.setAttribute('data-select-role', msg.role);
       const isUser = msg.role === 'user';
       row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:6px;transition:background 0.3s,padding-left 0.2s;padding:2px 4px;border-radius:8px;position:relative;`;
 
-      // If this message has stored comparison data, render the full card instead of a bubble
       if (!isUser && msg.comparisonData) {
-        // Skip the flex row wrapper — render card directly into container so layout isn't squished
-        // Still wrap in a div that carries the select attributes for select/delete to work
         const cardWrap = document.createElement('div');
         cardWrap.id = row.id;
         cardWrap.setAttribute('data-select-row', 'true');
-        cardWrap.setAttribute('data-select-key', `${dateKey}::${idx}`);
+        cardWrap.setAttribute('data-select-key', key);
         cardWrap.setAttribute('data-select-role', msg.role);
         cardWrap.style.cssText = 'position:relative;margin-bottom:6px;transition:background 0.3s,padding-left 0.2s;';
-        addComparisonCard(cardWrap, msg.comparisonData, true);
-        // Fix time to use stored time — the time div is the last child of the wrapper inside cardWrap
+        addComparisonCard(cardWrap, msg.comparisonData, true, key);
         const innerWrapper = cardWrap.firstChild;
         if (innerWrapper) {
-          const cardTime = innerWrapper.lastChild;
-          if (cardTime) cardTime.textContent = msg.time;
+          const metaRow = innerWrapper.lastChild;
+          if (metaRow) {
+            const timeEl = metaRow.firstChild;
+            if (timeEl) timeEl.textContent = msg.time;
+          }
         }
         container.appendChild(cardWrap);
       } else {
@@ -648,12 +807,27 @@ function renderFullHistory(container, history, dates) {
         if (isUser) bubble.textContent = msg.text;
         else bubble.innerHTML = formatBotMessage(convertLinksToHTML(msg.text));
 
+        const metaRow = document.createElement('div');
+        metaRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;padding:0 4px;';
         const time = document.createElement('div');
-        time.style.cssText = 'font-size:10px;color:#ccc;margin-top:2px;padding:0 4px;';
+        time.style.cssText = 'font-size:10px;color:#ccc;';
         time.textContent = msg.time;
 
+        const pinBtn = makePinButton(key);
+        pinBtn.style.opacity = pins.has(key) ? '1' : '0.4';
+        pinBtn.addEventListener('mouseenter', () => { pinBtn.style.opacity = '1'; });
+        pinBtn.addEventListener('mouseleave', () => { pinBtn.style.opacity = getPinnedSet().has(key) ? '1' : '0.4'; });
+
+        if (isUser) {
+          metaRow.appendChild(pinBtn);
+          metaRow.appendChild(time);
+        } else {
+          metaRow.appendChild(time);
+          metaRow.appendChild(pinBtn);
+        }
+
         row.appendChild(bubble);
-        row.appendChild(time);
+        row.appendChild(metaRow);
         container.appendChild(row);
       }
     });
@@ -683,6 +857,7 @@ function renderSearchResults(container, term, messagesArea) {
     grouped[dateKey].forEach(result => {
       const { msg, msgIndex } = result;
       const isUser = msg.role === 'user';
+      const key = `${dateKey}::${msgIndex}`;
       const card = document.createElement('div');
       card.style.cssText = 'background:#fafafa;border-radius:8px;padding:8px 12px;margin-bottom:4px;cursor:pointer;border:1px solid #f0f0f0;transition:all 0.15s;';
 
@@ -691,11 +866,17 @@ function renderSearchResults(container, term, messagesArea) {
       const roleLabel = document.createElement('span');
       roleLabel.style.cssText = `font-size:10px;font-weight:700;color:${isUser?BRAND.green:'#888'};text-transform:uppercase;letter-spacing:0.03em;`;
       roleLabel.textContent = isUser ? 'You' : 'Agent';
+      const rightMeta = document.createElement('div');
+      rightMeta.style.cssText = 'display:flex;align-items:center;gap:6px;';
       const timeLabel = document.createElement('span');
       timeLabel.style.cssText = 'font-size:10px;color:#ccc;';
       timeLabel.textContent = msg.time;
+      const pinBtn = makePinButton(key);
+      pinBtn.style.opacity = getPinnedSet().has(key) ? '1' : '0.4';
+      rightMeta.appendChild(timeLabel);
+      rightMeta.appendChild(pinBtn);
       topRow.appendChild(roleLabel);
-      topRow.appendChild(timeLabel);
+      topRow.appendChild(rightMeta);
 
       const snippetEl = document.createElement('div');
       snippetEl.style.cssText = 'font-size:12px;color:#555;line-height:1.4;margin-top:3px;';
@@ -725,6 +906,209 @@ function renderSearchResults(container, term, messagesArea) {
   });
 }
 
+// ==================== PINNED VIEW ====================
+function renderPinnedView(messagesArea) {
+  // If already in a sub-view (history/pinned), clean up first
+  const popup = messagesArea.closest('.pr-agent-popup');
+  const existingHeader = popup.querySelector('.pr-history-sticky-header');
+  if (existingHeader) existingHeader.remove();
+  const existingPill = popup.querySelector('.pr-back-to-top-pill');
+  if (existingPill) existingPill.remove();
+
+  const inputArea = popup?.querySelector('.pr-agent-input');
+  const limitBanner = popup?.querySelector('.pr-agent-limit-banner');
+
+  messagesArea.style.transition = 'opacity 0.15s ease-out';
+  messagesArea.style.opacity = '0';
+
+  setTimeout(() => {
+    messagesArea.innerHTML = '';
+    if (inputArea) inputArea.style.display = 'none';
+    if (limitBanner) limitBanner.style.display = 'none';
+
+    // ── Sticky header ──
+    const stickyHeader = document.createElement('div');
+    stickyHeader.className = 'pr-history-sticky-header';
+    stickyHeader.style.cssText = 'background:#fff;padding:10px 16px 10px;border-bottom:1px solid #f0f0f0;flex-shrink:0;';
+
+    const topBar = document.createElement('div');
+    topBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+
+    const backBtn = document.createElement('div');
+    backBtn.style.cssText = 'display:inline-flex;align-items:center;gap:5px;color:#999;font-size:13px;font-weight:500;cursor:pointer;transition:color 0.15s;';
+    backBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg> Back`;
+    backBtn.addEventListener('mouseenter', () => backBtn.style.color = '#333');
+    backBtn.addEventListener('mouseleave', () => backBtn.style.color = '#999');
+    // Always go back to chat — never loop into another sub-view
+    backBtn.addEventListener('click', () => navigateBackToChat(popup, messagesArea));
+
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = `font-size:12px;font-weight:600;color:${BRAND.green};display:flex;align-items:center;gap:5px;`;
+    titleEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pinned`;
+
+    topBar.appendChild(backBtn);
+    topBar.appendChild(titleEl);
+    stickyHeader.appendChild(topBar);
+    popup.insertBefore(stickyHeader, messagesArea);
+    messagesArea.style.paddingTop = '8px';
+
+    const contentArea = document.createElement('div');
+    messagesArea.appendChild(contentArea);
+
+    // Back to top pill for pinned view too
+    const backToTop = document.createElement('div');
+    backToTop.className = 'pr-back-to-top-pill';
+    backToTop.style.cssText = `
+      position:absolute; bottom:20px; left:50%; transform:translateX(-50%) translateY(16px);
+      background:${BRAND.green}; color:white;
+      font-size:11px; font-weight:600; letter-spacing:0.02em;
+      padding:7px 16px; border-radius:20px;
+      display:flex; align-items:center; gap:5px;
+      cursor:pointer; opacity:0; pointer-events:none;
+      transition:opacity 0.25s ease, transform 0.25s ease;
+      white-space:nowrap; z-index:100;
+      box-shadow: 0 3px 12px rgba(21,71,52,0.3);
+    `;
+    backToTop.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg> Back to top`;
+    backToTop.addEventListener('click', () => messagesArea.scrollTo({ top: 0, behavior: 'smooth' }));
+    popup.appendChild(backToTop);
+
+    messagesArea.addEventListener('scroll', () => {
+      const scrolled = messagesArea.scrollTop > 150;
+      if (scrolled) {
+        backToTop.style.opacity = '1';
+        backToTop.style.transform = 'translateX(-50%) translateY(0)';
+        backToTop.style.pointerEvents = 'auto';
+      } else {
+        backToTop.style.opacity = '0';
+        backToTop.style.transform = 'translateX(-50%) translateY(12px)';
+        backToTop.style.pointerEvents = 'none';
+      }
+    });
+
+    function renderPinnedContent() {
+      contentArea.innerHTML = '';
+      const pins = getPinnedSet();
+      if (pins.size === 0) {
+        contentArea.innerHTML = `
+          <div style="text-align:center;padding:50px 20px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ddd" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:10px;"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>
+            <div style="color:#bbb;font-size:13px;margin-top:4px;">No pinned messages yet</div>
+            <div style="color:#ccc;font-size:12px;margin-top:6px;line-height:1.5;">Hover over any message<br>and tap the pin icon to save it here.</div>
+          </div>`;
+        return;
+      }
+
+      const history = getChatHistory();
+      const byDate = {};
+      pins.forEach(key => {
+        const [dateKey, idxStr] = key.split('::');
+        const idx = parseInt(idxStr);
+        if (history[dateKey] && history[dateKey][idx]) {
+          if (!byDate[dateKey]) byDate[dateKey] = [];
+          // Avoid duplicate entries for same key
+          if (!byDate[dateKey].find(e => e.key === key)) {
+            byDate[dateKey].push({ key, idx, msg: history[dateKey][idx] });
+          }
+        }
+      });
+
+      const sortedDates = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a));
+
+      if (sortedDates.length === 0) {
+        contentArea.innerHTML = `<div style="text-align:center;color:#bbb;font-size:13px;padding:40px 20px;">No pinned messages found</div>`;
+        return;
+      }
+
+      sortedDates.forEach(dateKey => {
+        const dateHeader = document.createElement('div');
+        dateHeader.style.cssText = 'font-size:11px;font-weight:600;color:#bbb;text-transform:uppercase;letter-spacing:0.05em;padding:6px 0 4px;margin-top:6px;border-bottom:1px solid #f0f0f0;margin-bottom:8px;';
+        dateHeader.textContent = dateKey;
+        contentArea.appendChild(dateHeader);
+
+        byDate[dateKey].sort((a, b) => a.idx - b.idx).forEach(({ key, msg }) => {
+          const isUser = msg.role === 'user';
+
+          if (!isUser && msg.comparisonData) {
+            const cardWrap = document.createElement('div');
+            cardWrap.style.cssText = 'position:relative;margin-bottom:6px;';
+            addComparisonCard(cardWrap, msg.comparisonData, true, null);
+            const innerWrapper = cardWrap.firstChild;
+            if (innerWrapper) {
+              const metaRow = innerWrapper.lastChild;
+              if (metaRow) {
+                const timeEl = metaRow.firstChild;
+                if (timeEl) timeEl.textContent = msg.time;
+                const existingPin = metaRow.querySelector('.pr-pin-btn');
+                if (existingPin) existingPin.remove();
+                const unpinBtn = makeUnpinButton(key, () => renderPinnedContent());
+                metaRow.appendChild(unpinBtn);
+              }
+            }
+            contentArea.appendChild(cardWrap);
+          } else {
+            const row = document.createElement('div');
+            row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;`;
+
+            const bubble = document.createElement('div');
+            bubble.style.cssText = isUser
+              ? `background:${BRAND.green};color:#fff;padding:8px 14px;border-radius:14px 14px 4px 14px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`
+              : `background:#f5f5f5;color:#333;padding:8px 14px;border-radius:14px 14px 14px 4px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`;
+            if (isUser) bubble.textContent = msg.text;
+            else bubble.innerHTML = formatBotMessage(convertLinksToHTML(msg.text));
+
+            const metaRow = document.createElement('div');
+            metaRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;padding:0 4px;';
+            const time = document.createElement('div');
+            time.style.cssText = 'font-size:10px;color:#ccc;';
+            time.textContent = msg.time;
+
+            const unpinBtn = makeUnpinButton(key, () => renderPinnedContent());
+
+            if (isUser) {
+              metaRow.appendChild(unpinBtn);
+              metaRow.appendChild(time);
+            } else {
+              metaRow.appendChild(time);
+              metaRow.appendChild(unpinBtn);
+            }
+
+            row.appendChild(bubble);
+            row.appendChild(metaRow);
+            contentArea.appendChild(row);
+          }
+        });
+      });
+    }
+
+    renderPinnedContent();
+
+    messagesArea.style.transition = 'opacity 0.2s ease-in';
+    messagesArea.style.opacity = '1';
+  }, 150);
+}
+
+// A dedicated unpin button used inside the pinned view
+function makeUnpinButton(key, onUnpin) {
+  const btn = document.createElement('button');
+  btn.className = 'pr-pin-btn pinned';
+  btn.title = 'Unpin';
+  btn.style.opacity = '1';
+  btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>`;
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const [dateKey, idxStr] = key.split('::');
+    const idx = parseInt(idxStr);
+    const pairKey = getPairKey(dateKey, idx);
+    const pins = getPinnedSet();
+    pins.delete(key);
+    if (pairKey) pins.delete(pairKey);
+    setPinnedSet(pins);
+    if (onUnpin) onUnpin();
+  });
+  return btn;
+}
+
 // ==================== WELCOME STATE ====================
 function renderWelcomeState(messagesArea) {
   const userName = localStorage.getItem('pr_user_name') || '';
@@ -741,7 +1125,6 @@ function renderWelcomeState(messagesArea) {
   `;
   messagesArea.appendChild(welcome);
 
-  // Suggestion chips
   const chips = document.createElement('div');
   chips.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;';
   ['Compare professors', 'Compare classes', 'Who is the best professor?', 'Course difficulty'].forEach(label => {
@@ -763,34 +1146,62 @@ function renderWelcomeState(messagesArea) {
 // ==================== CHAT MESSAGES ====================
 function addUserMessage(container, message) {
   const wrapper = document.createElement('div');
+  wrapper.className = 'pr-msg-wrapper';
   wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;margin-bottom:10px;animation:agentSlideInR 0.25s ease-out;';
   const bubble = document.createElement('div');
   bubble.style.cssText = `background:${BRAND.green};color:#fff;padding:10px 14px;border-radius:16px 16px 4px 16px;margin-left:48px;font-size:13px;word-wrap:break-word;line-height:1.5;`;
   bubble.textContent = message;
+
+  saveChatMessage('user', message);
+  const history = getChatHistory();
+  const now = new Date();
+  const dateKey = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const idx = (history[dateKey] || []).length - 1;
+  const pinKey = `${dateKey}::${idx}`;
+
+  const metaRow = document.createElement('div');
+  metaRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;padding:0 4px;';
   const time = document.createElement('div');
-  time.style.cssText = 'font-size:10px;color:#ccc;margin-top:2px;padding:0 4px;';
-  time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  time.style.cssText = 'font-size:10px;color:#ccc;';
+  time.textContent = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const pinBtn = makePinButton(pinKey);
+  metaRow.appendChild(pinBtn);
+  metaRow.appendChild(time);
+
   wrapper.appendChild(bubble);
-  wrapper.appendChild(time);
+  wrapper.appendChild(metaRow);
   container.appendChild(wrapper);
   if (container.scrollTop !== undefined && container.className === "agent-messages") container.scrollTop = container.scrollHeight;
-  saveChatMessage('user', message);
 }
 
 function addBotMessage(container, message) {
+  saveChatMessage('bot', message);
+  const history = getChatHistory();
+  const now = new Date();
+  const dateKey = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const idx = (history[dateKey] || []).length - 1;
+  const pinKey = `${dateKey}::${idx}`;
+
   const wrapper = document.createElement('div');
+  wrapper.className = 'pr-msg-wrapper';
   wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;margin-bottom:10px;animation:agentSlideInL 0.25s ease-out;';
   const bubble = document.createElement('div');
   bubble.style.cssText = 'background:#f5f5f5;color:#333;padding:10px 14px;border-radius:16px 16px 16px 4px;margin-right:48px;font-size:13px;word-wrap:break-word;line-height:1.6;';
   bubble.innerHTML = formatBotMessage(convertLinksToHTML(message));
+
+  const metaRow = document.createElement('div');
+  metaRow.style.cssText = 'display:flex;align-items:center;gap:4px;margin-top:2px;padding:0 4px;';
   const time = document.createElement('div');
-  time.style.cssText = 'font-size:10px;color:#ccc;margin-top:2px;padding:0 4px;';
-  time.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  time.style.cssText = 'font-size:10px;color:#ccc;';
+  time.textContent = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const pinBtn = makePinButton(pinKey);
+  metaRow.appendChild(time);
+  metaRow.appendChild(pinBtn);
+
   wrapper.appendChild(bubble);
-  wrapper.appendChild(time);
+  wrapper.appendChild(metaRow);
   container.appendChild(wrapper);
   if (container.scrollTop !== undefined && container.className === "agent-messages") container.scrollTop = container.scrollHeight;
-  saveChatMessage('bot', message);
 }
 
 function addTypingIndicator(container) {
@@ -813,7 +1224,7 @@ function openAgentPopup(button) {
   const popup = document.createElement('div');
   popup.className = 'pr-agent-popup';
 
-  // Header — history icon button added next to close
+  // Header — pin icon + history icon + close
   const header = document.createElement('div');
   header.style.cssText = `padding:12px 16px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;cursor:default;user-select:none;background:#fff;border-radius:14px 14px 0 0;`;
   header.innerHTML = `
@@ -827,7 +1238,10 @@ function openAgentPopup(button) {
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;">
-      <div class="pr-agent-history-btn" style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ccc;transition:all 0.15s;">
+      <div class="pr-agent-pinned-btn" title="Pinned messages" style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ccc;transition:all 0.15s;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg>
+      </div>
+      <div class="pr-agent-history-btn" title="Chat history" style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ccc;transition:all 0.15s;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
       </div>
       <div class="pr-agent-close" style="width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ccc;transition:all 0.15s;">
@@ -839,7 +1253,7 @@ function openAgentPopup(button) {
   // Drag
   let isDragging = false, startX, startY, initLeft, initTop;
   header.addEventListener('mousedown', (e) => {
-    if (e.target.closest('.pr-agent-close') || e.target.closest('.pr-agent-history-btn')) return;
+    if (e.target.closest('.pr-agent-close') || e.target.closest('.pr-agent-history-btn') || e.target.closest('.pr-agent-pinned-btn')) return;
     isDragging = true; header.style.cursor = 'grabbing';
     const r = popup.getBoundingClientRect();
     startX = e.clientX; startY = e.clientY; initLeft = r.left; initTop = r.top;
@@ -875,16 +1289,21 @@ function openAgentPopup(button) {
   sendBtn.addEventListener('mouseenter', () => sendBtn.style.transform = 'scale(1.08)');
   sendBtn.addEventListener('mouseleave', () => sendBtn.style.transform = 'scale(1)');
 
-  // Close button
-  header.querySelector('.pr-agent-close').addEventListener('mouseenter', function() { this.style.color = '#666'; this.style.background = '#f0f0f0'; });
-  header.querySelector('.pr-agent-close').addEventListener('mouseleave', function() { this.style.color = '#ccc'; this.style.background = 'transparent'; });
-  header.querySelector('.pr-agent-close').addEventListener('click', closeAgentPopup);
+  // Header button hover states
+  const closeBtn = header.querySelector('.pr-agent-close');
+  closeBtn.addEventListener('mouseenter', function() { this.style.color = '#666'; this.style.background = '#f0f0f0'; });
+  closeBtn.addEventListener('mouseleave', function() { this.style.color = '#ccc'; this.style.background = 'transparent'; });
+  closeBtn.addEventListener('click', closeAgentPopup);
 
-  // History button in header
   const historyBtn = header.querySelector('.pr-agent-history-btn');
   historyBtn.addEventListener('mouseenter', () => { historyBtn.style.color = '#666'; historyBtn.style.background = '#f0f0f0'; });
   historyBtn.addEventListener('mouseleave', () => { historyBtn.style.color = '#ccc'; historyBtn.style.background = 'transparent'; });
   historyBtn.addEventListener('click', () => renderHistoryView(messagesArea));
+
+  const pinnedBtn = header.querySelector('.pr-agent-pinned-btn');
+  pinnedBtn.addEventListener('mouseenter', () => { pinnedBtn.style.color = BRAND.green; pinnedBtn.style.background = BRAND.greenLight; });
+  pinnedBtn.addEventListener('mouseleave', () => { pinnedBtn.style.color = '#ccc'; pinnedBtn.style.background = 'transparent'; });
+  pinnedBtn.addEventListener('click', () => renderPinnedView(messagesArea));
 
   // Send logic
   function sendMessage() {
@@ -904,11 +1323,16 @@ function openAgentPopup(button) {
 
       } else if (response?.status === 'success' || response?.status === 'ai_analysis') {
         const result = response.professor.analysis;
-        // Check if backend returned structured comparison JSON
         if (result && typeof result === 'object' && result.type === 'comparison') {
-          addComparisonCard(messagesArea, result.data);
+          const historyText = `[Comparison] ${result.data.items.map(i => `${i.name} (${i.rating}/4.0)`).join(' vs ')}. ${result.data.verdict || ''}`;
+          saveChatMessage("bot", historyText, result.data);
+          const history = getChatHistory();
+          const now = new Date();
+          const dateKey = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+          const idx = (history[dateKey] || []).length - 1;
+          const pinKey = `${dateKey}::${idx}`;
+          addComparisonCard(messagesArea, result.data, true, pinKey);
         } else {
-          // Plain text response (string or { type: 'text', data: '...' })
           const text = (result && typeof result === 'object' && result.data) ? result.data : result;
           addBotMessage(messagesArea, text);
         }
@@ -938,7 +1362,6 @@ function openAgentPopup(button) {
 
   requestAnimationFrame(() => popup.classList.add('visible'));
 
-  // Check rate limit on open
   const userId = localStorage.getItem('pr_user_id') || null;
   chrome.runtime.sendMessage({ type: 'checkRateLimit', userId }, (response) => {
     if (response?.remaining != null && response.remaining <= 3) showRateLimitBanner(popup, response.remaining);
