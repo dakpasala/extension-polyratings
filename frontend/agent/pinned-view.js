@@ -44,6 +44,8 @@ function renderPinnedView(messagesArea) {
     if (inputArea) inputArea.style.display = 'none';
     messagesArea.style.paddingTop = '8px';
     messagesArea.style.transform = 'translateY(0)';
+    messagesArea.dataset.currentView = 'pinned';
+    messagesArea.scrollTop = 0;
     popup.insertBefore(stickyHeader, messagesArea);
 
     const contentArea = document.createElement('div');

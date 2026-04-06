@@ -193,6 +193,7 @@ function navigateBackToChat(popup, messagesArea) {
     if (inputArea) inputArea.style.display = 'flex';
     messagesArea.innerHTML = '';
     messagesArea.style.paddingTop = '16px';
+    delete messagesArea.dataset.currentView;
     renderWelcomeState(messagesArea);
   });
 }

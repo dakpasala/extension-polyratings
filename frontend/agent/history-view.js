@@ -47,6 +47,8 @@ function renderHistoryView(messagesArea) {
     messagesArea.innerHTML = '';
     if (inputArea) inputArea.style.display = 'none';
     messagesArea.style.paddingTop = '8px';
+    messagesArea.dataset.currentView = 'history';
+    messagesArea.scrollTop = 0;
     messagesArea.style.transform = 'translateY(0)';
     popup.insertBefore(stickyHeader, messagesArea);
 

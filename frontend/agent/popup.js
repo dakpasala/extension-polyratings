@@ -90,12 +90,18 @@ function openAgentPopup(button) {
   const historyBtn = header.querySelector('.pr-agent-history-btn');
   historyBtn.addEventListener('mouseenter', () => { historyBtn.style.color = '#666'; historyBtn.style.background = '#f0f0f0'; });
   historyBtn.addEventListener('mouseleave', () => { historyBtn.style.color = '#ccc'; historyBtn.style.background = 'transparent'; });
-  historyBtn.addEventListener('click', () => renderHistoryView(messagesArea));
+  historyBtn.addEventListener('click', () => {
+    if (messagesArea.dataset.currentView === 'history') return;
+    renderHistoryView(messagesArea);
+  });
 
   const pinnedBtn = header.querySelector('.pr-agent-pinned-btn');
   pinnedBtn.addEventListener('mouseenter', () => { pinnedBtn.style.color = BRAND.green; pinnedBtn.style.background = BRAND.greenLight; });
   pinnedBtn.addEventListener('mouseleave', () => { pinnedBtn.style.color = '#ccc'; pinnedBtn.style.background = 'transparent'; });
-  pinnedBtn.addEventListener('click', () => renderPinnedView(messagesArea));
+  pinnedBtn.addEventListener('click', () => {
+    if (messagesArea.dataset.currentView === 'pinned') return;
+    renderPinnedView(messagesArea);
+  });
 
   // ── Send logic ──
   function sendMessage() {
