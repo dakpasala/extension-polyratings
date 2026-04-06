@@ -294,7 +294,7 @@ function showRateLimitBanner(popup, remaining) {
 
   const bannerWrap = document.createElement('div');
   bannerWrap.className = 'pr-agent-limit-banner';
-  bannerWrap.style.cssText = 'padding: 0 12px; background: #fff;';
+  bannerWrap.style.cssText = 'width:100%;flex-shrink:0;';
 
   const banner = document.createElement('div');
   const isOut = remaining === 0;
@@ -315,13 +315,15 @@ function showRateLimitBanner(popup, remaining) {
 
   const inputArea = popup.querySelector('.pr-agent-input');
   if (inputArea) {
-    popup.insertBefore(bannerWrap, inputArea);
-    inputArea.style.borderTop = 'none';
+    // Banner sits above the input row, always anchored to the bottom of the popup
+    bannerWrap.style.cssText = 'width:100%;flex-shrink:0;';
+    inputArea.insertBefore(bannerWrap, inputArea.firstChild);
   }
 
   if (isOut) {
-    const input = inputArea?.querySelector('input');
-    const sendBtn = inputArea?.querySelector('.pr-agent-send');
+    const inputRow = inputArea?.querySelector('.pr-input-inner') || inputArea;
+    const input = inputRow?.querySelector('input');
+    const sendBtn = inputRow?.querySelector('.pr-agent-send');
     if (input) { input.disabled = true; input.placeholder = 'Limit reached'; input.style.opacity = '0.4'; }
     if (sendBtn) { sendBtn.style.opacity = '0.3'; sendBtn.style.pointerEvents = 'none'; }
   }
@@ -506,6 +508,8 @@ function addComparisonCard(container, data, skipSave, pinKey) {
 // Unified fade helper: fade messagesArea + sticky header out, then call fn, then fade in.
 function fadeTransition(messagesArea, popup, outDuration, inDuration, fn) {
   const stickyHeader = popup.querySelector('.pr-history-sticky-header');
+  // Banner lives inside inputArea — hidden/shown with it automatically
+
   const targets = [messagesArea];
   if (stickyHeader) targets.push(stickyHeader);
 
@@ -518,7 +522,7 @@ function fadeTransition(messagesArea, popup, outDuration, inDuration, fn) {
 
   setTimeout(() => {
     fn();
-    // Fade in — done after fn() sets up new DOM
+    // Restore banner visibility after layout settles
     requestAnimationFrame(() => {
       messagesArea.style.transition = `opacity ${inDuration}ms ease-out, transform ${inDuration}ms ease-out`;
       messagesArea.style.opacity = '1';
@@ -540,7 +544,7 @@ function navigateBackToChat(popup, messagesArea) {
     if (backToTopEl) backToTopEl.remove();
 
     if (inputArea) inputArea.style.display = 'flex';
-    if (limitBanner) limitBanner.style.display = 'flex';
+    // Banner lives inside inputArea, no separate show needed
     messagesArea.innerHTML = '';
     messagesArea.style.paddingTop = '16px';
     renderWelcomeState(messagesArea);
@@ -651,8 +655,7 @@ function renderHistoryView(messagesArea) {
 
   fadeTransition(messagesArea, popup, 150, 200, () => {
     messagesArea.innerHTML = '';
-    if (inputArea) inputArea.style.display = 'none';
-    if (limitBanner) limitBanner.style.display = 'none';
+    if (inputArea) inputArea.style.display = 'none'; // banner lives inside inputArea
     messagesArea.style.paddingTop = '8px';
     messagesArea.style.transform = 'translateY(0)';
 
@@ -1056,8 +1059,7 @@ function renderPinnedView(messagesArea) {
 
   fadeTransition(messagesArea, popup, 150, 200, () => {
     messagesArea.innerHTML = '';
-    if (inputArea) inputArea.style.display = 'none';
-    if (limitBanner) limitBanner.style.display = 'none';
+    if (inputArea) inputArea.style.display = 'none'; // banner lives inside inputArea
     messagesArea.style.paddingTop = '8px';
     messagesArea.style.transform = 'translateY(0)';
 
@@ -1495,7 +1497,11 @@ function openAgentPopup(button) {
 
   const inputArea = document.createElement('div');
   inputArea.className = 'pr-agent-input';
-  inputArea.style.cssText = 'padding:10px 14px;border-top:1px solid #f0f0f0;display:flex;align-items:center;gap:8px;background:#fff;border-radius:0 0 14px 14px;';
+  inputArea.style.cssText = 'border-top:1px solid #f0f0f0;display:flex;flex-direction:column;background:#fff;border-radius:0 0 14px 14px;overflow:hidden;';
+  // Inner row holds the actual input + send button
+  const inputRow = document.createElement('div');
+  inputRow.className = 'pr-input-inner';
+  inputRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 14px;';
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'Ask about a course or professor...';
@@ -1569,8 +1575,9 @@ function openAgentPopup(button) {
   sendBtn.addEventListener('click', sendMessage);
   input.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
-  inputArea.appendChild(input);
-  inputArea.appendChild(sendBtn);
+  inputRow.appendChild(input);
+  inputRow.appendChild(sendBtn);
+  inputArea.appendChild(inputRow);
   popup.appendChild(header);
   popup.appendChild(messagesArea);
   popup.appendChild(inputArea);
