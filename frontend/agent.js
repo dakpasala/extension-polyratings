@@ -300,10 +300,11 @@ function showRateLimitBanner(popup, remaining) {
   const isOut = remaining === 0;
   banner.style.cssText = `
     padding: 10px 16px;
-    background: ${isOut ? 'rgba(180,30,30,0.95)' : 'rgba(45,35,55,0.95)'};
-    color: rgba(255,255,255,0.9); font-size: 12px; font-weight: 500;
+    background: ${isOut ? 'rgba(180,30,30,0.95)' : 'rgba(28,28,36,0.97)'};
+    color: rgba(255,255,255,0.92); font-size: 12px; font-weight: 500;
     display: flex; align-items: center; gap: 8px;
-    border-radius: 10px 10px 0 0;
+    border-radius: 10px;
+    margin: 8px 10px 0;
     animation: agentBannerIn 0.2s ease-out;
   `;
   if (isOut) {
@@ -315,9 +316,10 @@ function showRateLimitBanner(popup, remaining) {
 
   const inputArea = popup.querySelector('.pr-agent-input');
   if (inputArea) {
-    // Banner sits above the input row, always anchored to the bottom of the popup
     bannerWrap.style.cssText = 'width:100%;flex-shrink:0;';
     inputArea.insertBefore(bannerWrap, inputArea.firstChild);
+    // Remove top border on inputArea when banner is present — seamless join
+    inputArea.style.borderTop = 'none';
   }
 
   if (isOut) {
@@ -1666,7 +1668,7 @@ function openAgentPopup(button) {
 
   const inputArea = document.createElement('div');
   inputArea.className = 'pr-agent-input';
-  inputArea.style.cssText = 'border-top:1px solid #f0f0f0;display:flex;flex-direction:column;background:#fff;border-radius:0 0 14px 14px;overflow:hidden;';
+  inputArea.style.cssText = 'border-top:1px solid #f0f0f0;display:flex;flex-direction:column;background:#fff;border-radius:0 0 14px 14px;overflow:hidden;position:relative;';
   // Inner row holds the actual input + send button
   const inputRow = document.createElement('div');
   inputRow.className = 'pr-input-inner';
