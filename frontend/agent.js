@@ -666,33 +666,43 @@ function renderHistoryView(messagesArea) {
     contentArea.className = 'history-content-area';
     messagesArea.appendChild(contentArea);
 
-    // Action bar
+    // Action bar — clean pill design
     const actionBar = document.createElement('div');
-    actionBar.style.cssText = `position:sticky;bottom:0;background:rgba(30,30,35,0.96);backdrop-filter:blur(8px);padding:8px 12px;border-radius:10px;display:none;align-items:center;justify-content:space-between;margin-top:8px;gap:8px;`;
+    actionBar.style.cssText = `position:sticky;bottom:12px;left:50%;display:none;justify-content:center;margin-top:8px;`;
+
+    const actionPill = document.createElement('div');
+    actionPill.style.cssText = `display:flex;align-items:center;gap:2px;background:#fff;border:1px solid #e8e8e8;border-radius:20px;padding:4px;box-shadow:0 4px 16px rgba(0,0,0,0.1),0 1px 4px rgba(0,0,0,0.06);`;
 
     const actionCount = document.createElement('span');
-    actionCount.style.cssText = 'color:rgba(255,255,255,0.7);font-size:12px;font-weight:500;flex:1;';
+    actionCount.style.cssText = `font-size:12px;font-weight:500;color:#666;padding:0 10px;`;
 
-    const actionBtns = document.createElement('div');
-    actionBtns.style.cssText = 'display:flex;gap:6px;';
+    const divider = document.createElement('div');
+    divider.style.cssText = 'width:1px;height:18px;background:#eee;margin:0 2px;flex-shrink:0;';
 
     const cancelSelBtn = document.createElement('button');
-    cancelSelBtn.style.cssText = 'background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);border:none;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;';
+    cancelSelBtn.style.cssText = 'background:none;color:#999;border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;transition:background 0.15s,color 0.15s;white-space:nowrap;';
     cancelSelBtn.textContent = 'Cancel';
+    cancelSelBtn.addEventListener('mouseenter', () => { cancelSelBtn.style.background = '#f5f5f5'; cancelSelBtn.style.color = '#333'; });
+    cancelSelBtn.addEventListener('mouseleave', () => { cancelSelBtn.style.background = 'none'; cancelSelBtn.style.color = '#999'; });
 
     const pinSelBtn = document.createElement('button');
-    pinSelBtn.style.cssText = `background:${BRAND.green};color:white;border:none;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;`;
-    pinSelBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pin`;
+    pinSelBtn.style.cssText = `background:none;color:${BRAND.green};border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;transition:background 0.15s;display:flex;align-items:center;gap:5px;white-space:nowrap;`;
+    pinSelBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pin`;
+    pinSelBtn.addEventListener('mouseenter', () => { pinSelBtn.style.background = BRAND.greenLight; });
+    pinSelBtn.addEventListener('mouseleave', () => { pinSelBtn.style.background = 'none'; });
 
     const deleteSelBtn = document.createElement('button');
-    deleteSelBtn.style.cssText = 'background:rgba(220,38,38,0.85);color:white;border:none;padding:5px 11px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;';
+    deleteSelBtn.style.cssText = 'background:none;color:#e53e3e;border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;transition:background 0.15s;white-space:nowrap;';
     deleteSelBtn.textContent = 'Delete';
+    deleteSelBtn.addEventListener('mouseenter', () => { deleteSelBtn.style.background = 'rgba(229,62,62,0.08)'; });
+    deleteSelBtn.addEventListener('mouseleave', () => { deleteSelBtn.style.background = 'none'; });
 
-    actionBtns.appendChild(cancelSelBtn);
-    actionBtns.appendChild(pinSelBtn);
-    actionBtns.appendChild(deleteSelBtn);
-    actionBar.appendChild(actionCount);
-    actionBar.appendChild(actionBtns);
+    actionPill.appendChild(actionCount);
+    actionPill.appendChild(divider);
+    actionPill.appendChild(cancelSelBtn);
+    actionPill.appendChild(pinSelBtn);
+    actionPill.appendChild(deleteSelBtn);
+    actionBar.appendChild(actionPill);
     messagesArea.appendChild(actionBar);
 
     const backToTop = makeBackToTopPill(popup, messagesArea);
@@ -701,15 +711,20 @@ function renderHistoryView(messagesArea) {
       const count = selectedMessages.size;
       if (count > 0) {
         if (actionBar.style.display !== 'flex') {
-          actionBar.style.display = 'flex'; actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
-          requestAnimationFrame(() => { actionBar.style.transition = 'opacity 0.2s,transform 0.2s'; actionBar.style.opacity = '1'; actionBar.style.transform = 'translateY(0)'; });
+          actionBar.style.display = 'flex';
+          actionPill.style.opacity = '0'; actionPill.style.transform = 'translateY(8px) scale(0.95)';
+          requestAnimationFrame(() => {
+            actionPill.style.transition = 'opacity 0.22s ease, transform 0.22s cubic-bezier(0.34,1.2,0.64,1)';
+            actionPill.style.opacity = '1'; actionPill.style.transform = 'translateY(0) scale(1)';
+          });
         }
         actionCount.textContent = `${count} selected`;
-        pinSelBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pin (${count})`;
+        pinSelBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pin (${count})`;
         deleteSelBtn.textContent = `Delete (${count})`;
         hidePill(backToTop);
       } else {
-        actionBar.style.transition = 'opacity 0.15s,transform 0.15s'; actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
+        actionPill.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+        actionPill.style.opacity = '0'; actionPill.style.transform = 'translateY(6px) scale(0.95)';
         setTimeout(() => { actionBar.style.display = 'none'; }, 150);
       }
     }
@@ -729,7 +744,7 @@ function renderHistoryView(messagesArea) {
         if (circle) {
           circle.style.transition = 'opacity 0.28s ease, transform 0.28s ease';
           circle.style.opacity = '0';
-          circle.style.transform = 'translateY(-50%) scale(0.4)';
+          circle.style.transform = 'translateY(6px) scale(0.4)';
         }
         if (isBot) {
           row.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1)';
@@ -768,25 +783,25 @@ function renderHistoryView(messagesArea) {
       circle.className = 'select-circle';
       // For bot rows the circle sits at the left of the original (pre-shift) position
       // For user rows it sits at the far left since bubbles are right-aligned
-      circle.style.cssText = `position:absolute;left:${isBot ? '-26px' : '4px'};top:50%;transform:translateY(-50%) scale(0.5);opacity:0;width:18px;height:18px;border-radius:50%;border:1.5px solid #ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;background:white;transition:opacity 0.2s ease,transform 0.2s cubic-bezier(0.34,1.3,0.64,1),background 0.15s,border-color 0.15s;`;
+      circle.style.cssText = `position:absolute;left:${isBot ? '-26px' : '4px'};top:0;transform:translateY(6px) scale(0.5);opacity:0;width:18px;height:18px;border-radius:50%;border:1.5px solid #ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;background:white;transition:opacity 0.2s ease,transform 0.2s cubic-bezier(0.34,1.3,0.64,1),background 0.15s,border-color 0.15s;`;
       row.appendChild(circle);
       requestAnimationFrame(() => {
         circle.style.opacity = '1';
-        circle.style.transform = 'translateY(-50%) scale(1)';
+        circle.style.transform = 'translateY(6px) scale(1)';
       });
 
       circle.addEventListener('click', (e) => {
         e.stopPropagation();
         if (selectedMessages.has(key)) {
           selectedMessages.delete(key);
-          circle.style.transform = 'translateY(-50%) scale(0.8)';
-          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 120);
+          circle.style.transform = 'translateY(6px) scale(0.8)';
+          setTimeout(() => { circle.style.transform = 'translateY(6px) scale(1)'; }, 120);
           circle.style.background = 'white'; circle.style.borderColor = '#ddd'; circle.innerHTML = '';
           row.style.background = 'transparent';
         } else {
           selectedMessages.add(key);
-          circle.style.transform = 'translateY(-50%) scale(1.25)';
-          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 120);
+          circle.style.transform = 'translateY(6px) scale(1.25)';
+          setTimeout(() => { circle.style.transform = 'translateY(6px) scale(1)'; }, 120);
           circle.style.background = BRAND.green; circle.style.borderColor = BRAND.green;
           circle.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
           row.style.transition = 'background 0.15s ease, transform 0.32s cubic-bezier(0.4,0,0.2,1)';
@@ -1042,8 +1057,12 @@ function renderPinnedView(messagesArea) {
   titleEl.style.cssText = `font-size:12px;font-weight:600;color:${BRAND.green};display:flex;align-items:center;gap:5px;`;
   titleEl.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h5l-4 4 1.5 7L12 17l-5.5 3L8 13 4 9h5z"/></svg> Pinned`;
 
+  // Right side: title + select btn
+  const pinnedRight = document.createElement('div');
+  pinnedRight.style.cssText = 'display:flex;align-items:center;gap:8px;';
+  pinnedRight.appendChild(titleEl);
   topBar.appendChild(backBtn);
-  topBar.appendChild(titleEl);
+  topBar.appendChild(pinnedRight);
   stickyHeader.appendChild(topBar);
 
   // Search bar for pinned view
@@ -1073,6 +1092,145 @@ function renderPinnedView(messagesArea) {
 
     const contentArea = document.createElement('div');
     messagesArea.appendChild(contentArea);
+
+    // ── Pinned select mode ──
+    let selectMode = false;
+    const selectedMessages = new Set();
+
+    // Action bar — same pill design as history
+    const actionBar = document.createElement('div');
+    actionBar.style.cssText = `position:sticky;bottom:12px;left:50%;display:none;justify-content:center;margin-top:8px;`;
+    const actionPill = document.createElement('div');
+    actionPill.style.cssText = `display:flex;align-items:center;gap:2px;background:#fff;border:1px solid #e8e8e8;border-radius:20px;padding:4px;box-shadow:0 4px 16px rgba(0,0,0,0.1),0 1px 4px rgba(0,0,0,0.06);`;
+    const actionCount = document.createElement('span');
+    actionCount.style.cssText = `font-size:12px;font-weight:500;color:#666;padding:0 10px;`;
+    const dividerP = document.createElement('div');
+    dividerP.style.cssText = 'width:1px;height:18px;background:#eee;margin:0 2px;flex-shrink:0;';
+    const cancelSelBtn = document.createElement('button');
+    cancelSelBtn.style.cssText = 'background:none;color:#999;border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;transition:background 0.15s,color 0.15s;white-space:nowrap;';
+    cancelSelBtn.textContent = 'Cancel';
+    cancelSelBtn.addEventListener('mouseenter', () => { cancelSelBtn.style.background = '#f5f5f5'; cancelSelBtn.style.color = '#333'; });
+    cancelSelBtn.addEventListener('mouseleave', () => { cancelSelBtn.style.background = 'none'; cancelSelBtn.style.color = '#999'; });
+    const unpinSelBtn = document.createElement('button');
+    unpinSelBtn.style.cssText = `background:none;color:${BRAND.green};border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;transition:background 0.15s;white-space:nowrap;`;
+    unpinSelBtn.textContent = 'Unpin';
+    unpinSelBtn.addEventListener('mouseenter', () => { unpinSelBtn.style.background = BRAND.greenLight; });
+    unpinSelBtn.addEventListener('mouseleave', () => { unpinSelBtn.style.background = 'none'; });
+    actionPill.appendChild(actionCount);
+    actionPill.appendChild(dividerP);
+    actionPill.appendChild(cancelSelBtn);
+    actionPill.appendChild(unpinSelBtn);
+    actionBar.appendChild(actionPill);
+    messagesArea.appendChild(actionBar);
+
+    function updateActionBar() {
+      const count = selectedMessages.size;
+      if (count > 0) {
+        if (actionBar.style.display !== 'flex') {
+          actionBar.style.display = 'flex';
+          actionPill.style.opacity = '0'; actionPill.style.transform = 'translateY(8px) scale(0.95)';
+          requestAnimationFrame(() => {
+            actionPill.style.transition = 'opacity 0.22s ease, transform 0.22s cubic-bezier(0.34,1.2,0.64,1)';
+            actionPill.style.opacity = '1'; actionPill.style.transform = 'translateY(0) scale(1)';
+          });
+        }
+        actionCount.textContent = `${count} selected`;
+        unpinSelBtn.textContent = `Unpin (${count})`;
+      } else {
+        actionPill.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+        actionPill.style.opacity = '0'; actionPill.style.transform = 'translateY(6px) scale(0.95)';
+        setTimeout(() => { actionBar.style.display = 'none'; }, 150);
+      }
+    }
+
+    function exitSelectMode() {
+      selectMode = false; selectedMessages.clear();
+      selectBtn.style.transition = 'color 0.2s, background 0.2s';
+      selectBtn.textContent = 'Select'; selectBtn.style.color = '#999'; selectBtn.style.background = 'transparent';
+      actionPill.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+      actionPill.style.opacity = '0'; actionPill.style.transform = 'translateY(6px) scale(0.95)';
+      setTimeout(() => { actionBar.style.display = 'none'; }, 150);
+      contentArea.querySelectorAll('[data-select-row]').forEach(row => {
+        const isBot = row.getAttribute('data-select-role') !== 'user';
+        const circle = row.querySelector('.select-circle');
+        if (circle) {
+          circle.style.transition = 'opacity 0.28s ease, transform 0.28s ease';
+          circle.style.opacity = '0'; circle.style.transform = 'translateY(6px) scale(0.4)';
+        }
+        if (isBot) { row.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1)'; row.style.transform = 'translateX(0)'; }
+        row.style.background = 'transparent';
+      });
+      setTimeout(() => contentArea.querySelectorAll('.select-circle').forEach(c => c.remove()), 300);
+    }
+
+    function enterSelectMode() {
+      selectMode = true;
+      selectBtn.style.transition = 'color 0.2s, background 0.2s';
+      selectBtn.textContent = 'Done'; selectBtn.style.color = BRAND.green; selectBtn.style.background = BRAND.greenLight;
+      contentArea.querySelectorAll('[data-select-row]').forEach(row => {
+        const isBot = row.getAttribute('data-select-role') !== 'user';
+        row.style.position = 'relative';
+        if (isBot) { row.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1)'; row.style.transform = 'translateX(28px)'; }
+        setTimeout(() => addSelectCircle(row), 80);
+      });
+    }
+
+    function addSelectCircle(row) {
+      if (row.querySelector('.select-circle')) return;
+      const key = row.getAttribute('data-select-key');
+      const isBot = row.getAttribute('data-select-role') !== 'user';
+      const circle = document.createElement('div');
+      circle.className = 'select-circle';
+      circle.style.cssText = `position:absolute;left:${isBot ? '-26px' : '4px'};top:0;transform:translateY(6px) scale(0.5);opacity:0;width:18px;height:18px;border-radius:50%;border:1.5px solid #ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;background:white;transition:opacity 0.2s ease,transform 0.2s cubic-bezier(0.34,1.3,0.64,1),background 0.15s,border-color 0.15s;`;
+      row.appendChild(circle);
+      requestAnimationFrame(() => { circle.style.opacity = '1'; circle.style.transform = 'translateY(6px) scale(1)'; });
+      circle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (selectedMessages.has(key)) {
+          selectedMessages.delete(key);
+          circle.style.transform = 'translateY(6px) scale(0.8)';
+          setTimeout(() => { circle.style.transform = 'translateY(6px) scale(1)'; }, 120);
+          circle.style.background = 'white'; circle.style.borderColor = '#ddd'; circle.innerHTML = '';
+          row.style.background = 'transparent';
+        } else {
+          selectedMessages.add(key);
+          circle.style.transform = 'translateY(6px) scale(1.25)';
+          setTimeout(() => { circle.style.transform = 'translateY(6px) scale(1)'; }, 120);
+          circle.style.background = BRAND.green; circle.style.borderColor = BRAND.green;
+          circle.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          row.style.transition = 'background 0.15s ease, transform 0.32s cubic-bezier(0.4,0,0.2,1)';
+          row.style.background = BRAND.greenLight;
+        }
+        updateActionBar();
+      });
+    }
+
+    cancelSelBtn.addEventListener('click', () => exitSelectMode());
+    unpinSelBtn.addEventListener('click', () => {
+      if (selectedMessages.size === 0) return;
+      const pins = getPinnedSet();
+      selectedMessages.forEach(key => {
+        const [dk, idxStr] = key.split('::');
+        const pairKey = getPairKey(dk, parseInt(idxStr));
+        pins.delete(key);
+        if (pairKey) pins.delete(pairKey);
+        syncPinBtnUI(key, false, false);
+        if (pairKey) syncPinBtnUI(pairKey, false, false);
+      });
+      setPinnedSet(pins);
+      exitSelectMode();
+      setTimeout(() => renderPinnedContent(), 320);
+    });
+
+    // Add Select btn to pinned header topBar
+    const selectBtn = document.createElement('div');
+    selectBtn.style.cssText = 'font-size:12px;font-weight:500;color:#999;cursor:pointer;padding:4px 8px;border-radius:6px;transition:all 0.15s;';
+    selectBtn.textContent = 'Select';
+    selectBtn.addEventListener('mouseenter', () => { selectBtn.style.color = '#333'; selectBtn.style.background = '#f0f0f0'; });
+    selectBtn.addEventListener('mouseleave', () => { selectBtn.style.color = selectMode ? BRAND.green : '#999'; selectBtn.style.background = selectMode ? BRAND.greenLight : 'transparent'; });
+    selectBtn.addEventListener('click', () => { if (selectMode) exitSelectMode(); else enterSelectMode(); });
+    // Insert select btn into pinnedRight group
+    pinnedRight.appendChild(selectBtn);
 
     const backToTop = makeBackToTopPill(popup, messagesArea);
 
@@ -1160,7 +1318,10 @@ function renderPinnedView(messagesArea) {
               contentArea.appendChild(cardWrap);
             } else {
               const row = document.createElement('div');
-              row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;`;
+              row.setAttribute('data-select-row', 'true');
+              row.setAttribute('data-select-key', key);
+              row.setAttribute('data-select-role', isUser ? 'user' : 'bot');
+              row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;position:relative;transition:background 0.15s,transform 0.32s cubic-bezier(0.4,0,0.2,1);`;
 
               const bubble = document.createElement('div');
               bubble.style.cssText = isUser
@@ -1221,7 +1382,10 @@ function renderPinnedView(messagesArea) {
         byDate[dateKey].sort((a, b) => a.idx - b.idx).forEach(({ key, msg }) => {
           const isUser = msg.role === 'user';
           const row = document.createElement('div');
-          row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;`;
+          row.setAttribute('data-select-row', 'true');
+          row.setAttribute('data-select-key', key);
+          row.setAttribute('data-select-role', isUser ? 'user' : 'bot');
+          row.style.cssText = `display:flex;flex-direction:column;align-items:${isUser?'flex-end':'flex-start'};margin-bottom:10px;position:relative;transition:background 0.15s,transform 0.32s cubic-bezier(0.4,0,0.2,1);`;
           const bubble = document.createElement('div');
           bubble.style.cssText = isUser
             ? `background:${BRAND.green};color:#fff;padding:8px 14px;border-radius:14px 14px 4px 14px;max-width:82%;font-size:13px;word-wrap:break-word;line-height:1.5;`
