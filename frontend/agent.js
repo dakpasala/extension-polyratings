@@ -303,7 +303,7 @@ function showRateLimitBanner(popup, remaining) {
     background: ${isOut ? 'rgba(180,30,30,0.95)' : 'rgba(28,28,36,0.97)'};
     color: rgba(255,255,255,0.92); font-size: 12px; font-weight: 500;
     display: flex; align-items: center; gap: 8px;
-    border-radius: 10px;
+    border-radius: 10px 10px 0 0;
     margin: 8px 10px 0;
     animation: agentBannerIn 0.2s ease-out;
   `;
