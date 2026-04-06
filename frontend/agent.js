@@ -713,16 +713,48 @@ function renderHistoryView(messagesArea) {
 
     function exitSelectMode() {
       selectMode = false; selectedMessages.clear();
+      selectBtn.style.transition = 'color 0.2s, background 0.2s';
       selectBtn.textContent = 'Select'; selectBtn.style.color = '#999'; selectBtn.style.background = 'transparent';
-      actionBar.style.transition = 'opacity 0.15s,transform 0.15s'; actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
-      setTimeout(() => { actionBar.style.display = 'none'; }, 150);
-      contentArea.querySelectorAll('.select-circle').forEach(c => c.remove());
-      contentArea.querySelectorAll('[data-select-row]').forEach(row => { row.style.background = 'transparent'; row.style.paddingLeft = '2px'; });
+      actionBar.style.transition = 'opacity 0.2s ease-in, transform 0.2s ease-in';
+      actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
+      setTimeout(() => { actionBar.style.display = 'none'; }, 200);
+
+      const circles = [...contentArea.querySelectorAll('.select-circle')];
+      const rows = [...contentArea.querySelectorAll('[data-select-row]')];
+
+      // Crossfade the whole content area so reflow is invisible
+      contentArea.style.transition = 'opacity 0.15s ease-out';
+      contentArea.style.opacity = '0';
+      setTimeout(() => {
+        circles.forEach(c => c.remove());
+        rows.forEach(row => {
+          row.style.transition = 'none';
+          row.style.paddingLeft = '2px';
+          row.style.background = 'transparent';
+        });
+        contentArea.style.transition = 'opacity 0.2s ease-in';
+        contentArea.style.opacity = '1';
+      }, 150);
     }
 
     function enterSelectMode() {
-      selectMode = true; selectBtn.textContent = 'Done'; selectBtn.style.color = BRAND.green; selectBtn.style.background = BRAND.greenLight;
-      contentArea.querySelectorAll('[data-select-row]').forEach(row => { addSelectCircle(row); row.style.paddingLeft = '30px'; });
+      selectMode = true;
+      selectBtn.style.transition = 'color 0.2s, background 0.2s';
+      selectBtn.textContent = 'Done'; selectBtn.style.color = BRAND.green; selectBtn.style.background = BRAND.greenLight;
+      const rows = [...contentArea.querySelectorAll('[data-select-row]')];
+
+      // Crossfade so the layout shift is invisible
+      contentArea.style.transition = 'opacity 0.15s ease-out';
+      contentArea.style.opacity = '0.3';
+      setTimeout(() => {
+        rows.forEach(row => {
+          row.style.transition = 'none';
+          row.style.paddingLeft = '28px';
+          addSelectCircle(row);
+        });
+        contentArea.style.transition = 'opacity 0.2s ease-in';
+        contentArea.style.opacity = '1';
+      }, 150);
     }
 
     function addSelectCircle(row) {
@@ -730,19 +762,30 @@ function renderHistoryView(messagesArea) {
       const key = row.getAttribute('data-select-key');
       const circle = document.createElement('div');
       circle.className = 'select-circle';
-      circle.style.cssText = `position:absolute;left:4px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;border:1.5px solid #ccc;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;background:white;`;
+      // Fade + scale in alongside the padding slide
+      // No entrance animation needed — contentArea crossfade covers it
+      circle.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;border:1.5px solid #ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;background:white;transition:background 0.15s,border-color 0.15s,transform 0.15s cubic-bezier(0.34,1.3,0.64,1);';
+      row.style.position = 'relative';
+      row.appendChild(circle);
+
       circle.addEventListener('click', (e) => {
         e.stopPropagation();
         if (selectedMessages.has(key)) {
-          selectedMessages.delete(key); circle.style.background = 'white'; circle.style.borderColor = '#ccc'; circle.innerHTML = ''; row.style.background = 'transparent';
+          selectedMessages.delete(key);
+          circle.style.transform = 'translateY(-50%) scale(0.8)';
+          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 130);
+          circle.style.background = 'white'; circle.style.borderColor = '#ddd'; circle.innerHTML = '';
+          row.style.background = 'transparent';
         } else {
-          selectedMessages.add(key); circle.style.background = BRAND.green; circle.style.borderColor = BRAND.green;
-          circle.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+          selectedMessages.add(key);
+          circle.style.transform = 'translateY(-50%) scale(1.3)';
+          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 130);
+          circle.style.background = BRAND.green; circle.style.borderColor = BRAND.green;
+          circle.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
           row.style.background = BRAND.greenLight;
         }
         updateActionBar();
       });
-      row.style.position = 'relative'; row.appendChild(circle);
     }
 
     selectBtn.addEventListener('click', () => { if (selectMode) exitSelectMode(); else enterSelectMode(); });
