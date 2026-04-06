@@ -722,69 +722,74 @@ function renderHistoryView(messagesArea) {
       actionBar.style.opacity = '0'; actionBar.style.transform = 'translateY(8px)';
       setTimeout(() => { actionBar.style.display = 'none'; }, 200);
 
-      const circles = [...contentArea.querySelectorAll('.select-circle')];
-      const rows = [...contentArea.querySelectorAll('[data-select-row]')];
-
-      // Crossfade the whole content area so reflow is invisible
-      contentArea.style.transition = 'opacity 0.15s ease-out';
-      contentArea.style.opacity = '0';
+      // Slide bot rows back left, fade + shrink circles simultaneously
+      contentArea.querySelectorAll('[data-select-row]').forEach(row => {
+        const isBot = row.getAttribute('data-select-role') !== 'user';
+        const circle = row.querySelector('.select-circle');
+        if (circle) {
+          circle.style.transition = 'opacity 0.28s ease, transform 0.28s ease';
+          circle.style.opacity = '0';
+          circle.style.transform = 'translateY(-50%) scale(0.4)';
+        }
+        if (isBot) {
+          row.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1)';
+          row.style.transform = 'translateX(0)';
+        }
+        row.style.background = 'transparent';
+      });
       setTimeout(() => {
-        circles.forEach(c => c.remove());
-        rows.forEach(row => {
-          row.style.transition = 'none';
-          row.style.paddingLeft = '2px';
-          row.style.background = 'transparent';
-        });
-        contentArea.style.transition = 'opacity 0.2s ease-in';
-        contentArea.style.opacity = '1';
-      }, 150);
+        contentArea.querySelectorAll('.select-circle').forEach(c => c.remove());
+      }, 300);
     }
 
     function enterSelectMode() {
       selectMode = true;
       selectBtn.style.transition = 'color 0.2s, background 0.2s';
       selectBtn.textContent = 'Done'; selectBtn.style.color = BRAND.green; selectBtn.style.background = BRAND.greenLight;
-      const rows = [...contentArea.querySelectorAll('[data-select-row]')];
 
-      // Crossfade so the layout shift is invisible
-      contentArea.style.transition = 'opacity 0.15s ease-out';
-      contentArea.style.opacity = '0.3';
-      setTimeout(() => {
-        rows.forEach(row => {
-          row.style.transition = 'none';
-          row.style.paddingLeft = '28px';
-          addSelectCircle(row);
-        });
-        contentArea.style.transition = 'opacity 0.2s ease-in';
-        contentArea.style.opacity = '1';
-      }, 150);
+      contentArea.querySelectorAll('[data-select-row]').forEach(row => {
+        const isBot = row.getAttribute('data-select-role') !== 'user';
+        row.style.position = 'relative';
+        if (isBot) {
+          // Slide bot rows right to reveal circle space
+          row.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1)';
+          row.style.transform = 'translateX(28px)';
+        }
+        // Circles appear after slide starts
+        setTimeout(() => addSelectCircle(row), 80);
+      });
     }
 
     function addSelectCircle(row) {
       if (row.querySelector('.select-circle')) return;
       const key = row.getAttribute('data-select-key');
+      const isBot = row.getAttribute('data-select-role') !== 'user';
       const circle = document.createElement('div');
       circle.className = 'select-circle';
-      // Fade + scale in alongside the padding slide
-      // No entrance animation needed — contentArea crossfade covers it
-      circle.style.cssText = 'position:absolute;left:4px;top:50%;transform:translateY(-50%);width:18px;height:18px;border-radius:50%;border:1.5px solid #ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;background:white;transition:background 0.15s,border-color 0.15s,transform 0.15s cubic-bezier(0.34,1.3,0.64,1);';
-      row.style.position = 'relative';
+      // For bot rows the circle sits at the left of the original (pre-shift) position
+      // For user rows it sits at the far left since bubbles are right-aligned
+      circle.style.cssText = `position:absolute;left:${isBot ? '-26px' : '4px'};top:50%;transform:translateY(-50%) scale(0.5);opacity:0;width:18px;height:18px;border-radius:50%;border:1.5px solid #ddd;cursor:pointer;display:flex;align-items:center;justify-content:center;background:white;transition:opacity 0.2s ease,transform 0.2s cubic-bezier(0.34,1.3,0.64,1),background 0.15s,border-color 0.15s;`;
       row.appendChild(circle);
+      requestAnimationFrame(() => {
+        circle.style.opacity = '1';
+        circle.style.transform = 'translateY(-50%) scale(1)';
+      });
 
       circle.addEventListener('click', (e) => {
         e.stopPropagation();
         if (selectedMessages.has(key)) {
           selectedMessages.delete(key);
           circle.style.transform = 'translateY(-50%) scale(0.8)';
-          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 130);
+          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 120);
           circle.style.background = 'white'; circle.style.borderColor = '#ddd'; circle.innerHTML = '';
           row.style.background = 'transparent';
         } else {
           selectedMessages.add(key);
-          circle.style.transform = 'translateY(-50%) scale(1.3)';
-          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 130);
+          circle.style.transform = 'translateY(-50%) scale(1.25)';
+          setTimeout(() => { circle.style.transform = 'translateY(-50%) scale(1)'; }, 120);
           circle.style.background = BRAND.green; circle.style.borderColor = BRAND.green;
           circle.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          row.style.transition = 'background 0.15s ease, transform 0.32s cubic-bezier(0.4,0,0.2,1)';
           row.style.background = BRAND.greenLight;
         }
         updateActionBar();
