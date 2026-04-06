@@ -303,4 +303,4 @@ function renderPinnedByDate(contentArea, byDate, sortedDates, onUnpin) {
       contentArea.appendChild(row);
     });
   });
-}
+} 
