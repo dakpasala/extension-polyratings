@@ -40,11 +40,13 @@ Rules:
 - Professors: Extract last names only
 - If nothing found, return empty arrays
 - Intent: What is the user asking about?
+- Use "comparison" intent when query uses words like: vs, versus, compare, better, between, or, difference
 
 Examples:
 "CSC 307 vs CSC 357" → {"courses": ["CSC 307", "CSC 357"], "professors": [], "intent": "comparison"}
 "How is Professor Oliver for CPE 350?" → {"courses": ["CPE 350"], "professors": ["Oliver"], "intent": "rating"}
-"Is chem 110 hard?" → {"courses": ["CHEM 110"], "professors": [], "intent": "difficulty"}`;
+"Is chem 110 hard?" → {"courses": ["CHEM 110"], "professors": [], "intent": "difficulty"}
+"Mukherjee vs Siu for CSC 357" → {"courses": ["CSC 357"], "professors": ["Mukherjee", "Siu"], "intent": "comparison"}`;
 
   try {
     const response = await callGroqAPI([
@@ -96,7 +98,6 @@ async function handleRAGQuery(query) {
         let professor = await findProfessor(profName);
         
         // Verify we found the right professor (fuzzy search might match wrong person)
-        // Check if extracted name appears as a complete WORD in found professor's name
         const nameWords = professor.name.toLowerCase().split(/\s+/);
         const searchWords = profName.toLowerCase().split(/\s+/);
         const allWordsMatch = searchWords.every(word => nameWords.includes(word));
@@ -104,7 +105,6 @@ async function handleRAGQuery(query) {
         if (professor && !allWordsMatch) {
           console.log(`⚠️ Fuzzy match might be wrong: searched "${profName}", found "${professor.name}"`);
           
-          // Try to find full name in original query
           const profPattern = /(?:tell me about|about|professor|prof|dr\.?|for)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)+)/i;
           const match = query.match(profPattern);
           
@@ -114,13 +114,12 @@ async function handleRAGQuery(query) {
             const betterMatch = await findProfessor(fullName);
             if (betterMatch) {
               console.log(`✅ Better match found: ${fullName} → ${betterMatch.name}`);
-              professor = betterMatch; // Use the better match
+              professor = betterMatch;
             }
           }
         }
         
         if (professor) {
-          // If specific course mentioned, get professor+course reviews
           if (entities.courses.length === 1) {
             const reviews = await getReviewsByProfessorAndCourse(professor.name, entities.courses[0], 15);
             professorData[professor.name] = {
@@ -133,11 +132,10 @@ async function handleRAGQuery(query) {
               count: reviews.length
             };
           } else {
-            // General professor reviews
             const reviews = await getReviewsByProfessor(professor.name, 20);
             professorData[professor.name] = {
               info: professor,
-              reviews: reviews.slice(0, 10), // Limit to 10 for context
+              reviews: reviews.slice(0, 10),
               avgRating: professor.rating,
               count: reviews.length
             };
@@ -146,7 +144,7 @@ async function handleRAGQuery(query) {
       }
     }
     
-    // Step 3: Build context for GROQ - just feed all the data
+    // Step 3: Build context for GROQ
     let context = `User Question: "${query}"\n\n`;
     
     if (Object.keys(reviewData).length > 0) {
@@ -154,14 +152,12 @@ async function handleRAGQuery(query) {
       for (const [course, data] of Object.entries(reviewData)) {
         context += `\n${course} (${data.count} student reviews):\n`;
         
-        // Group by professor to show who teaches it
         const byProfessor = {};
         data.reviews.forEach(r => {
           if (!byProfessor[r.professor]) byProfessor[r.professor] = [];
           byProfessor[r.professor].push(r);
         });
         
-        // Show reviews grouped by professor
         Object.entries(byProfessor).forEach(([prof, reviews]) => {
           const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
           context += `\n  Professor: ${prof} (${reviews.length} reviews, avg rating: ${avgRating}/4.0)\n`;
@@ -176,9 +172,7 @@ async function handleRAGQuery(query) {
       context += "\n=== PROFESSOR REVIEWS ===\n";
       for (const [profName, data] of Object.entries(professorData)) {
         context += `\n${profName} (${data.count} total reviews, avg: ${data.avgRating}/4.0)`;
-        if (data.course) {
-          context += ` - specifically for ${data.course}`;
-        }
+        if (data.course) context += ` - specifically for ${data.course}`;
         context += `:\n`;
         data.reviews.slice(0, 8).forEach(r => {
           context += `  - "${r.text.substring(0, 120)}..." [${r.rating}/4.0, Grade: ${r.grade || 'N/A'}]\n`;
@@ -187,10 +181,85 @@ async function handleRAGQuery(query) {
     }
     
     if (Object.keys(reviewData).length === 0 && Object.keys(professorData).length === 0) {
-      return "I'm focused on helping with your Cal Poly schedule and professors! Try asking me about a specific course (like CSC 307) or professor (like Professor Oliver).";
+      return { type: 'text', data: "I'm focused on helping with your Cal Poly schedule and professors! Try asking me about a specific course (like CSC 307) or professor (like Professor Oliver)." };
     }
-    
-    // Step 4: Let the model figure out what to do with the data
+
+    // Step 4: Branch on intent — comparison gets structured JSON, everything else gets prose
+    if (entities.intent === 'comparison') {
+      console.log("📊 Comparison intent detected — requesting structured JSON");
+
+      // Build explicit item stubs so GROQ knows exactly what names/ratings to use
+      const itemStubs = [];
+
+      // Professor comparisons
+      for (const [profName, data] of Object.entries(professorData)) {
+        itemStubs.push({
+          name: profName,
+          rating: parseFloat(data.avgRating) || 0,
+          reviewCount: data.count
+        });
+      }
+
+      // Course comparisons — pre-compute avg rating across ALL reviews for the course
+      for (const [course, data] of Object.entries(reviewData)) {
+        const avgRating = data.reviews.length > 0
+          ? (data.reviews.reduce((sum, r) => sum + r.rating, 0) / data.reviews.length).toFixed(2)
+          : "0";
+        itemStubs.push({
+          name: course,
+          rating: parseFloat(avgRating) || 0,
+          reviewCount: data.reviews.length
+        });
+      }
+
+      const stubsJson = JSON.stringify(itemStubs, null, 2);
+
+      const comparisonPrompt = `${context}
+
+The user wants to compare these items. I have pre-computed their names and ratings for you — use EXACTLY these names and ratings, do not change them:
+${stubsJson}
+
+Respond ONLY with valid JSON, no markdown, no explanation outside the JSON:
+{
+  "type": "comparison",
+  "items": [
+    {
+      "name": "MUST match exactly one of the names above",
+      "rating": 3.8,
+      "reviewCount": 12,
+      "difficulty": "Easy" | "Medium" | "Hard",
+      "tags": ["max 3 short student sentiment tags"],
+      "summary": "One punchy sentence from student reviews, under 15 words."
+    }
+  ],
+  "verdict": "One clear sentence recommending which to pick and the main reason why."
+}
+
+Rules:
+- You MUST include exactly one item per entry in the stubs above — use the exact name and rating provided
+- difficulty: infer from review language ("easy", "fair", "hard", "brutal", "manageable", "no exams", etc.)
+- tags: 2-3 most recurring student sentiments from the reviews (e.g. "Heavy workload", "Fair grader", "Conceptual exams")
+- summary: quote or paraphrase something specific students actually said
+- verdict: be direct, name the winner and the main reason why`;
+
+      try {
+        const raw = await callGroqAPI([
+          { role: "system", content: "You return only valid JSON. No markdown, no preamble, no explanation. Just the JSON object." },
+          { role: "user", content: comparisonPrompt }
+        ]);
+
+        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        console.log("✅ Structured comparison response:", parsed);
+        return { type: 'comparison', data: parsed };
+
+      } catch (parseError) {
+        console.error("❌ Comparison JSON parse failed, falling back to prose:", parseError);
+        // Fall through to prose answer below
+      }
+    }
+
+    // Step 5: Default prose answer for non-comparison queries
     const answerPrompt = `${context}
 
 Answer the user's question based on the review data above. Guidelines:
@@ -223,7 +292,7 @@ STRICT RULES:
       { role: "user", content: answerPrompt }
     ]);
     
-    return answer;
+    return { type: 'text', data: answer };
     
   } catch (error) {
     console.error("❌ RAG query failed:", error);
@@ -233,16 +302,12 @@ STRICT RULES:
 
 /* ==================== HELPER FUNCTIONS ==================== */
 
-// Fetch professor data from Supabase
 async function fetchProfessorData() {
   if (professorCache) return professorCache;
   if (isFetching) {
     return new Promise((resolve) => {
       const check = setInterval(() => {
-        if (professorCache) {
-          clearInterval(check);
-          resolve(professorCache);
-        }
+        if (professorCache) { clearInterval(check); resolve(professorCache); }
       }, 100);
     });
   }
@@ -268,11 +333,9 @@ function preloadProfessorData() {
   fetchProfessorData();
 }
 
-// Find professor in cache or DB
 async function findProfessor(profName) {
   if (!profName) return null;
   
-  // Try cache first
   if (professorCache) {
     const normalized = profName.toLowerCase().trim();
     const cached = professorCache.find(p => 
@@ -286,7 +349,6 @@ async function findProfessor(profName) {
     }
   }
   
-  // Try Supabase with fuzzy search
   console.log(`🔍 Searching Supabase for: ${profName}`);
   return await findProfessorByName(profName);
 }
@@ -297,7 +359,6 @@ function noRatingsMessage(profName) {
   return `No PolyRatings found. Try asking classmates or other professors for insights.\n\nhttps://polyratings.dev/new-professor`;
 }
 
-// Write a newly generated summary back to the DB so we don't re-generate next time
 async function saveSummaryToDB(profName, summary, link = null) {
   try {
     const url = `${SUPABASE_URL}/rest/v1/ai_summaries`;
@@ -327,26 +388,19 @@ async function saveSummaryToDB(profName, summary, link = null) {
 }
 
 async function callGeminiTooltipAnalysis(profName) {
-  // Step 1: Check precomputed AI summaries from Supabase DB
   const precomputed = await getPrecomputedSummary(profName);
   if (precomputed?.summary) {
     let summary = precomputed.summary;
-    if (summary.includes("\n\nProfessor")) {
-      summary = "Professor" + summary.split("\n\nProfessor")[1];
-    }
+    if (summary.includes("\n\nProfessor")) summary = "Professor" + summary.split("\n\nProfessor")[1];
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
     return summary;
   }
 
-  // Step 2: No precomputed summary — generate from DB reviews
   console.log(`🔄 No precomputed summary for ${profName}, generating from reviews...`);
   try {
     const reviews = await getReviewsByProfessor(profName, 15);
-    
-    if (reviews.length === 0) {
-      return "No PolyRatings found. Try asking classmates for insights.";
-    }
+    if (reviews.length === 0) return "No PolyRatings found. Try asking classmates for insights.";
 
     const avgRating = (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(2);
     const reviewSnippets = reviews.slice(0, 8).map(r => 
@@ -367,10 +421,7 @@ ${reviewSnippets}`;
     ]);
 
     console.log(`✅ Generated live summary for ${profName}`);
-
-    // Write back to DB so we don't regenerate next time
     await saveSummaryToDB(profName, summary, null);
-
     return summary;
   } catch (error) {
     console.error(`❌ Live summary generation failed for ${profName}:`, error);
@@ -379,19 +430,15 @@ ${reviewSnippets}`;
 }
 
 async function callGeminiAnalysis(profName, professorData = null) {
-  // Step 1: Check precomputed AI summaries from Supabase DB
   const precomputed = await getPrecomputedSummary(profName);
   if (precomputed?.summary) {
     let summary = precomputed.summary;
-    if (summary.includes("\n\nProfessor")) {
-      summary = "Professor" + summary.split("\n\nProfessor")[1];
-    }
+    if (summary.includes("\n\nProfessor")) summary = "Professor" + summary.split("\n\nProfessor")[1];
     summary = summary.replace(/\n\nhttps?:\/\/[^\s]+/g, "");
     summary = summary.replace(/https?:\/\/[^\s]+/g, "");
     return `${summary}\n\n${precomputed.link || professorData?.link || ""}`;
   }
 
-  // No precomputed summary — generate from DB reviews
   try {
     const reviews = await getReviewsByProfessor(profName, 15);
     if (reviews.length > 0) {
@@ -405,9 +452,7 @@ async function callGeminiAnalysis(profName, professorData = null) {
         { role: "user", content: `Summarize this professor based on student reviews. Focus on teaching style, difficulty, and student experience.\n\nProfessor: ${profName}\nAverage Rating: ${avgRating}/4.0 (${reviews.length} reviews)\n\nReviews:\n${reviewSnippets}` }
       ]);
 
-      // Write back to DB so we don't regenerate next time
       await saveSummaryToDB(profName, summary, professorData?.link || null);
-
       return `${summary}\n\n${professorData?.link || ""}`;
     }
   } catch (error) {
@@ -446,10 +491,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (professor) {
           sendResponse({ status: "success", professor });
         } else {
-          sendResponse({
-            status: "not_found",
-            message: "Professor not found",
-          });
+          sendResponse({ status: "not_found", message: "Professor not found" });
         }
       } catch (e) {
         sendResponse({ status: "error", message: "Failed to fetch" });
@@ -482,8 +524,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
         
-        // Try RAG system for all queries
-        const answer = await handleRAGQuery(query);
+        // RAG system — returns { type: 'text'|'comparison', data: ... }
+        const result = await handleRAGQuery(query);
         
         // Increment usage in Supabase AFTER successful response
         await incrementAgentUsage(userId);
@@ -491,7 +533,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         sendResponse({
           status: "success",
-          professor: { analysis: answer },
+          professor: { analysis: result },  // result is { type, data }
           remaining: updated.remaining
         });
         
@@ -506,14 +548,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const professor = await findProfessor(professorName);
             const analysis = await callGeminiAnalysis(professorName, professor);
             
-            // Still increment usage on fallback success
             const userId = message.userId || null;
             await incrementAgentUsage(userId);
             const updated = await checkAgentUsage(userId);
             
             sendResponse({
               status: "success",
-              professor: { ...professor, analysis },
+              professor: { ...professor, analysis: { type: 'text', data: analysis } },
               remaining: updated.remaining
             });
             return;
@@ -537,16 +578,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await fetchProfessorData();
         const professor = await findProfessor(message.profName);
         const analysis = await callGeminiAnalysis(message.profName, professor);
-        sendResponse({
-          status: "success",
-          analysis,
-          professor,
-        });
+        sendResponse({ status: "success", analysis, professor });
       } catch (error) {
-        sendResponse({
-          status: "error",
-          message: "Failed to get AI summary",
-        });
+        sendResponse({ status: "error", message: "Failed to get AI summary" });
       }
     })();
     return true;
@@ -564,10 +598,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           professor: professor || { name: message.profName },
         });
       } catch (error) {
-        sendResponse({
-          status: "error",
-          message: "Failed to get tooltip summary",
-        });
+        sendResponse({ status: "error", message: "Failed to get tooltip summary" });
       }
     })();
     return true;
@@ -577,11 +608,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const profName = message.profName;
-        if (!profName) {
-          sendResponse({ status: "error", reviews: [] });
-          return;
-        }
-
+        if (!profName) { sendResponse({ status: "error", reviews: [] }); return; }
         const reviews = await getReviewsByProfessor(profName, 100);
         sendResponse({ status: "success", reviews });
       } catch (error) {
@@ -592,7 +619,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Handle schedule analysis
   if (message.type === "analyzeSchedule") {
     (async () => {
       try {
@@ -600,7 +626,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const userId = message.userId || null;
         console.log(`📊 Analyzing schedule with ${courses.length} courses (user: ${userId}):`, courses);
         
-        // Server-side rate limit check
         const usage = await checkAnalysisUsage(userId);
         if (!usage.canSend) {
           sendResponse({
@@ -611,12 +636,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
         
-        // Build analysis prompt
         const courseList = courses.map(c => `${c.code} - ${c.title} (${c.units} units)`).join('\n');
-        const totalUnits = courses.reduce((sum, c) => {
-          const units = parseInt(c.units) || 0;
-          return sum + units;
-        }, 0);
+        const totalUnits = courses.reduce((sum, c) => { const units = parseInt(c.units) || 0; return sum + units; }, 0);
         
         const prompt = `Analyze this Cal Poly student's schedule and provide helpful insights:
 
@@ -632,43 +653,26 @@ Provide a concise analysis with these 4 sections (use this exact format):
 
 Be encouraging but realistic. No bullet points, no bold formatting, just clear sentences.`;
         
-        const messages = [
-          { role: "user", content: prompt }
-        ];
+        const analysis = await callGroqAPI([{ role: "user", content: prompt }]);
         
-        const analysis = await callGroqAPI(messages);
-        
-        // Increment usage after successful analysis
         await incrementAnalysisUsage(userId);
         const updated = await checkAnalysisUsage(userId);
         
-        sendResponse({
-          status: "success",
-          analysis: analysis,
-          remaining: updated.remaining
-        });
+        sendResponse({ status: "success", analysis: analysis, remaining: updated.remaining });
         
       } catch (error) {
         console.error("Schedule analysis error:", error);
-        sendResponse({
-          status: "error",
-          message: "Sorry, I couldn't analyze your schedule. Please try again."
-        });
+        sendResponse({ status: "error", message: "Sorry, I couldn't analyze your schedule. Please try again." });
       }
     })();
     return true;
   }
 
-  // Check analysis rate limit
   if (message.type === "checkAnalysisLimit") {
     (async () => {
       try {
         const usage = await checkAnalysisUsage(message.userId);
-        sendResponse({
-          status: "success",
-          remaining: usage.remaining,
-          canSend: usage.canSend
-        });
+        sendResponse({ status: "success", remaining: usage.remaining, canSend: usage.canSend });
       } catch (error) {
         sendResponse({ status: "success", remaining: 5, canSend: true });
       }
@@ -676,16 +680,11 @@ Be encouraging but realistic. No bullet points, no bold formatting, just clear s
     return true;
   }
 
-  // Check rate limit from DB
   if (message.type === "checkRateLimit") {
     (async () => {
       try {
         const usage = await checkAgentUsage(message.userId);
-        sendResponse({
-          status: "success",
-          remaining: usage.remaining,
-          canSend: usage.canSend
-        });
+        sendResponse({ status: "success", remaining: usage.remaining, canSend: usage.canSend });
       } catch (error) {
         console.error("Rate limit check error:", error);
         sendResponse({ status: "success", remaining: 10, canSend: true });
